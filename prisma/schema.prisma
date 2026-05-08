@@ -1,0 +1,471 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  COMMERCIAL
+  FINANCIAL
+  WAREHOUSE
+  INVESTOR
+  RESELLER_B2B
+}
+
+model User {
+  id              String    @id @default(uuid())
+  name            String
+  email           String    @unique
+  password        String
+  role            UserRole  @default(INVESTOR)
+  phone           String?
+  avatarUrl       String?   @map("avatar_url")
+  
+  // Relations
+  projects        InvestmentProject[] @relation("InvestorProjects")
+  createdProjects InvestmentProject[] @relation("CreatedBy")
+  assignedLeads  Lead[]              @relation("AssignedSeller")
+  assignedCustomers Customer[]       @relation("CustomerSeller")
+  salesOrders     SalesOrder[]        @relation("OrderSeller")
+  checkedWeapons  WeaponMap[]         @relation("WeaponCheckedBy")
+  soldWeapons     WeaponMap[]         @relation("WeaponSoldBy")
+  
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model InvestmentProject {
+  id              String        @id @default(uuid())
+  name            String        // ex: "VR-12P · Francisco · Lote 01"
+  productName     String        @map("product_name")
+  investorId      String        @map("investor_id")
+  status          ProjectStatus @default(ACTIVE)
+  initialCapital  Decimal       @db.Decimal(12, 2) @map("initial_capital")
+  maxCycles       Int           @default(8) @map("max_cycles")
+  profitSplitPct  Decimal       @db.Decimal(5, 4) @default(0.50) @map("profit_split_pct")
+  notes           String?       @db.Text
+  
+  // Relations
+  investor        User          @relation("InvestorProjects", fields: [investorId], references: [id])
+  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
+  createdById     String        @map("created_by_id")
+  cycles          Cycle[]
+  importLots      ImportLot[]
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@map("investment_projects")
+}
+
+enum LotStatus {
+  CAPTACAO
+  CAPITAL_CAPTADO
+  PEDIDO_FEITO
+  AGUARD_EMBARQUE
+  TRANSITO
+  NACIONALIZANDO
+  LIBERADO
+  ESTOQUE
+  VENDA
+  LIQUIDADO
+}
+
+enum Currency {
+  USD
+  EUR
+  GBP
+}
+
+model ImportLot {
+  id                      String    @id @default(uuid())
+  batchCode               String    @unique @map("batch_code")
+  supplierId              String    @map("supplier_id")
+  countryOrigin           String    @map("country_origin")
+  purchaseDate            DateTime  @map("purchase_date")
+  expectedShipmentDate    DateTime? @map("expected_shipment_date")
+  expectedNationalityDate DateTime? @map("expected_nationality_date")
+  currency                Currency  @default(USD)
+  exchangeRate            Decimal   @db.Decimal(10, 4) @map("exchange_rate")
+  fobValue                Decimal   @db.Decimal(12, 2) @map("fob_value")
+  freight                 Decimal   @db.Decimal(12, 2)
+  insurance               Decimal   @db.Decimal(12, 2)
+  customsTaxes            Decimal   @db.Decimal(12, 2) @map("customs_taxes")
+  customsFees             Decimal   @db.Decimal(12, 2) @map("customs_fees")
+  totalCostNationalized   Decimal   @db.Decimal(12, 2) @map("total_cost_nationalized")
+  quantityItems           Int       @map("quantity_items")
+  status                  LotStatus @default(CAPTACAO)
+  expectedMarginPct       Decimal   @db.Decimal(5, 2) @map("expected_margin_pct")
+  realizedMarginPct       Decimal?  @db.Decimal(5, 2) @map("realized_margin_pct")
+  
+  // Relations
+  supplier              Supplier  @relation(fields: [supplierId], references: [id])
+  investmentProject     InvestmentProject? @relation(fields: [investmentProjectId], references: [id])
+  investmentProjectId   String?   @map("investment_project_id")
+  products              Product[]
+  weapons               WeaponMap[]
+  cycles                Cycle[]
+
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("import_lots")
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+model Product {
+  id                      String        @id @default(uuid())
+  sku                     String        @unique
+  commercialName          String        @map("commercial_name")
+  brand                   String
+  model                   String
+  caliber                 String
+  species                 String
+  actionType              String        @map("action_type")
+  capacity                Int
+  barrelLength            Decimal       @db.Decimal(5, 2) @map("barrel_length")
+  finish                  String
+  originCountry           String        @map("origin_country")
+  ncm                     String
+  technicalDescription    String?       @db.Text @map("technical_description")
+  photos                  String[]      // URLs
+  videos                  String[]      // URLs
+  priceB2C                Decimal       @db.Decimal(12, 2) @map("price_b2c")
+  priceB2B                Decimal?      @db.Decimal(12, 2) @map("price_b2b")
+  stockAvailable          Int           @default(0) @map("stock_available")
+  stockReserved           Int           @default(0) @map("stock_reserved")
+  status                  ProductStatus @default(ACTIVE)
+  
+  // Relations
+  importLot             ImportLot?    @relation(fields: [importLotId], references: [id])
+  importLotId           String?       @map("import_lot_id")
+  weapons               WeaponMap[]
+
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
+enum WeaponStatus {
+  IMPORTADA
+  CONFERENCIA
+  ESTOQUE
+  RESERVADA
+  VENDIDA
+  FATURADA
+  TRANSPORTE
+  ENTREGUE
+  BAIXADA
+  BLOQUEADA
+  DEVOLVIDA
+  CANCELADA
+}
+
+model WeaponMap {
+  id                      String        @id @default(uuid())
+  productId               String        @map("product_id")
+  serialNumber            String        @unique @map("serial_number")
+  classification          String?
+  supplierId              String        @map("supplier_id")
+  importLotId             String        @map("import_lot_id")
+  importProcessNumber     String?       @map("import_process_number")
+  liNumber                String?       @map("li_number")
+  diNumber                String?       @map("di_number")
+  diDate                  DateTime?     @map("di_date")
+  customsClearanceDate    DateTime?     @map("customs_clearance_date")
+  entryInvoiceNumber      String?       @map("entry_invoice_number")
+  entryDate               DateTime      @map("entry_date")
+  unitCost                Decimal       @db.Decimal(12, 2) @map("unit_cost")
+  warehouseLocation       String?       @map("warehouse_location")
+  currentStatus           WeaponStatus  @default(IMPORTADA) @map("current_status")
+  lastMovementDate        DateTime      @default(now()) @map("last_movement_date")
+  observations            String?       @db.Text
+  hasDivergence           Boolean       @default(false) @map("has_divergence")
+  
+  // Venda
+  customerId              String?       @map("customer_id")
+  customerCpfCnpj         String?       @map("customer_cpf_cnpj")
+  customerState           String?       @db.VarChar(2) @map("customer_state")
+  salesOrderId            String?       @map("sales_order_id")
+  salesInvoiceNumber      String?       @map("sales_invoice_number")
+  saleDate                DateTime?     @map("sale_date")
+  saleValue               Decimal?      @db.Decimal(12, 2) @map("sale_value")
+  paymentMethod           String?       @map("payment_method")
+  shippingCompany         String?       @map("shipping_company")
+  deliveryStatus          String?       @map("delivery_status")
+
+  // Relations
+  product               Product       @relation(fields: [productId], references: [id])
+  supplier              Supplier      @relation(fields: [supplierId], references: [id])
+  importLot             ImportLot     @relation(fields: [importLotId], references: [id])
+  customer              Customer?     @relation(fields: [customerId], references: [id])
+  checkedBy             User?         @relation("WeaponCheckedBy", fields: [checkedById], references: [id])
+  checkedById           String?       @map("checked_by_id")
+  sellingUser           User?         @relation("WeaponSoldBy", fields: [sellingUserId], references: [id])
+  sellingUserId         String?       @map("selling_user_id")
+  salesOrder            SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  @@map("weapons_map")
+}
+
+enum CycleStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model Cycle {
+  id                       String      @id @default(uuid())
+  projectId                String      @map("project_id")
+  cycleNumber              Int         @map("cycle_number")
+  cycleName                String      @map("cycle_name")
+  status                   CycleStatus @default(PENDING)
+  importLotId              String?     @map("import_lot_id")
+
+  // Identificação
+  processNumber            String?     @map("process_number")
+  diNumber                 String?     @map("di_number")
+  diDate                   DateTime?   @map("di_date")
+
+  // Inputs
+  quantity                 Int
+  salePricePerUnit         Decimal     @db.Decimal(12, 2) @map("sale_price_per_unit")
+  exchangeRateUsd          Decimal     @db.Decimal(10, 4) @map("exchange_rate_usd")
+  fobValueUsd              Decimal     @db.Decimal(12, 2) @map("fob_value_usd")
+  freightUsd               Decimal     @db.Decimal(12, 2) @map("freight_usd")
+  insuranceUsd             Decimal     @db.Decimal(12, 2) @map("insurance_usd")
+
+  // Tributos
+  customsValueBrl         Decimal     @db.Decimal(12, 2) @map("customs_value_brl")
+  iiTax                   Decimal     @db.Decimal(12, 2) @map("ii_tax")
+  ipiTax                  Decimal     @db.Decimal(12, 2) @map("ipi_tax")
+  afrmmTax                Decimal     @db.Decimal(12, 2) @map("afrmm_tax")
+  capatazia               Decimal     @db.Decimal(12, 2)
+  pisPasepTax             Decimal     @db.Decimal(12, 2) @map("pis_pasep_tax")
+  cofinsTax               Decimal     @db.Decimal(12, 2) @map("cofins_tax")
+  siscomexFee             Decimal     @db.Decimal(12, 2) @map("siscomex_fee")
+  icmsSt                  Decimal     @db.Decimal(12, 2) @map("icms_st")
+  simplesTax              Decimal     @db.Decimal(12, 2) @map("simples_tax")
+  operationalCost         Decimal     @db.Decimal(12, 2) @map("operational_cost")
+  calcBaseNormal          Decimal     @db.Decimal(12, 2) @map("calc_base_normal")
+  icmsBaseAltered         Decimal     @db.Decimal(12, 2) @map("icms_base_altered")
+  icmsImportTax           Decimal     @db.Decimal(12, 2) @map("icms_import_tax")
+  totalInvestment         Decimal     @db.Decimal(12, 2) @map("total_investment")
+
+  // Resultado
+  grossRevenue            Decimal     @db.Decimal(12, 2) @map("gross_revenue")
+  salesTax                Decimal     @db.Decimal(12, 2) @map("sales_tax")
+  salesOperationalCost    Decimal     @db.Decimal(12, 2) @map("sales_operational_cost")
+  netRevenue              Decimal     @db.Decimal(12, 2) @map("net_revenue")
+  grossProfit             Decimal     @db.Decimal(12, 2) @map("gross_profit")
+  investorShare           Decimal     @db.Decimal(12, 2) @map("investor_share")
+  companyShare            Decimal     @db.Decimal(12, 2) @map("company_share")
+  reserveShare            Decimal     @db.Decimal(12, 2) @map("reserve_share")
+  reinvestmentShare       Decimal     @db.Decimal(12, 2) @map("reinvestment_share")
+
+  taxSnapshot             Json?       @map("tax_snapshot")
+
+  // Relations
+  project               InvestmentProject @relation(fields: [projectId], references: [id])
+  importLot             ImportLot?        @relation(fields: [importLotId], references: [id])
+
+  createdAt               DateTime    @default(now()) @map("created_at")
+  updatedAt               DateTime    @updatedAt @map("updated_at")
+
+  @@map("cycles")
+}
+
+model Supplier {
+  id              String    @id @default(uuid())
+  name            String
+  country         String
+  contactEmail    String?   @map("contact_email")
+  contactPhone    String?   @map("contact_phone")
+  bankDetails     String?   @db.Text @map("bank_details")
+  rating          Decimal?  @db.Decimal(3, 2)
+  status          Status    @default(ACTIVE)
+  
+  // Relations
+  lots            ImportLot[]
+  weapons         WeaponMap[]
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("suppliers")
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum CustomerType {
+  B2C
+  B2B
+}
+
+model Customer {
+  id              String       @id @default(uuid())
+  type            CustomerType @default(B2C)
+  name            String
+  cpfCnpj         String       @unique @map("cpf_cnpj")
+  email           String?
+  phone           String
+  state           String       @db.VarChar(2)
+  city            String?
+  address         String?
+  status          Status       @default(ACTIVE)
+  
+  // Relations
+  seller          User?        @relation("CustomerSeller", fields: [sellerId], references: [id])
+  sellerId        String?      @map("seller_id")
+  salesOrders     SalesOrder[]
+  weapons         WeaponMap[]
+  invoices        Invoice[]
+
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  @@map("customers")
+}
+
+enum OrderStatus {
+  RASCUNHO
+  ENVIADA
+  DOCUMENTACAO_PENDENTE
+  PAGAMENTO_PENDENTE
+  APROVADA
+  FATURADA
+  ENTREGUE
+}
+
+model SalesOrder {
+  id              String      @id @default(uuid())
+  orderNumber     String      @unique @map("order_number")
+  customerId      String      @map("customer_id")
+  sellerId        String      @map("seller_id")
+  products        Json        // [{product_id, quantity, unit_price}]
+  totalValue      Decimal     @db.Decimal(12, 2) @map("total_value")
+  status          OrderStatus @default(RASCUNHO)
+  proposedDate    DateTime?   @map("proposed_date")
+  paymentMethod   String?     @map("payment_method")
+  notes           String?     @db.Text
+
+  // Relations
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  seller          User        @relation("OrderSeller", fields: [sellerId], references: [id])
+  weapons         WeaponMap[]
+  invoices        Invoice[]
+
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  @@map("sales_orders")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  REJECTED
+  APPROVED
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNumber   String        @unique @map("invoice_number")
+  invoiceSeries   String        @map("invoice_series")
+  customerId      String        @map("customer_id")
+  salesOrderId    String?       @map("sales_order_id")
+  emissionDate    DateTime      @map("emission_date")
+  products        Json
+  totalAmount     Decimal       @db.Decimal(12, 2) @map("total_amount")
+  status          InvoiceStatus @default(DRAFT)
+  nfeKey          String?       @map("nfe_key")
+
+  // Relations
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  salesOrder      SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@map("invoices")
+}
+
+model FinancialDistributionRule {
+  id                    String   @id @default(uuid())
+  name                  String
+  reinvestmentPct       Decimal  @db.Decimal(5, 2) @map("reinvestment_pct")
+  investorPct           Decimal  @db.Decimal(5, 2) @map("investor_pct")
+  companyPct            Decimal  @db.Decimal(5, 2) @map("company_pct")
+  reservePct            Decimal  @db.Decimal(5, 2) @map("reserve_pct")
+  operationalCost       Decimal  @db.Decimal(12, 2) @map("operational_cost")
+  salesCommission       Decimal  @db.Decimal(5, 2) @map("sales_commission")
+  minBalanceNewPurchase Decimal  @db.Decimal(12, 2) @map("min_balance_new_purchase")
+  newBatchCriteria      String   @map("new_batch_criteria")
+  isActive              Boolean  @default(true) @map("is_active")
+
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("financial_distribution_rules")
+}
+
+enum LeadStatus {
+  NOVO
+  INTERESSADO
+  ATENDIMENTO
+  PROPOSTA
+  DOCUMENTO
+  PAGAMENTO
+  APROVADO
+  FATURADO
+  ENTREGUE
+  POS_VENDA
+}
+
+model Lead {
+  id              String     @id @default(uuid())
+  name            String
+  email           String?
+  phone           String
+  company         String?
+  status          LeadStatus @default(NOVO)
+  assignedSellerId String?   @map("assigned_seller_id")
+  interests       String[]   // array de strings (produtos)
+  documents       String?    @db.Text
+  notes           String?    @db.Text
+
+  // Relations
+  assignedSeller User?       @relation("AssignedSeller", fields: [assignedSellerId], references: [id])
+
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  @@map("leads")
+}
