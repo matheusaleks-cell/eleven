@@ -13,7 +13,7 @@ interface StatCardProps {
 export function StatCard({ title, value, icon, sub, accent = false }: StatCardProps) {
   return (
     <div
-      className="rounded-[4px] p-6 transition-all"
+      className="rounded-[4px] p-8 transition-all"
       style={{
         background: "#242424",
         border: "1px solid #333",
@@ -24,11 +24,11 @@ export function StatCard({ title, value, icon, sub, accent = false }: StatCardPr
         <p
           style={{
             color: "#A0A0A0",
-            fontSize: "11px",
-            letterSpacing: "0.12em",
+            fontSize: "13px",
+            letterSpacing: "0.15em",
             textTransform: "uppercase",
             fontFamily: "'Rajdhani', sans-serif",
-            fontWeight: 600,
+            fontWeight: 700,
           }}
         >
           {title}
@@ -49,8 +49,8 @@ export function StatCard({ title, value, icon, sub, accent = false }: StatCardPr
             style={{
               color: "#FFFFFF",
               fontFamily: "'Roboto Mono', monospace",
-              fontWeight: 700,
-              fontSize: "24px",
+              fontWeight: 800,
+              fontSize: "32px",
             }}
           >
             {value}
@@ -62,9 +62,10 @@ export function StatCard({ title, value, icon, sub, accent = false }: StatCardPr
       {sub && (
         <p
           style={{
-            color: "#555",
-            fontSize: "12px",
+            color: "#666",
+            fontSize: "14px",
             fontFamily: "'Rajdhani', sans-serif",
+            fontWeight: 500,
           }}
         >
           {sub}

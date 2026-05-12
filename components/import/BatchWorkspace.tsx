@@ -16,20 +16,83 @@ import {
   Download,
   AlertCircle,
   History,
-  Plus
+  Plus,
+  ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { updateLotStatus } from "@/app/admin/importacao/lotes/actions";
+import Link from "next/link";
 
 interface BatchWorkspaceProps {
   batch: any;
   onClose: () => void;
+  onRefresh?: () => void;
 }
 
-export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }) => {
+export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, onRefresh }) => {
   const [activeTab, setActiveTab] = useState<"overview" | "items" | "docs" | "history">("overview");
+  const [updating, setUpdating] = useState(false);
 
   if (!batch) return null;
+
+  // Cálculos Reais baseados no lote
+  const fobBrl = (batch.fobTotal || 0) * (batch.exchangeRate || 1);
+  const taxesEst = fobBrl * 0.48; // Estimativa consolidada
+  const totalDdp = fobBrl + taxesEst + (batch.freightTotal * batch.exchangeRate) + (batch.insuranceTotal * batch.exchangeRate);
+
+  const handleNextStep = async () => {
+    const statusFlow: Record<string, string> = {
+      "PEDIDO_FEITO": "TRANSITO",
+      "TRANSITO": "NACIONALIZANDO",
+      "NACIONALIZANDO": "DISPONIVEL",
+      "DISPONIVEL": "LIQUIDADO"
+    };
+
+    const nextStatus = statusFlow[batch.status];
+    if (!nextStatus) {
+      toast.info("Lote já concluído ou em status final.");
+      return;
+    }
+
+    setUpdating(true);
+    const res = await updateLotStatus(batch.dbId || batch.id, nextStatus);
+    if (res.success) {
+      toast.success(`Lote movido para ${nextStatus.replace('_', ' ')}`);
+      onRefresh?.();
+      onClose();
+    } else {
+      toast.error("Falha ao atualizar status.");
+    }
+    setUpdating(false);
+  };
+
+  const exportCSV = () => {
+    const rows = [
+      ["Campo", "Valor"],
+      ["Lote", batch.id],
+      ["Fornecedor", batch.supplier],
+      ["Origem", batch.origin],
+      ["Total FOB (USD)", batch.fobTotal],
+      ["Cambio", batch.exchangeRate],
+      ["Total FOB (BRL)", fobBrl.toFixed(2)],
+      ["Impostos Estimados", taxesEst.toFixed(2)],
+      ["Frete Internacional", batch.freightTotal],
+      ["Seguro", batch.insuranceTotal],
+      ["Total DDP (Estimado)", totalDdp.toFixed(2)]
+    ];
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + rows.map(e => e.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `lote_${batch.id}_custos.csv`);
+    document.body.appendChild(link);
+    link.click();
+    toast.success("Planilha de custos exportada com sucesso!");
+  };
 
   const tabs = [
     { id: "overview", label: "Resumo", icon: <Globe size={14} /> },
@@ -42,22 +105,22 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }
     <div className="flex flex-col gap-6 animate-in fade-in zoom-in duration-300">
       {/* Quick Stats Header */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-3 bg-brand-surface border-brand-border">
+        <Card className="p-3 bg-brand-surface border-brand-border shadow-md">
           <p className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mb-1">Status Atual</p>
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-brand-accent animate-pulse" />
-            <span className="text-xs font-bold text-white uppercase">{batch.status}</span>
+            <span className="text-xs font-bold text-white uppercase">{batch.status?.replace('_', ' ')}</span>
           </div>
         </Card>
-        <Card className="p-3 bg-brand-surface border-brand-border">
+        <Card className="p-3 bg-brand-surface border-brand-border shadow-md">
           <p className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mb-1">Total FOB</p>
-          <span className="text-sm font-mono font-bold text-brand-accent">{batch.currency} {batch.value.toLocaleString()}</span>
+          <span className="text-sm font-mono font-bold text-brand-accent">{batch.currency} {batch.value?.toLocaleString()}</span>
         </Card>
-        <Card className="p-3 bg-brand-surface border-brand-border">
+        <Card className="p-3 bg-brand-surface border-brand-border shadow-md">
           <p className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mb-1">Previsão ETA</p>
-          <span className="text-sm font-bold text-white">{batch.eta}</span>
+          <span className="text-sm font-bold text-white">{batch.eta || "A definir"}</span>
         </Card>
-        <Card className="p-3 bg-brand-surface border-brand-border">
+        <Card className="p-3 bg-brand-surface border-brand-border shadow-md">
           <p className="text-[9px] font-bold text-brand-text-muted uppercase tracking-widest mb-1">Progresso</p>
           <span className="text-sm font-mono font-bold text-brand-success">{batch.progress}%</span>
         </Card>
@@ -114,7 +177,7 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }
                  <div className="space-y-1">
                     <p className="text-[10px] font-bold text-brand-warning uppercase">Atenção Aduaneira</p>
                     <p className="text-[9px] text-brand-text-secondary uppercase leading-tight font-medium">
-                       Lote aguardando confirmação de pagamento do frete internacional para liberação do HAWB.
+                       Verificar se a Licença de Importação (LI) foi deferida antes da chegada ao porto nacional.
                     </p>
                  </div>
               </Card>
@@ -122,25 +185,25 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }
 
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-brand-accent uppercase tracking-widest border-b border-brand-border pb-2">Custos Nacionalizados (Est.)</h4>
-              <div className="bg-brand-surface/50 rounded-lg p-5 border border-brand-border space-y-3">
+              <div className="bg-brand-surface/50 rounded-lg p-5 border border-brand-border space-y-3 shadow-inner">
                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">Subtotal FOB</span>
-                    <span className="text-sm font-mono text-white">R$ 640.500,00</span>
+                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">Subtotal FOB (BRL)</span>
+                    <span className="text-sm font-mono text-white">R$ {fobBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                  </div>
                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">Imposto de Importação (II)</span>
-                    <span className="text-sm font-mono text-brand-danger">R$ 128.100,00</span>
+                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">Impostos Est. (48%)</span>
+                    <span className="text-sm font-mono text-brand-danger">R$ {taxesEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                  </div>
                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">IPI / PIS / COFINS</span>
-                    <span className="text-sm font-mono text-brand-danger">R$ 84.300,00</span>
+                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">Câmbio Aplicado</span>
+                    <span className="text-sm font-mono text-brand-accent">R$ {batch.exchangeRate?.toFixed(4)}</span>
                  </div>
                  <div className="pt-3 border-t border-brand-border flex justify-between items-center">
                     <span className="text-xs font-bold text-brand-accent uppercase">Total Estimado (DDP)</span>
-                    <span className="text-xl font-bold font-mono text-white">R$ 852.900</span>
+                    <span className="text-xl font-bold font-mono text-white">R$ {totalDdp.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
                  </div>
               </div>
-              <Button variant="secondary" className="w-full text-[10px] font-bold tracking-widest gap-2">
+              <Button variant="secondary" className="w-full text-[10px] font-bold tracking-widest gap-2 py-6" onClick={exportCSV}>
                  <Download size={14} /> EXPORTAR PLANILHA DE CUSTOS
               </Button>
             </div>
@@ -151,37 +214,46 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }
           <div className="space-y-4">
             <div className="flex justify-between items-center">
                <h4 className="text-xs font-bold text-brand-accent uppercase tracking-widest">Listagem de SKUs no Lote</h4>
-               <span className="text-[10px] font-mono text-brand-text-muted uppercase">Total: {batch.items} Unidades</span>
+               <span className="text-[10px] font-mono text-brand-text-muted uppercase">Total: {batch.items_count || 0} Itens</span>
             </div>
             <table className="table-base">
                <thead>
                   <tr>
                      <th>Produto</th>
-                     <th>Qtd</th>
-                     <th>Valor Unit.</th>
+                     <th>Qtd Estimada</th>
+                     <th>Valor Unit. (FOB)</th>
                      <th>NCM</th>
                      <th className="text-right">Ação</th>
                   </tr>
                </thead>
                <tbody>
-                  <tr>
-                     <td className="text-xs font-bold uppercase">VR-12P CARRERA - 12GA</td>
-                     <td className="font-mono text-xs">200</td>
-                     <td className="font-mono text-xs">USD 450.00</td>
-                     <td className="text-[10px] font-mono">9303.20.00</td>
-                     <td className="text-right">
-                        <Button variant="ghost" size="sm" className="text-[10px]">VER SKU</Button>
-                     </td>
-                  </tr>
-                  <tr>
-                     <td className="text-xs font-bold uppercase">CANIK TP9 SFx RIVAL - 9MM</td>
-                     <td className="font-mono text-xs">200</td>
-                     <td className="font-mono text-xs">USD 580.00</td>
-                     <td className="text-[10px] font-mono">9302.00.00</td>
-                     <td className="text-right">
-                        <Button variant="ghost" size="sm" className="text-[10px]">VER SKU</Button>
-                     </td>
-                  </tr>
+                  {batch.products?.map((product: any, i: number) => (
+                    <tr key={i}>
+                       <td className="text-xs font-bold uppercase">
+                         <div className="flex flex-col">
+                           <span className="text-white">{product.commercialName}</span>
+                           <span className="text-[9px] text-brand-text-muted">{product.sku}</span>
+                         </div>
+                       </td>
+                       <td className="font-mono text-xs">{(batch.items_count / (batch.products?.length || 1)).toFixed(0)}</td>
+                       <td className="font-mono text-xs">{batch.currency} {(batch.fobTotal / (batch.items_count || 1)).toLocaleString()}</td>
+                       <td className="text-[10px] font-mono">{product.ncm || "9303.20.00"}</td>
+                       <td className="text-right">
+                          <Link href={`/admin/erp/produtos?search=${product.sku}`}>
+                            <Button variant="ghost" size="sm" className="text-[10px] gap-2">
+                              VER NO ERP <ExternalLink size={10} />
+                            </Button>
+                          </Link>
+                       </td>
+                    </tr>
+                  ))}
+                  {(!batch.products || batch.products.length === 0) && (
+                    <tr>
+                      <td colSpan={5} className="text-center py-10 text-brand-text-muted text-[10px] uppercase">
+                        Nenhum SKU detalhado vinculado a este lote.
+                      </td>
+                    </tr>
+                  )}
                </tbody>
             </table>
           </div>
@@ -196,9 +268,9 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }
                { name: "Certificado de Origem", type: "PDF", status: "VERIFICADO" },
                { name: "LI - Licença de Importação", type: "PDF", status: "PROCESSANDO" },
              ].map((doc, i) => (
-               <Card key={i} className="p-4 border-brand-border bg-brand-surface/30 flex flex-col gap-3 hover:border-brand-accent/30 transition-all cursor-pointer group">
+               <Card key={i} className="p-4 border-brand-border bg-brand-surface/30 flex flex-col gap-3 hover:border-brand-accent/30 transition-all cursor-pointer group shadow-sm">
                   <div className="flex items-center gap-3">
-                     <div className="p-2 bg-brand-bg rounded border border-brand-border text-brand-text-muted group-hover:text-brand-accent">
+                     <div className="p-2 bg-brand-bg rounded border border-brand-border text-brand-text-muted group-hover:text-brand-accent transition-colors">
                         <FileText size={18} />
                      </div>
                      <div className="flex flex-col">
@@ -215,14 +287,45 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }
                      )}>
                        {doc.status}
                      </span>
-                     <Download size={14} className="text-brand-text-muted group-hover:text-brand-accent" />
+                     <Download size={14} className="text-brand-text-muted group-hover:text-brand-accent transition-colors" />
                   </div>
                </Card>
              ))}
-             <button className="border-2 border-dashed border-brand-border rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:border-brand-accent/50 hover:bg-brand-accent/5 transition-all text-brand-text-muted hover:text-brand-accent">
+             <button 
+              className="border-2 border-dashed border-brand-border rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:border-brand-accent/50 hover:bg-brand-accent/5 transition-all text-brand-text-muted hover:text-brand-accent"
+              onClick={() => toast.info("Selecione o arquivo para upload (LI/DI/Invoice)...")}
+             >
                 <Plus size={20} />
                 <span className="text-[10px] font-bold uppercase">UPLOAD DOCUMENTO</span>
              </button>
+          </div>
+        )}
+
+        {activeTab === "history" && (
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-brand-accent uppercase tracking-widest mb-4">Linha do Tempo de Operações</h4>
+            <div className="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-brand-border">
+               {[
+                 { date: "10/05/2026 14:30", action: "Status alterado para NACIONALIZANDO", user: "Raul (Admin)", icon: <Truck size={12} /> },
+                 { date: "08/05/2026 09:15", action: "Embarque confirmado - Istanbul", user: "Sistema", icon: <Ship size={12} /> },
+                 { date: "01/05/2026 16:40", action: "Pagamento FOB realizado", user: "Financeiro", icon: <DollarSign size={12} /> },
+                 { date: "28/04/2026 11:20", action: "Lote criado no sistema", user: "Raul (Admin)", icon: <Plus size={12} /> },
+               ].map((item, i) => (
+                 <div key={i} className="flex gap-4 relative z-10">
+                    <div className="w-6 h-6 rounded-full bg-brand-bg border border-brand-border flex items-center justify-center text-brand-accent shadow-sm">
+                       {item.icon}
+                    </div>
+                    <div className="flex flex-col">
+                       <span className="text-[11px] font-bold text-white uppercase">{item.action}</span>
+                       <div className="flex gap-2 text-[9px] text-brand-text-muted font-medium uppercase mt-0.5">
+                          <span>{item.date}</span>
+                          <span>•</span>
+                          <span className="text-brand-accent/70">{item.user}</span>
+                       </div>
+                    </div>
+                 </div>
+               ))}
+            </div>
           </div>
         )}
       </div>
@@ -230,16 +333,24 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose }
       {/* Footer Actions */}
       <div className="flex justify-between items-center mt-6 pt-6 border-t border-brand-border">
          <div className="flex gap-2">
-            <Button variant="ghost" className="text-[10px] font-bold uppercase tracking-widest hover:text-brand-danger" onClick={onClose}>
+            <Button variant="ghost" className="text-[10px] font-bold uppercase tracking-widest hover:text-brand-danger transition-colors" onClick={onClose}>
                FECHAR WORKSPACE
             </Button>
          </div>
          <div className="flex gap-3">
-            <Button variant="secondary" className="text-[10px] font-bold uppercase tracking-widest gap-2">
+            <Button 
+              variant="secondary" 
+              className="text-[10px] font-bold uppercase tracking-widest gap-2"
+              onClick={() => toast.info("Escolha o novo status manualmente no editor de lote.")}
+            >
                <Anchor size={14} /> ALTERAR LOGÍSTICA
             </Button>
-            <Button className="text-[10px] font-bold uppercase tracking-widest gap-2 shadow-[0_0_15px_rgba(245,196,0,0.15)]" onClick={() => toast.success("Processo movido para ADUANA")}>
-               <Truck size={14} /> AVANÇAR ETAPA
+            <Button 
+              className="text-[10px] font-bold uppercase tracking-widest gap-2 shadow-[0_0_15px_rgba(245,196,0,0.15)] hover:shadow-brand-accent/20 transition-all" 
+              onClick={handleNextStep}
+              disabled={updating}
+            >
+               <Truck size={14} /> {updating ? "ATUALIZANDO..." : "AVANÇAR ETAPA"}
             </Button>
          </div>
       </div>

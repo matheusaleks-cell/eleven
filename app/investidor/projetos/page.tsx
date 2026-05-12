@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { mockProjects } from "@/lib/mock-data";
+import { getInvestorProjects } from "../actions";
 import Link from "next/link";
 
 export default function InvestorProjectsPage() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [myProjects, setMyProjects] = useState<any[]>([]);
 
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
@@ -18,11 +20,14 @@ export default function InvestorProjectsPage() {
     const parsed = JSON.parse(s);
     if (parsed.role !== "INVESTOR") { router.push("/admin"); return; }
     setSession(parsed);
+    
+    getInvestorProjects(parsed.email).then(res => {
+      if (res.success) setMyProjects(res.projects);
+      setLoading(false);
+    });
   }, []);
 
-  const myProjects = mockProjects.filter((p) => p.investor_id === "user-francisco");
-
-  if (!session) return null;
+  if (loading || !session) return null;
 
   return (
     <DashboardLayout role="INVESTOR" userName={session.name} userEmail={session.email} pageTitle="Meus Projetos">
@@ -33,7 +38,7 @@ export default function InvestorProjectsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {myProjects.map((project) => (
-          <Link key={project.id} href={`/investor/projects/${project.id}`} style={{ textDecoration: "none" }}>
+          <Link key={project.id} href={`/investidor/projetos/${project.id}`} style={{ textDecoration: "none" }}>
             <div
               className="rounded-[4px] p-5 transition-all h-full"
               style={{ background: "#242424", border: "1px solid #333", borderLeft: "3px solid #333", cursor: "pointer" }}

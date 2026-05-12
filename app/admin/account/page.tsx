@@ -14,7 +14,7 @@ export default function AdminAccountPage() {
 
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
-    if (!s) { router.push("/login"); return; }
+    if (!s) { router.push("/admin/login"); return; }
     setSession(JSON.parse(s));
   }, []);
 

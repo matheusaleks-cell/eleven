@@ -6,93 +6,138 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Plus, Search, Filter, MoreHorizontal, Image as ImageIcon, ArrowUpDown, Save, X as CloseIcon } from "lucide-react";
+import { Edit2, Plus, Search, Filter, MoreHorizontal, Image as ImageIcon, ArrowUpDown, Save, X as CloseIcon, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useEffect, useCallback } from "react";
+import { getProducts, createProduct, deleteProduct, updateProduct } from "./actions";
+import { maskDecimal } from "@/lib/masks";
 
-const INITIAL_PRODUCTS = [
-  {
-    id: "1",
-    name: "Vezir Arms Carrera VR-12P",
-    sku: "VEZIR-VR12P",
-    brand: "Vezir Arms",
-    model: "VR-12P",
-    caliber: "12 Gauge",
-    stock: 12,
-    reserved: 8,
-    price: 8500,
-    status: "ACTIVE",
-  },
-  {
-    id: "2",
-    name: "Canik TP9 SFx Rival",
-    sku: "CANIK-TP9-RIVAL",
-    brand: "Canik",
-    model: "TP9 SFx",
-    caliber: "9mm",
-    stock: 25,
-    reserved: 10,
-    price: 9200,
-    status: "ACTIVE",
-  },
-  {
-    id: "3",
-    name: "Derya MK-12 AS-250",
-    sku: "DERYA-MK12-250",
-    brand: "Derya Arms",
-    model: "MK-12",
-    caliber: "12 Gauge",
-    stock: 5,
-    reserved: 0,
-    price: 11500,
-    status: "OUT_OF_STOCK",
-  }
-];
+
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterBrand, setFilterBrand] = useState("Todas as Marcas");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newProduct, setNewProduct] = useState({
     name: "",
     sku: "",
-    brand: "",
+    brand: "Canik",
     model: "",
-    caliber: "",
-    price: "",
-    stock: ""
+    caliber: "9mm",
+    species: "Pistola",
+    actionType: "Semiautomática",
+    capacity: "18",
+    barrelLength: "4.5",
+    finish: "Preto Fosco",
+    originCountry: "Turquia",
+    ncm: "9302.00.00",
+    priceB2C: "",
+    priceB2B: "",
+    stockInitial: "0",
+    technicalDescription: "",
+    photos: ""
   });
+
+  const refreshProducts = useCallback(async () => {
+    setLoading(true);
+    const data = await getProducts();
+    setProducts(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    refreshProducts();
+  }, [refreshProducts]);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
-                           p.sku.toLowerCase().includes(search.toLowerCase()) ||
-                           p.brand.toLowerCase().includes(search.toLowerCase());
+      const name = (p.commercialName || "").toLowerCase();
+      const sku = (p.sku || "").toLowerCase();
+      const brand = (p.brand || "").toLowerCase();
+      const searchLower = search.toLowerCase();
+
+      const matchesSearch = name.includes(searchLower) || 
+                           sku.includes(searchLower) ||
+                           brand.includes(searchLower);
       const matchesBrand = filterBrand === "Todas as Marcas" || p.brand === filterBrand;
       return matchesSearch && matchesBrand;
     });
   }, [products, search, filterBrand]);
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (!newProduct.name || !newProduct.sku) {
-      toast.error("Por favor, preencha os campos obrigatórios.");
+      toast.error("Nome e SKU são obrigatórios.");
       return;
     }
 
-    const product = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...newProduct,
-      price: Number(newProduct.price),
-      stock: Number(newProduct.stock),
-      reserved: 0,
-      status: "ACTIVE"
-    };
+    try {
+      let res;
+      if (editingId) {
+        res = await updateProduct(editingId, {
+          ...newProduct,
+          stockAvailable: Number(newProduct.stockInitial)
+        });
+      } else {
+        res = await createProduct(newProduct);
+      }
 
-    setProducts([product as any, ...products]);
-    setIsModalOpen(false);
-    setNewProduct({ name: "", sku: "", brand: "", model: "", caliber: "", price: "", stock: "" });
-    toast.success("Produto adicionado ao catálogo com sucesso!");
+      if (res.success) {
+        toast.success(editingId ? "Arma atualizada!" : "Arma cadastrada com sucesso!");
+        setIsModalOpen(false);
+        setEditingId(null);
+        setNewProduct({
+          name: "", sku: "", brand: "Canik", model: "", caliber: "9mm",
+          species: "Pistola", actionType: "Semiautomática", capacity: "18",
+          barrelLength: "4.5", finish: "Preto Fosco", originCountry: "Turquia",
+          ncm: "9302.00.00", priceB2C: "", priceB2B: "", stockInitial: "0",
+          technicalDescription: "", photos: ""
+        });
+        refreshProducts();
+      } else {
+        toast.error(res.error);
+      }
+    } catch (error) {
+      toast.error("Erro ao processar operação.");
+    }
+  };
+
+  const handleOpenEdit = (product: any) => {
+    setNewProduct({
+      name: product.commercialName,
+      sku: product.sku,
+      brand: product.brand,
+      model: product.model,
+      caliber: product.caliber,
+      species: product.species,
+      actionType: product.actionType,
+      capacity: String(product.capacity),
+      barrelLength: String(product.barrelLength),
+      finish: product.finish,
+      originCountry: product.originCountry,
+      ncm: product.ncm,
+      priceB2C: String(product.priceB2C),
+      priceB2B: String(product.priceB2B),
+      stockInitial: String(product.stockAvailable),
+      technicalDescription: product.technicalDescription || "",
+      photos: product.photos || ""
+    });
+    setEditingId(product.id);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Confirmar exclusão permanente deste SKU?")) return;
+    const res = await deleteProduct(id);
+    if (res.success) {
+      toast.success("Produto removido.");
+      refreshProducts();
+    } else {
+      toast.error(res.error);
+    }
   };
 
   return (
@@ -123,15 +168,15 @@ export default function ProductsPage() {
           </Card>
           <Card className="py-4 px-5 border-l-2 border-l-brand-success bg-brand-surface/30">
             <p className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted mb-1">Em Estoque</p>
-            <p className="text-2xl font-bold font-mono text-brand-success">{products.reduce((acc, p) => acc + p.stock, 0)}</p>
+            <p className="text-2xl font-bold font-mono text-brand-success">{products.reduce((acc, p) => acc + (p.stockAvailable || 0), 0)}</p>
           </Card>
           <Card className="py-4 px-5 border-l-2 border-l-brand-warning bg-brand-surface/30">
             <p className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted mb-1">Reservados</p>
-            <p className="text-2xl font-bold font-mono text-brand-warning">18</p>
+            <p className="text-2xl font-bold font-mono text-brand-warning">{products.reduce((acc, p) => acc + (p.stockReserved || 0), 0)}</p>
           </Card>
           <Card className="py-4 px-5 border-l-2 border-l-brand-danger bg-brand-surface/30">
             <p className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted mb-1">Esgotados</p>
-            <p className="text-2xl font-bold font-mono text-brand-danger">{products.filter(p => p.stock === 0).length}</p>
+            <p className="text-2xl font-bold font-mono text-brand-danger">{products.filter(p => (p.stockAvailable || 0) === 0).length}</p>
           </Card>
         </div>
 
@@ -205,19 +250,19 @@ export default function ProductsPage() {
                       <div className="flex flex-col">
                         <span className={cn(
                           "font-bold text-sm font-mono",
-                          product.stock <= 5 ? "text-brand-danger" : "text-white"
+                          (product.stockAvailable || 0) <= 5 ? "text-brand-danger" : "text-white"
                         )}>
-                          {String(product.stock).padStart(2, '0')} UN
+                          {String(product.stockAvailable || 0).padStart(2, '0')} UN
                         </span>
-                        {product.reserved > 0 && (
+                        {(product.stockReserved || 0) > 0 && (
                           <span className="text-[10px] text-brand-text-muted uppercase font-bold">
-                            {product.reserved} reservadas
+                            {product.stockReserved} reservadas
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="font-mono text-sm text-brand-accent font-bold">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price)}
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.priceB2C)}
                     </td>
                     <td>
                       <span className={cn(
@@ -235,12 +280,17 @@ export default function ProductsPage() {
                           variant="ghost" 
                           size="sm" 
                           className="p-2 h-auto text-brand-text-muted hover:text-brand-accent"
-                          onClick={() => toast.info(`Ajuste de estoque para ${product.sku}`)}
+                          onClick={() => handleOpenEdit(product)}
                         >
-                          <ArrowUpDown size={14} />
+                          <Edit2 size={16} />
                         </Button>
-                        <Button variant="ghost" size="sm" className="p-2 h-auto text-brand-text-muted hover:text-white">
-                          <MoreHorizontal size={18} />
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="p-2 h-auto text-brand-text-muted hover:text-brand-danger"
+                          onClick={() => handleDelete(product.id)}
+                        >
+                          <Trash2 size={16} />
                         </Button>
                       </div>
                     </td>
@@ -262,60 +312,170 @@ export default function ProductsPage() {
       {/* Modal Novo Produto */}
       <Dialog
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="CADASTRAR NOVO PRODUTO NO CATÁLOGO"
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingId(null);
+        }}
+        title={editingId ? "EDITAR ARMAMENTO DO CATÁLOGO" : "CADASTRAR NOVO PRODUTO NO CATÁLOGO"}
         className="max-w-2xl"
       >
         <div className="space-y-6">
-           <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Nome do Produto *</label>
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Nome Comercial *</label>
                  <Input 
-                   placeholder="Ex: Canik TP9 SFx" 
+                   placeholder="Ex: Canik TP9 SFx Rival" 
                    value={newProduct.name}
                    onChange={(e) => setNewProduct({...newProduct, name: e.target.value})}
                  />
               </div>
               <div className="space-y-2">
-                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">SKU de Controle *</label>
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">SKU (Único) *</label>
                  <Input 
-                   placeholder="Ex: CNK-TP9" 
+                   placeholder="Ex: CNK-TP9-RIV" 
                    value={newProduct.sku}
                    onChange={(e) => setNewProduct({...newProduct, sku: e.target.value})}
                  />
               </div>
+              
               <div className="space-y-2">
                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">Marca</label>
                  <Input 
-                   placeholder="Ex: Canik" 
                    value={newProduct.brand}
                    onChange={(e) => setNewProduct({...newProduct, brand: e.target.value})}
                  />
               </div>
               <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Modelo</label>
+                 <Input 
+                   value={newProduct.model}
+                   onChange={(e) => setNewProduct({...newProduct, model: e.target.value})}
+                 />
+              </div>
+              <div className="space-y-2">
                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">Calibre</label>
                  <Input 
-                   placeholder="Ex: 9mm" 
                    value={newProduct.caliber}
                    onChange={(e) => setNewProduct({...newProduct, caliber: e.target.value})}
                  />
               </div>
+
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Espécie</label>
+                 <select 
+                    className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white"
+                    value={newProduct.species}
+                    onChange={(e) => setNewProduct({...newProduct, species: e.target.value})}
+                 >
+                    <option>Pistola</option>
+                    <option>Revolver</option>
+                    <option>Rifle</option>
+                    <option>Espingarda</option>
+                    <option>Carabina</option>
+                 </select>
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">NCM (Fiscal) *</label>
+                 <Input 
+                   maxLength={8}
+                   placeholder="Ex: 93032000"
+                   value={newProduct.ncm}
+                   onChange={(e) => setNewProduct({...newProduct, ncm: e.target.value.replace(/\D/g, "")})}
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">País de Origem</label>
+                 <Input 
+                   value={newProduct.originCountry}
+                   onChange={(e) => setNewProduct({...newProduct, originCountry: e.target.value})}
+                 />
+              </div>
+
               <div className="space-y-2">
                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preço B2C (R$)</label>
                  <Input 
-                   type="number"
-                   placeholder="0,00" 
-                   value={newProduct.price}
-                   onChange={(e) => setNewProduct({...newProduct, price: e.target.value})}
+                   placeholder="0.00"
+                   value={newProduct.priceB2C}
+                   onChange={(e) => setNewProduct({...newProduct, priceB2C: maskDecimal(e.target.value)})}
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preço B2B (R$)</label>
+                 <Input 
+                   placeholder="0.00"
+                   value={newProduct.priceB2B}
+                   onChange={(e) => setNewProduct({...newProduct, priceB2B: maskDecimal(e.target.value)})}
                  />
               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">Estoque Inicial</label>
                  <Input 
                    type="number"
-                   placeholder="0" 
-                   value={newProduct.stock}
-                   onChange={(e) => setNewProduct({...newProduct, stock: e.target.value})}
+                   value={newProduct.stockInitial}
+                   onChange={(e) => setNewProduct({...newProduct, stockInitial: e.target.value})}
+                 />
+              </div>
+
+              <div className="md:col-span-3 h-px bg-brand-border/30 my-2" />
+
+              {/* Especificações Técnicas */}
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Tipo de Ação</label>
+                 <Input 
+                   placeholder="Ex: Semiautomática" 
+                   value={newProduct.actionType}
+                   onChange={(e) => setNewProduct({...newProduct, actionType: e.target.value})}
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Capacidade</label>
+                 <Input 
+                   placeholder="Ex: 18+1" 
+                   value={newProduct.capacity}
+                   onChange={(e) => setNewProduct({...newProduct, capacity: e.target.value})}
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Cano (Pol.)</label>
+                 <Input 
+                   placeholder="Ex: 4.5" 
+                   value={newProduct.barrelLength}
+                   onChange={(e) => setNewProduct({...newProduct, barrelLength: e.target.value})}
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Acabamento</label>
+                 <Input 
+                   placeholder="Ex: Cerakote" 
+                   value={newProduct.finish}
+                   onChange={(e) => setNewProduct({...newProduct, finish: e.target.value})}
+                 />
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">URL da Foto</label>
+                 <Input 
+                   placeholder="https://..." 
+                   value={newProduct.photos}
+                   onChange={(e) => setNewProduct({...newProduct, photos: e.target.value})}
+                 />
+              </div>
+              <div className="space-y-2 md:col-span-1">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preview Visual</label>
+                 <div className="w-full h-10 bg-brand-bg rounded border border-brand-border flex items-center justify-center overflow-hidden">
+                    {newProduct.photos ? (
+                      <img src={newProduct.photos} alt="Preview" className="h-full w-full object-cover" />
+                    ) : (
+                      <ImageIcon size={20} className="text-brand-text-muted opacity-30" />
+                    )}
+                 </div>
+              </div>
+              <div className="space-y-2 md:col-span-3">
+                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Descrição Técnica / Marketing</label>
+                 <textarea 
+                   className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white h-20 outline-none focus:border-brand-accent transition-colors"
+                   placeholder="Destaque as principais características..."
+                   value={newProduct.technicalDescription}
+                   onChange={(e) => setNewProduct({...newProduct, technicalDescription: e.target.value})}
                  />
               </div>
            </div>

@@ -46,7 +46,7 @@ export function DashboardLayout({ children, role, userName, userEmail, pageTitle
           minHeight: "100vh",
           flex: 1,
           width: "100%",
-          marginLeft: isDesktop ? "260px" : "0", // Fallback if CSS fails
+          marginLeft: isDesktop ? "280px" : "0", // Match sidebar width
           transition: "margin-left 0.3s cubic-bezier(0.4,0,0.2,1)",
         }}
       >
@@ -61,7 +61,7 @@ export function DashboardLayout({ children, role, userName, userEmail, pageTitle
         <main
           style={{
             flex: 1,
-            padding: isDesktop ? "40px" : "20px",
+            padding: isDesktop ? "60px" : "30px",
             width: "100%",
             maxWidth: "1600px",
             margin: "0 auto",

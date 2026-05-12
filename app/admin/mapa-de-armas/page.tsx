@@ -5,73 +5,107 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Search, Filter, ShieldCheck, QrCode, FileText, MoreHorizontal, Target, History, CheckCircle2 } from "lucide-react";
+import { Search, Filter, ShieldCheck, QrCode, FileText, MoreHorizontal, Target, History, CheckCircle2, Plus, Eye, Trash2, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Dialog } from "@/components/ui/Dialog";
+import { useEffect, useCallback } from "react";
+import { getWeapons, updateWeaponStatus, getWeaponStats, createWeapon, deleteWeapon, getProducts } from "./actions";
 
-const INITIAL_WEAPONS = [
-  {
-    serial: "VEZ24-889021",
-    product: "VR-12P Carrera",
-    status: "ESTOQUE",
-    location: "BOX-A12",
-    entryDate: "12/03/2026",
-    lot: "LOT-01-2026",
-    customer: "ELEVEN STOCK",
-  },
-  {
-    serial: "CAN-RIVAL-77612",
-    product: "TP9 SFx Rival",
-    status: "RESERVADA",
-    location: "BOX-B04",
-    entryDate: "15/03/2026",
-    lot: "LOT-01-2026",
-    customer: "Francisco Investidor",
-  },
-  {
-    serial: "VEZ24-889022",
-    product: "VR-12P Carrera",
-    status: "VENDIDA",
-    location: "ENTREGUE",
-    entryDate: "12/03/2026",
-    lot: "LOT-01-2026",
-    customer: "João Silva (B2C)",
-  },
-  {
-    serial: "DERYA-MK12-9901",
-    product: "Derya MK-12",
-    status: "CONFERÊNCIA",
-    location: "DOCA 02",
-    entryDate: "18/03/2026",
-    lot: "LOT-02-2026",
-    customer: "CHECKING...",
-  }
-];
+// Dados agora vêm do banco de dados via Server Actions
 
 const STATUS_STYLES: Record<string, string> = {
   ESTOQUE: "bg-brand-success/10 text-brand-success border-brand-success/20",
   RESERVADA: "bg-brand-warning/10 text-brand-warning border-brand-warning/20",
   VENDIDA: "bg-brand-text-muted/10 text-brand-text-muted border-brand-text-muted/20",
   "CONFERÊNCIA": "bg-brand-accent/10 text-brand-accent border-brand-accent/20",
+  IMPORTADA: "bg-blue-500/10 text-blue-500 border-blue-500/20",
 };
 
 export default function WeaponsMapPage() {
-  const [weapons, setWeapons] = useState(INITIAL_WEAPONS);
+  const [weapons, setWeapons] = useState<any[]>([]);
+  const [stats, setStats] = useState({ total: 0, available: 0, reserved: 0, sold: 0, divergence: 0 });
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [selectedWeapon, setSelectedWeapon] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [products, setProducts] = useState<any[]>([]);
+  const [newWeapon, setNewWeapon] = useState({
+    serialNumber: "",
+    productId: "",
+    location: "COFRE A",
+    unitCost: "",
+    diNumber: ""
+  });
+
+  const refreshWeapons = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [wData, sData, pData] = await Promise.all([
+        getWeapons(),
+        getWeaponStats(),
+        getProducts()
+      ]);
+      setWeapons(wData);
+      setStats(sData);
+      setProducts(pData);
+    } catch (error) {
+      toast.error("Erro ao carregar mapa de armas.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshWeapons();
+  }, [refreshWeapons]);
 
   const filteredWeapons = useMemo(() => {
     return weapons.filter(w => {
-      const matchesSearch = w.serial.toLowerCase().includes(search.toLowerCase()) || 
-                           w.product.toLowerCase().includes(search.toLowerCase()) ||
-                           w.customer.toLowerCase().includes(search.toLowerCase()) ||
-                           w.lot.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = w.serial?.toLowerCase().includes(search.toLowerCase()) || 
+                           w.product?.toLowerCase().includes(search.toLowerCase()) ||
+                           w.customer?.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = filterStatus === "Todos" || w.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
   }, [weapons, search, filterStatus]);
+
+  const handleAddWeapon = async () => {
+    if (!newWeapon.serialNumber || !newWeapon.productId) {
+      toast.error("Número de série e produto são obrigatórios.");
+      return;
+    }
+    try {
+      const res = await createWeapon(newWeapon);
+      if (res.success) {
+        toast.success("Arma cadastrada com sucesso!");
+        setIsAddModalOpen(false);
+        setNewWeapon({ serialNumber: "", productId: "", location: "COFRE A", unitCost: "", diNumber: "" });
+        refreshWeapons();
+      } else {
+        toast.error(res.error);
+      }
+    } catch (error) {
+      toast.error("Erro ao processar cadastro.");
+    }
+  };
+
+  const handleDeleteWeapon = async (id: string) => {
+    if (!confirm("Confirmar exclusão permanente deste registro?")) return;
+    try {
+      const res = await deleteWeapon(id);
+      if (res.success) {
+        toast.success("Registro removido.");
+        refreshWeapons();
+      } else {
+        toast.error(res.error);
+      }
+    } catch (error) {
+      toast.error("Erro ao excluir.");
+    }
+  };
 
   const handleScannerClick = () => {
     toast.promise(
@@ -98,7 +132,7 @@ export default function WeaponsMapPage() {
 
   return (
     <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
-      <div className="flex flex-col gap-8 animate-fade-in">
+      <div className="flex flex-col gap-8 animate-fade-in pb-12">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -115,22 +149,21 @@ export default function WeaponsMapPage() {
               <QrCode size={18} />
               SCANNER
             </Button>
-            <Button className="gap-2 shadow-[0_0_20px_rgba(245,196,0,0.15)]" onClick={handleExportSigma}>
-              <ShieldCheck size={18} />
-              EXPORTAR SIGMA
+            <Button className="gap-2 shadow-[0_0_20px_rgba(245,196,0,0.15)]" onClick={() => setIsAddModalOpen(true)}>
+              <Plus size={18} />
+              NOVO REGISTRO
             </Button>
           </div>
         </div>
 
-        {/* ... (Stats and Filters remain same) ... */}
         {/* Stats Summary */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { label: "Total Rastreado", val: "1.240", color: "border-brand-border" },
-            { label: "Disponível", val: "856", color: "border-brand-success text-brand-success" },
-            { label: "Reservado", val: "114", color: "border-brand-warning text-brand-warning" },
-            { label: "Vendido/Baixa", val: "240", color: "border-brand-text-muted text-brand-text-muted" },
-            { label: "Divergências", val: "0", color: "border-brand-danger text-brand-danger" },
+            { label: "Total Rastreado", val: stats.total, color: "border-brand-border" },
+            { label: "Disponível", val: stats.available, color: "border-brand-success text-brand-success" },
+            { label: "Reservado", val: stats.reserved, color: "border-brand-warning text-brand-warning" },
+            { label: "Vendido/Baixa", val: stats.sold, color: "border-brand-text-muted text-brand-text-muted" },
+            { label: "Divergências", val: stats.divergence, color: "border-brand-danger text-brand-danger" },
           ].map((stat, i) => (
             <Card key={i} className={cn("py-3 px-4 border-l-2 bg-brand-surface/30", stat.color)}>
               <p className="text-[9px] font-bold uppercase tracking-widest text-brand-text-muted mb-0.5">{stat.label}</p>
@@ -149,6 +182,21 @@ export default function WeaponsMapPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #333;
+          border-radius: 2px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #444;
+        }
+      `}</style>
             </div>
             <div className="flex gap-2">
               <select 
@@ -222,13 +270,10 @@ export default function WeaponsMapPage() {
                     <td className="pr-6 text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" className="p-2 h-auto hover:text-brand-accent" title="Ficha Técnica" onClick={() => openWeaponDetails(w)}>
-                          <FileText size={16} />
+                          <Eye size={16} />
                         </Button>
-                        <Button variant="ghost" size="sm" className="p-2 h-auto hover:text-brand-accent" title="Histórico" onClick={() => openWeaponDetails(w)}>
-                          <History size={16} />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="p-2 h-auto text-brand-text-muted hover:text-white">
-                          <MoreHorizontal size={18} />
+                        <Button variant="ghost" size="sm" className="p-2 h-auto text-brand-text-muted hover:text-brand-danger" title="Excluir" onClick={() => handleDeleteWeapon(w.id)}>
+                          <Trash2 size={16} />
                         </Button>
                       </div>
                     </td>
@@ -328,6 +373,78 @@ export default function WeaponsMapPage() {
           </div>
         </div>
       )}
+      {/* Modal: Novo Registro de Arma */}
+      <Dialog
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        title="REGISTRAR NOVA ARMA NO ESTOQUE"
+        className="max-w-2xl"
+      >
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-[10px] font-bold uppercase text-brand-text-muted">Modelo / Produto *</label>
+              <select 
+                className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                value={newWeapon.productId}
+                onChange={(e) => setNewWeapon({...newWeapon, productId: e.target.value})}
+              >
+                <option value="">Selecione o modelo...</option>
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>{p.commercialName} ({p.caliber})</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-brand-text-muted">Número de Série *</label>
+              <Input 
+                placeholder="Ex: ABC12345" 
+                value={newWeapon.serialNumber}
+                onChange={(e) => setNewWeapon({...newWeapon, serialNumber: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-brand-text-muted">Número da DI (Importação)</label>
+              <Input 
+                placeholder="Ex: 24/0988712-0" 
+                value={newWeapon.diNumber}
+                onChange={(e) => setNewWeapon({...newWeapon, diNumber: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-brand-text-muted">Custo Unitário (R$)</label>
+              <Input 
+                type="number"
+                placeholder="0.00" 
+                value={newWeapon.unitCost}
+                onChange={(e) => setNewWeapon({...newWeapon, unitCost: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold uppercase text-brand-text-muted">Localização Física</label>
+              <select 
+                className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                value={newWeapon.location}
+                onChange={(e) => setNewWeapon({...newWeapon, location: e.target.value})}
+              >
+                <option value="COFRE A">COFRE PRINCIPAL (A)</option>
+                <option value="COFRE B">COFRE SECUNDÁRIO (B)</option>
+                <option value="MOSTRUARIO">MOSTRUÁRIO LOJA</option>
+                <option value="TRANSITO">EM TRÂNSITO</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-6 border-t border-brand-border">
+            <Button variant="ghost" onClick={() => setIsAddModalOpen(false)} className="text-[10px] font-bold uppercase tracking-widest">
+              CANCELAR
+            </Button>
+            <Button onClick={handleAddWeapon} className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-[0_0_20px_rgba(245,196,0,0.15)]">
+              <Save size={16} /> FINALIZAR REGISTRO
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </DashboardLayout>
   );
 }

@@ -3,12 +3,10 @@
 import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Lock, Mail, Shield } from "lucide-react";
-
+import { Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
 
 const USERS = [
-  { email: "admin@elevenfirearms.com.br", password: "Admin@123", role: "ADMIN", name: "Administrador" },
-  { email: "francisco@email.com", password: "Invest@123", role: "INVESTOR", name: "Francisco" },
+  { email: "ricardo@investor.com", password: "password123", role: "INVESTOR", name: "Ricardo Fonseca" },
 ];
 
 export default function LoginPage() {
@@ -25,273 +23,319 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // Find user in mock USERS
       const user = USERS.find(u => u.email === email && u.password === password);
       
       if (!user) {
-        setError("E-mail ou senha inválidos.");
+        setError("E-mail ou senha de investidor inválidos.");
         setLoading(false);
         return;
       }
 
-      // Set session in localStorage
       localStorage.setItem("eleven_session", JSON.stringify({
         email: user.email,
         name: user.name,
         role: user.role
       }));
 
-      // Redirect based on role
-      if (user.role === "ADMIN") {
-        window.location.href = "/admin";
-      } else {
-        window.location.href = "/investidor";
-      }
+      window.location.href = "/investidor";
     } catch (err) {
-      setError("Ocorreu um erro ao tentar entrar.");
+      setError("Ocorreu um erro ao tentar entrar na área do investidor.");
       setLoading(false);
     }
   };
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ background: "#111111" }}
+      className="min-h-screen flex items-center justify-center relative overflow-hidden px-4"
+      style={{ background: "#080808" }}
     >
-      {/* Background pattern */}
+      {/* Background pattern - refined grid */}
       <div
-        className="absolute inset-0 opacity-5"
+        className="absolute inset-0 opacity-[0.03]"
         style={{
-          backgroundImage: `repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 40px,
-            #F5C400 40px,
-            #F5C400 41px
-          ), repeating-linear-gradient(
-            90deg,
-            transparent,
-            transparent 40px,
-            #F5C400 40px,
-            #F5C400 41px
-          )`,
+          backgroundImage: `linear-gradient(#F5C400 1px, transparent 1px), linear-gradient(90deg, #F5C400 1px, transparent 1px)`,
+          backgroundSize: '60px 60px'
         }}
       />
-
-      {/* Accent line top */}
-      <div className="absolute top-0 left-0 right-0 h-0.5" style={{ background: "#F5C400" }} />
+      
+      {/* Subtle Glow */}
+      <div 
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-5 blur-[120px]"
+        style={{ background: '#F5C400' }}
+      />
 
       <div
-        className="relative w-full max-w-sm mx-4 animate-fade-in"
+        className="relative w-full max-w-sm animate-fade-in"
         style={{ animationDelay: "0.1s" }}
       >
-        {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div
-            className="mb-6 p-6 rounded-[4px]"
-            style={{ background: "rgba(245,196,0,0.06)", border: "1px solid rgba(245,196,0,0.15)" }}
-          >
+        {/* Logo Section */}
+        <div className="flex flex-col items-center mb-10">
+          <div className="mb-6 transform hover:scale-105 transition-transform duration-700">
             <Image
-              src="/logos/logo-alta-a.png"
+              src="/logos/logo-vertical-white.png"
               alt="Eleven Firearms"
-              width={160}
-              height={52}
-              className="object-contain animate-fade-in"
-              style={{ filter: "brightness(0) invert(1)" }}
+              width={150}
+              height={150}
+              className="object-contain"
+              priority
             />
           </div>
-          <p
-            style={{
-              color: "#F5C400",
-              fontSize: "11px",
-              letterSpacing: "0.2em",
-              textTransform: "uppercase",
-              fontFamily: "'Rajdhani', sans-serif",
-              fontWeight: 700,
-            }}
-          >
-            ★ Sistema de Gestão de Investimentos ★
-          </p>
+          <div className="flex items-center gap-4">
+             <div className="h-[1px] w-10 bg-gradient-to-r from-transparent to-[#F5C400]/40" />
+             <p
+               style={{
+                 color: "#F5C400",
+                 fontSize: "10px",
+                 letterSpacing: "0.5em",
+                 textTransform: "uppercase",
+                 fontFamily: "'Rajdhani', sans-serif",
+                 fontWeight: 700,
+                 opacity: 0.9
+               }}
+             >
+               Área do Investidor
+             </p>
+             <div className="h-[1px] w-10 bg-gradient-to-l from-transparent to-[#F5C400]/40" />
+          </div>
         </div>
 
         {/* Card */}
         <div
-          className="rounded-[4px] p-8"
+          className="rounded-xl overflow-hidden"
           style={{
-            background: "#1A1A1A",
-            border: "1px solid #2A2A2A",
-            borderTop: "3px solid #F5C400",
-            boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+            background: "rgba(18, 18, 18, 0.85)",
+            backdropFilter: "blur(20px)",
+            border: "1px solid rgba(255, 255, 255, 0.05)",
+            boxShadow: "0 40px 100px -20px rgba(0, 0, 0, 0.8)",
           }}
         >
-          <div className="flex items-center gap-2 mb-6">
-            <Shield size={16} style={{ color: "#F5C400" }} />
-            <h1
-              style={{
-                color: "#FFFFFF",
-                fontSize: "18px",
-                fontWeight: 700,
-                letterSpacing: "0.1em",
-                textTransform: "uppercase",
-                fontFamily: "'Rajdhani', sans-serif",
-              }}
-            >
-              Acesso ao Sistema
-            </h1>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label
+          {/* Card Header Top Border */}
+          <div className="bg-gradient-to-r from-[#F5C400] via-[#D4A900] to-[#F5C400] h-[2px] w-full" />
+          
+          <div className="p-10">
+            <div className="flex items-center gap-3 mb-10">
+              <div className="w-10 h-10 rounded-lg bg-[#F5C400]/10 flex items-center justify-center border border-[#F5C400]/20">
+                <Lock size={18} className="text-[#F5C400]" />
+              </div>
+              <h1
                 style={{
-                  color: "#A0A0A0",
-                  fontSize: "11px",
-                  letterSpacing: "0.12em",
+                  color: "#FFFFFF",
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  letterSpacing: "0.15em",
                   textTransform: "uppercase",
                   fontFamily: "'Rajdhani', sans-serif",
-                  fontWeight: 600,
-                  display: "block",
-                  marginBottom: 6,
                 }}
               >
-                E-mail
-              </label>
-              <div className="relative">
-                <Mail
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "#606060" }}
-                />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  placeholder="seu@email.com"
-                  className="input-base pl-10"
-                  style={{
-                    background: "#0F0F0F",
-                    border: "1px solid #2A2A2A",
-                    color: "#FFFFFF",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 15,
-                  }}
-                />
-              </div>
+                Autenticação
+              </h1>
             </div>
 
-            {/* Senha */}
-            <div>
-              <label
-                style={{
-                  color: "#A0A0A0",
-                  fontSize: "11px",
-                  letterSpacing: "0.12em",
-                  textTransform: "uppercase",
-                  fontFamily: "'Rajdhani', sans-serif",
-                  fontWeight: 600,
-                  display: "block",
-                  marginBottom: 6,
-                }}
-              >
-                Senha
-              </label>
-              <div className="relative">
-                <Lock
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "#606060" }}
-                />
-                <input
-                  id="password"
-                  type={showPw ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  placeholder="••••••••"
-                  className="input-base pl-10 pr-10"
+            <form onSubmit={handleLogin} className="space-y-8">
+              {/* Email */}
+              <div className="space-y-3">
+                <label
                   style={{
-                    background: "#0F0F0F",
-                    border: "1px solid #2A2A2A",
-                    color: "#FFFFFF",
+                    color: "#666",
+                    fontSize: "11px",
+                    letterSpacing: "0.25em",
+                    textTransform: "uppercase",
                     fontFamily: "'Rajdhani', sans-serif",
-                    fontSize: 15,
+                    fontWeight: 700,
+                    display: "block",
+                    marginLeft: "2px"
                   }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(!showPw)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
-                  style={{ color: "#606060", background: "none", border: "none", cursor: "pointer" }}
                 >
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                  E-mail institucional
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
+                    <Mail size={18} className="text-[#444] transition-colors duration-300 group-focus-within:text-[#F5C400]" />
+                  </div>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="seu@email.com"
+                    style={{
+                        paddingLeft: '52px',
+                        paddingRight: '16px',
+                        paddingTop: '14px',
+                        paddingBottom: '14px',
+                        background: '#0A0A0A',
+                        border: '1px solid #1A1A1A',
+                        borderRadius: '6px',
+                        color: '#FFF',
+                        width: '100%',
+                        fontSize: '14px',
+                        fontFamily: "'Rajdhani', sans-serif",
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                    }}
+                    onFocus={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(245, 196, 0, 0.4)';
+                        e.currentTarget.style.boxShadow = '0 0 0 4px rgba(245, 196, 0, 0.05)';
+                    }}
+                    onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#1A1A1A';
+                        e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div className="space-y-3">
+                <label
+                  style={{
+                    color: "#666",
+                    fontSize: "11px",
+                    letterSpacing: "0.25em",
+                    textTransform: "uppercase",
+                    fontFamily: "'Rajdhani', sans-serif",
+                    fontWeight: 700,
+                    display: "block",
+                    marginLeft: "2px"
+                  }}
+                >
+                  Chave de acesso
+                </label>
+                <div className="relative group">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
+                    <Lock size={18} className="text-[#444] transition-colors duration-300 group-focus-within:text-[#F5C400]" />
+                  </div>
+                  <input
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    style={{
+                        paddingLeft: '52px',
+                        paddingRight: '52px',
+                        paddingTop: '14px',
+                        paddingBottom: '14px',
+                        background: '#0A0A0A',
+                        border: '1px solid #1A1A1A',
+                        borderRadius: '6px',
+                        color: '#FFF',
+                        width: '100%',
+                        fontSize: '14px',
+                        fontFamily: "'Rajdhani', sans-serif",
+                        transition: 'all 0.3s ease',
+                        outline: 'none'
+                    }}
+                    onFocus={(e) => {
+                        e.currentTarget.style.borderColor = 'rgba(245, 196, 0, 0.4)';
+                        e.currentTarget.style.boxShadow = '0 0 0 4px rgba(245, 196, 0, 0.05)';
+                    }}
+                    onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#1A1A1A';
+                        e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(!showPw)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-[#444] hover:text-[#888] transition-colors"
+                  >
+                    {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {error && (
+                <div
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg bg-red-500/5 border border-red-500/10 animate-shake"
+                >
+                  <ShieldAlert size={16} className="text-red-500/80 shrink-0" />
+                  <span className="text-red-500/80 text-[11px] font-rajdhani font-bold tracking-widest uppercase">
+                    {error}
+                  </span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 rounded-lg font-bold uppercase tracking-[0.25em] transition-all duration-300 active:scale-[0.98] disabled:opacity-50"
+                style={{
+                  background: loading ? "#D4A900" : "#F5C400",
+                  color: "#000000",
+                  fontSize: "14px",
+                  fontFamily: "'Rajdhani', sans-serif",
+                  boxShadow: "0 10px 30px -10px rgba(245, 196, 0, 0.3)",
+                  border: 'none',
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {loading ? "Processando..." : "Entrar no Dashboard"}
+              </button>
+            </form>
+
+            {/* Quick Demo Access */}
+            <div className="mt-8 pt-8 border-t border-white/5">
+              <p className="text-[10px] text-[#444] uppercase tracking-widest font-bold mb-4 text-center">Acessos de Demonstração</p>
+              <div 
+                className="p-3 rounded bg-white/[0.02] border border-white/5 cursor-pointer hover:bg-white/[0.05] transition-colors group"
+                onClick={() => {
+                  setEmail("ricardo@investor.com");
+                  setPassword("password123");
+                }}
+              >
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] text-[#888] font-rajdhani uppercase font-bold group-hover:text-[#F5C400]">Investidor Demo</span>
+                  <span className="text-[9px] text-[#444] font-mono">ricardo@investor.com</span>
+                </div>
               </div>
             </div>
-
-            {error && (
-              <div
-                className="flex items-center gap-2 px-3 py-2 rounded-[2px]"
-                style={{ background: "rgba(229,57,53,0.1)", border: "1px solid rgba(229,57,53,0.3)" }}
-              >
-                <span style={{ color: "#E53935", fontSize: 13, fontFamily: "'Rajdhani', sans-serif" }}>
-                  {error}
-                </span>
-              </div>
-            )}
-
-            <button
-              id="btn-login"
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-[2px] font-bold uppercase tracking-widest transition-all duration-150 mt-2"
-              style={{
-                background: loading ? "#D4A900" : "#F5C400",
-                color: "#1A1A1A",
-                fontSize: "14px",
-                letterSpacing: "0.15em",
-                fontFamily: "'Rajdhani', sans-serif",
-                border: "none",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-              onMouseOver={(e) => {
-                if (!loading) (e.currentTarget as HTMLElement).style.background = "#D4A900";
-              }}
-              onMouseOut={(e) => {
-                if (!loading) (e.currentTarget as HTMLElement).style.background = "#F5C400";
-              }}
-            >
-              {loading ? "Verificando..." : "★ Entrar"}
-            </button>
-          </form>
+          </div>
         </div>
 
         {/* Footer */}
-        <p
-          className="text-center mt-6"
-          style={{ color: "#333", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}
-        >
-          Eleven Firearms © 2025 · Acesso restrito
-        </p>
+        <div className="mt-12 flex flex-col items-center gap-6">
+          <p
+            style={{ 
+              color: "#333", 
+              fontSize: "10px", 
+              fontFamily: "'Rajdhani', sans-serif", 
+              letterSpacing: "0.2em",
+              textTransform: "uppercase",
+              fontWeight: 700
+            }}
+          >
+            Eleven Firearms Group · Autenticação Protegida
+          </p>
 
-        {/* Demo credentials */}
-        <div
-          className="mt-4 p-3 rounded-[2px]"
-          style={{ background: "rgba(245,196,0,0.04)", border: "1px solid #2A2A2A" }}
-        >
-          <p style={{ color: "#606060", fontSize: "11px", fontFamily: "'Rajdhani', sans-serif", marginBottom: 4 }}>
-            ACESSO DEMO:
-          </p>
-          <p style={{ color: "#A0A0A0", fontSize: "12px", fontFamily: "'Roboto Mono', monospace" }}>
-            Admin: admin@elevenfirearms.com.br / Admin@123
-          </p>
-          <p style={{ color: "#A0A0A0", fontSize: "12px", fontFamily: "'Roboto Mono', monospace" }}>
-            Investidor: francisco@email.com / Invest@123
-          </p>
+          <a 
+            href="/admin/login" 
+            className="text-[10px] text-[#444] hover:text-[#F5C400] uppercase tracking-[0.4em] font-bold transition-all duration-500 border-b border-transparent hover:border-[#F5C400]/20 pb-1"
+          >
+            Painel Administrativo
+          </a>
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes fade-in {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+          animation: fade-in 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          20% { transform: translateX(-5px); }
+          40% { transform: translateX(5px); }
+          60% { transform: translateX(-5px); }
+          80% { transform: translateX(5px); }
+        }
+        .animate-shake {
+          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+      `}</style>
     </div>
   );
 }

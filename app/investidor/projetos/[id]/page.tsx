@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { mockProjects } from "@/lib/mock-data";
+import { getInvestorProjectDetails } from "../../actions";
 import { formatMoney } from "@/lib/calculations";
 import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
@@ -13,22 +13,32 @@ import Link from "next/link";
 export default function InvestorProjectDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
+  const [project, setProject] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
 
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
     if (!s) { router.push("/login"); return; }
-    setSession(JSON.parse(s));
+    const parsed = JSON.parse(s);
+    setSession(parsed);
+
+    getInvestorProjectDetails(params.id, parsed.email).then(res => {
+      if (res.success && res.project) {
+        setProject(res.project);
+      } else {
+        router.push("/investidor/projetos");
+      }
+      setLoading(false);
+    });
   }, []);
 
-  const project = mockProjects.find((p) => p.id === params.id) || mockProjects[0];
-
-  if (!session) return null;
+  if (loading || !session || !project) return null;
 
   return (
     <DashboardLayout role="INVESTOR" userName={session.name} userEmail={session.email} pageTitle={project.name}>
       <div className="mb-6">
-        <Link href="/investor/projects" className="inline-flex items-center gap-2 text-sm" style={{ color: "#A0A0A0", textDecoration: "none", fontFamily: "'Rajdhani', sans-serif" }}
+        <Link href="/investidor/projetos" className="inline-flex items-center gap-2 text-sm" style={{ color: "#A0A0A0", textDecoration: "none", fontFamily: "'Rajdhani', sans-serif" }}
           onMouseOver={(e) => (e.currentTarget as HTMLElement).style.color = "#F5C400"}
           onMouseOut={(e) => (e.currentTarget as HTMLElement).style.color = "#A0A0A0"}>
           <ArrowLeft size={14} /> Voltar

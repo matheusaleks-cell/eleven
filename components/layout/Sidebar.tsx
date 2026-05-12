@@ -79,19 +79,19 @@ function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, se
         display: "flex",
         alignItems: "center",
         gap: 12,
-        padding: "10px 16px",
+        padding: "14px 20px",
         borderRadius: "2px",
         background: isActive(item.href) ? "rgba(245,196,0,0.10)" : "transparent",
         color: isActive(item.href) ? "#F5C400" : "#A0A0A0",
-        borderLeft: isActive(item.href) ? "2px solid #F5C400" : "2px solid transparent",
+        borderLeft: isActive(item.href) ? "3px solid #F5C400" : "2px solid transparent",
         fontWeight: isActive(item.href) ? 600 : 400,
         textDecoration: "none",
         fontFamily: "'Rajdhani', sans-serif",
         fontSize: "15px",
-        letterSpacing: "0.03em",
+        letterSpacing: "0.04em",
         transition: "all 0.15s",
         whiteSpace: "nowrap",
-        marginBottom: 2,
+        marginBottom: 6,
       }}
     >
       <span style={{ color: isActive(item.href) ? "#F5C400" : "#555", flexShrink: 0 }}>{item.icon}</span>
@@ -112,8 +112,8 @@ function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, se
         overflowX: "hidden",
       }}
     >
-      <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #242424", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <Image src="/logos/logo-alta-a.png" alt="Eleven Firearms" width={130} height={42} style={{ objectFit: "contain", filter: "brightness(0) invert(1)", width: "auto", height: "42px" }} />
+      <div style={{ padding: "30px 24px 24px", borderBottom: "1px solid #242424", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <Image src="/logos/logo-alta-a.png" alt="Eleven Firearms" width={140} height={46} style={{ objectFit: "contain", filter: "brightness(0) invert(1)", width: "auto", height: "46px" }} />
         {!isDesktop && (
           <button onClick={onMobileClose} style={{ color: "#555", background: "none", border: "none", cursor: "pointer", padding: 4 }}>
             <X size={18} />
@@ -207,7 +207,7 @@ export function Sidebar({ role, userName, userEmail, mobileOpen = false, onMobil
             left: 0,
             top: 0,
             bottom: 0,
-            width: 260,
+            width: 280,
             zIndex: 30,
           }}
         >

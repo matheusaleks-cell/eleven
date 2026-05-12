@@ -10,8 +10,10 @@ import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { CapitalGrowthChart } from "@/components/charts/CapitalGrowthChart";
 import { RevenueBarChart } from "@/components/charts/RevenueBarChart";
 import { FilterBar } from "@/components/shared/FilterBar";
-import { mockProjects, dashboardStats } from "@/lib/mock-data";
 import { TrendingUp, FolderKanban, Users, ArrowRight, Plus, Activity, Eye } from "lucide-react";
+import { getDashboardStats, getRecentProjects } from "./actions";
+import { getInvestors } from "./investidores/actions";
+import { toast } from "sonner";
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -23,55 +25,49 @@ export default function AdminDashboard() {
   const [endDate, setEndDate] = useState("");
   const [investorId, setInvestorId] = useState("ALL");
   
-  // Dados filtrados (inicializados com os mocks)
-  const [filteredProjects, setFilteredProjects] = useState(mockProjects);
-  const [stats, setStats] = useState(dashboardStats);
+  // Dados reais do banco
+  const [filteredProjects, setFilteredProjects] = useState<any[]>([]);
+  const [investors, setInvestors] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    try {
-      const s = localStorage.getItem("eleven_session");
-      if (!s) {
-        window.location.href = "/login";
-        return;
-      }
-      const parsed = JSON.parse(s);
-      if (parsed.role !== "ADMIN") {
-        window.location.href = "/investidor";
-        return;
-      }
-      setSession(parsed);
-    } catch (e) {
-      window.location.href = "/login";
-    } finally {
-      setLoading(false);
+    const s = localStorage.getItem("eleven_session");
+    if (s) {
+      setSession(JSON.parse(s));
     }
+    
+    // Carregar dados iniciais do banco
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [sData, pData, iData] = await Promise.all([
+          getDashboardStats(),
+          getRecentProjects(),
+          getInvestors()
+        ]);
+        setStats(sData);
+        setFilteredProjects(pData);
+        setInvestors(iData);
+      } catch (error) {
+        toast.error("Erro ao sincronizar dados com o banco.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, []);
 
   const applyFilters = () => {
-    const filtered = mockProjects.filter(p => {
-      const matchInvestor = investorId === "ALL" || p.investor_id === investorId;
-      const matchDate = (!startDate || p.created_at >= startDate) && (!endDate || p.created_at <= endDate);
-      return matchInvestor && matchDate;
-    });
-
-    setFilteredProjects(filtered);
-
-    // Recalcular estatísticas
-    setStats({
-      activeProjects: filtered.filter(p => p.status === "ACTIVE").length,
-      completedProjects: filtered.filter(p => p.status === "COMPLETED").length,
-      totalRevenue: filtered.reduce((a, p) => a + p.totalRevenue, 0),
-      totalInvestorShare: filtered.reduce((a, p) => a + p.totalInvestorShare, 0),
-      totalCompanyShare: filtered.reduce((a, p) => a + p.totalCompanyShare, 0),
-    });
+    toast.info("Filtragem de banco em desenvolvimento. Usando visão geral.");
   };
 
   const handleClearFilters = () => {
     setStartDate("");
     setEndDate("");
     setInvestorId("ALL");
-    setFilteredProjects(mockProjects);
-    setStats(dashboardStats);
+    // Recarregar do banco
+    getRecentProjects().then(setFilteredProjects);
   };
 
   if (loading) {
@@ -93,30 +89,41 @@ export default function AdminDashboard() {
     );
   }
 
-  // Dados para os gráficos com campos corretos (camelCase do CycleResult)
-  const chartCapitalData = filteredProjects.length > 0 && filteredProjects[0].cycles
-    ? filteredProjects[0].cycles.map((c: any) => ({ 
-        name: c.cycleName, 
-        capital: Number(c.nextCycleCapital) || 0,
-      }))
-    : [];
+  // Dados para os gráficos com campos reais do banco
+  // Agregação de dados para os gráficos
+  const chartCapitalData = filteredProjects.reduce((acc: any[], p: any) => {
+    p.cycles?.forEach((c: any) => {
+      const existing = acc.find(x => x.name === c.cycleName);
+      if (existing) {
+        existing.capital += Number(c.totalInvestment) || 0;
+      } else {
+        acc.push({ name: c.cycleName, capital: Number(c.totalInvestment) || 0 });
+      }
+    });
+    return acc;
+  }, []).sort((a, b) => a.name.localeCompare(b.name));
 
-  const chartRevenueData = filteredProjects.length > 0 && filteredProjects[0].cycles
-    ? filteredProjects[0].cycles.map((c: any) => ({ 
-        name: c.cycleName, 
-        value: Number(c.grossRevenue) || 0,
-      }))
-    : [];
+  const chartRevenueData = filteredProjects.reduce((acc: any[], p: any) => {
+    p.cycles?.forEach((c: any) => {
+      const existing = acc.find(x => x.name === c.cycleName);
+      if (existing) {
+        existing.value += Number(c.grossRevenue) || 0;
+      } else {
+        acc.push({ name: c.cycleName, value: Number(c.grossRevenue) || 0 });
+      }
+    });
+    return acc;
+  }, []).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <DashboardLayout role="ADMIN" userName={session.name} userEmail={session.email} pageTitle="Dashboard">
       {/* Welcome */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
         <div>
-          <h1 style={{ color: "#FFFFFF", fontSize: "28px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif" }}>
+          <h1 style={{ color: "#FFFFFF", fontSize: "32px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "-0.02em" }}>
             Bem-vindo, {session.name}
           </h1>
-          <p style={{ color: "#606060", fontSize: "14px", fontFamily: "'Rajdhani', sans-serif" }}>
+          <p style={{ color: "#606060", fontSize: "16px", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em", marginTop: "4px" }}>
             Visão geral do sistema de investimentos
           </p>
         </div>
@@ -140,44 +147,49 @@ export default function AdminDashboard() {
         onInvestorChange={setInvestorId}
         onClear={handleClearFilters}
         onFilter={applyFilters}
+        investors={investors}
       />
 
+      <div style={{ height: "48px" }} />
+
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-8">
         <StatCard
           title="Projetos Ativos"
           value={
             <span style={{ color: "#F5C400", fontSize: "38px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif" }}>
-              {stats.activeProjects}
+              {stats?.activeProjects || 0}
             </span>
           }
           icon={<FolderKanban size={18} />}
-          sub={`${stats.completedProjects} concluídos`}
+          sub={`${stats?.completedProjects || 0} concluídos`}
           accent
         />
         <StatCard
           title="Faturamento Total"
-          value={<MoneyDisplay value={stats.totalRevenue} size="lg" />}
+          value={<MoneyDisplay value={stats?.totalRevenue || 0} size="lg" />}
           icon={<Activity size={18} />}
           sub="Baseado nos filtros"
         />
         <StatCard
           title="Saldo Investidores"
-          value={<MoneyDisplay value={stats.totalInvestorShare} size="lg" />}
+          value={<MoneyDisplay value={stats?.totalInvestorShare || 0} size="lg" />}
           icon={<Users size={18} />}
           sub="Total distribuído"
         />
         <StatCard
           title="Saldo Empresa"
-          value={<MoneyDisplay value={stats.totalCompanyShare} size="lg" />}
+          value={<MoneyDisplay value={stats?.totalCompanyShare || 0} size="lg" />}
           icon={<TrendingUp size={18} />}
           sub="Lucro retido"
         />
       </div>
 
+      <div style={{ height: "48px" }} />
+
       {/* Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-10">
-        <div className="rounded-[4px] p-6" style={{ background: "#242424", border: "1px solid #333" }}>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
+        <div className="rounded-[4px] p-10" style={{ background: "#242424", border: "1px solid #333" }}>
           <div className="mb-6">
             <p className="section-divider" style={{ margin: 0, fontSize: "11px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
               ★ Evolução do Capital ★
@@ -189,7 +201,7 @@ export default function AdminDashboard() {
           <CapitalGrowthChart data={chartCapitalData} height={280} />
         </div>
 
-        <div className="rounded-[4px] p-6" style={{ background: "#242424", border: "1px solid #333" }}>
+        <div className="rounded-[4px] p-10" style={{ background: "#242424", border: "1px solid #333" }}>
           <div className="mb-6">
             <p style={{ margin: 0, fontSize: "11px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
               ★ Faturamento por Ciclo ★
@@ -202,15 +214,19 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      <div style={{ height: "64px" }} />
+
       {/* Recent Projects Table */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="section-divider" style={{ margin: 0, fontSize: "12px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
+      <div className="flex items-center justify-between mb-8">
+        <h2 className="section-divider" style={{ margin: 0, fontSize: "16px", color: "#F5C400", letterSpacing: "0.2em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
           ★ Projetos Recentes ★
         </h2>
-        <Link href="/admin/projetos" className="text-xs text-gray-500 hover:text-yellow-500 flex items-center gap-1 uppercase tracking-tighter">
-          Ver todos <ArrowRight size={12} />
+        <Link href="/admin/projetos" className="text-sm text-gray-500 hover:text-yellow-500 flex items-center gap-2 uppercase tracking-widest font-bold">
+          Ver todos <ArrowRight size={14} />
         </Link>
       </div>
+
+      <div style={{ height: "24px" }} />
 
       <div className="rounded-[4px] overflow-hidden" style={{ background: "#242424", border: "1px solid #333" }}>
         <div className="overflow-x-auto">

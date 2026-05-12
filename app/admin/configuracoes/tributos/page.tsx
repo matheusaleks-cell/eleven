@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { mockTaxConfigs, defaultTaxConfig } from "@/lib/mock-data";
+import { getTaxConfigs, createTaxConfig, updateTaxConfig } from "../actions";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Save, AlertTriangle, CheckCircle } from "lucide-react";
+import { toast } from "sonner";
 
 const fieldStyle = {
   background: "#0F0F0F",
@@ -23,34 +24,83 @@ export default function TaxesPage() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [saved, setSaved] = useState(false);
+  const [configList, setConfigList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState({
+    id: "",
     name: "Configuração padrão 2025",
-    ii_rate: "18.00",
-    ipi_rate: "55.00",
-    pis_rate: "2.10",
-    cofins_rate: "9.65",
-    icms_rate: "25.00",
-    icms_factor: "0.75",
-    siscomex_fixed: "154.23",
-    operational_fixed: "1740.00",
-    sales_tax_rate: "11.00",
-    sales_op_rate: "8.00",
+    ii: "18.00",
+    ipi: "55.00",
+    pisPasep: "2.10",
+    cofins: "9.65",
+    icmsImport: "25.00",
+    icmsSale: "18.00",
+    simplesNacional: "8.00",
+    siscomexFixed: "154.23",
+    description: "",
+    isDefault: true
   });
 
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
-    if (!s) { router.push("/login"); return; }
+    if (!s) { router.push("/admin/login"); return; }
     const parsed = JSON.parse(s);
-    if (parsed.role !== "ADMIN") { router.push("/investor"); return; }
+    if (parsed.role !== "ADMIN") { router.push("/investidor"); return; }
     setSession(parsed);
+    loadConfigs();
   }, []);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  async function loadConfigs() {
+    setLoading(true);
+    const res = await getTaxConfigs();
+    if (res.success && res.configs.length > 0) {
+      setConfigList(res.configs);
+      const active = res.configs.find((c: any) => c.isDefault) || res.configs[0];
+      setConfig({
+        id: active.id,
+        name: active.name,
+        ii: active.ii.toString(),
+        ipi: active.ipi.toString(),
+        pisPasep: active.pisPasep.toString(),
+        cofins: active.cofins.toString(),
+        icmsImport: active.icmsImport.toString(),
+        icmsSale: active.icmsSale.toString(),
+        simplesNacional: active.simplesNacional.toString(),
+        siscomexFixed: active.siscomexFixed.toString(),
+        description: active.description || "",
+        isDefault: active.isDefault
+      });
+    }
+    setLoading(false);
+  }
+
+  const handleSave = async (isNew: boolean) => {
+    try {
+      if (isNew || !config.id) {
+        const res = await createTaxConfig({...config, isDefault: true});
+        if (res.success) {
+          toast.success("Nova configuração salva e ativada com sucesso!");
+          loadConfigs();
+        } else {
+          toast.error(res.error);
+        }
+      } else {
+        const res = await updateTaxConfig(config.id, {...config, isDefault: true});
+        if (res.success) {
+          toast.success("Configuração atualizada e ativada!");
+          loadConfigs();
+        } else {
+          toast.error(res.error);
+        }
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      toast.error("Erro ao salvar configuração.");
+    }
   };
 
-  if (!session) return null;
+  if (!session || loading) return null;
 
   const Field = ({ label, value, key: k, suffix = "%" }: { label: string; value: string; key: string; suffix?: string }) => (
     <div>
@@ -95,33 +145,31 @@ export default function TaxesPage() {
 
           <div className="section-divider mb-8">★ Tributos de Importação ★</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-            <Field label="II — Imposto de Importação (%)" value={config.ii_rate} key="ii_rate" />
-            <Field label="IPI (%)" value={config.ipi_rate} key="ipi_rate" />
-            <Field label="PIS-PASEP (%)" value={config.pis_rate} key="pis_rate" />
-            <Field label="COFINS (%)" value={config.cofins_rate} key="cofins_rate" />
-            <Field label="ICMS — Alíquota (%)" value={config.icms_rate} key="icms_rate" />
-            <Field label="Fator ICMS — RICMS Art. 52 (decimal)" value={config.icms_factor} key="icms_factor" suffix="×" />
-            <Field label="Taxa de Siscomex (R$)" value={config.siscomex_fixed} key="siscomex_fixed" suffix="R$" />
-            <Field label="Custo Operacional Fixo (R$)" value={config.operational_fixed} key="operational_fixed" suffix="R$" />
+            <Field label="II — Imposto de Importação (%)" value={config.ii} key="ii" />
+            <Field label="IPI (%)" value={config.ipi} key="ipi" />
+            <Field label="PIS-PASEP (%)" value={config.pisPasep} key="pisPasep" />
+            <Field label="COFINS (%)" value={config.cofins} key="cofins" />
+            <Field label="ICMS Importação — Alíquota (%)" value={config.icmsImport} key="icmsImport" />
+            <Field label="Taxa de Siscomex (R$)" value={config.siscomexFixed} key="siscomexFixed" suffix="R$" />
           </div>
 
           <div className="section-divider mb-8">★ Tributação sobre Vendas ★</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
-            <Field label="Taxa sobre Faturamento (%)" value={config.sales_tax_rate} key="sales_tax_rate" />
-            <Field label="Custo Operacional sobre Vendas (%)" value={config.sales_op_rate} key="sales_op_rate" />
+            <Field label="ICMS Venda (%)" value={config.icmsSale} key="icmsSale" />
+            <Field label="Simples Nacional (%)" value={config.simplesNacional} key="simplesNacional" />
           </div>
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-3">
             <button
-              onClick={handleSave}
+              onClick={() => handleSave(true)}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[2px] font-bold uppercase"
               style={{ border: "1px solid #F5C400", color: "#F5C400", background: "transparent", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", cursor: "pointer", fontSize: "13px" }}
             >
               <Save size={15} /> Salvar como Nova Configuração
             </button>
             <button
-              onClick={handleSave}
+              onClick={() => handleSave(false)}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[2px] font-bold uppercase"
               style={{ background: "#F5C400", color: "#1A1A1A", border: "none", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", cursor: "pointer", fontSize: "13px" }}
             >
@@ -153,16 +201,20 @@ export default function TaxesPage() {
                 </tr>
               </thead>
               <tbody>
-                {mockTaxConfigs.map((tc) => (
-                  <tr key={tc.id}>
-                    <td style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>{tc.name}</td>
-                    <td className="hidden md:table-cell" style={{ fontFamily: "'Roboto Mono', monospace", color: "#A0A0A0", fontSize: "13px" }}>{(tc.ii_rate * 100).toFixed(2)}%</td>
-                    <td className="hidden md:table-cell" style={{ fontFamily: "'Roboto Mono', monospace", color: "#A0A0A0", fontSize: "13px" }}>{(tc.ipi_rate * 100).toFixed(2)}%</td>
-                    <td className="hidden lg:table-cell" style={{ fontFamily: "'Roboto Mono', monospace", color: "#A0A0A0", fontSize: "13px" }}>{(tc.icms_rate * 100).toFixed(2)}%</td>
-                    <td className="hidden lg:table-cell" style={{ color: "#606060", fontFamily: "'Rajdhani', sans-serif", fontSize: "13px" }}>{tc.created_at}</td>
-                    <td>{tc.is_active ? <StatusBadge status="ACTIVE" /> : <StatusBadge status="PENDING" />}</td>
-                  </tr>
-                ))}
+                {configList.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-6 text-brand-text-muted text-xs uppercase font-bold">Nenhuma configuração registrada no banco.</td></tr>
+                ) : (
+                  configList.map((tc: any) => (
+                    <tr key={tc.id}>
+                      <td style={{ fontFamily: "'Rajdhani', sans-serif", fontWeight: 600 }}>{tc.name}</td>
+                      <td className="hidden md:table-cell" style={{ fontFamily: "'Roboto Mono', monospace", color: "#A0A0A0", fontSize: "13px" }}>{tc.ii}%</td>
+                      <td className="hidden md:table-cell" style={{ fontFamily: "'Roboto Mono', monospace", color: "#A0A0A0", fontSize: "13px" }}>{tc.ipi}%</td>
+                      <td className="hidden lg:table-cell" style={{ fontFamily: "'Roboto Mono', monospace", color: "#A0A0A0", fontSize: "13px" }}>{tc.icmsImport}%</td>
+                      <td className="hidden lg:table-cell" style={{ color: "#606060", fontFamily: "'Rajdhani', sans-serif", fontSize: "13px" }}>{new Date(tc.createdAt).toLocaleDateString('pt-BR')}</td>
+                      <td>{tc.isDefault ? <StatusBadge status="ACTIVE" /> : <StatusBadge status="PENDING" />}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

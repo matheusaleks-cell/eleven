@@ -3,20 +3,12 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum UserRole {
-  ADMIN
-  COMMERCIAL
-  FINANCIAL
-  WAREHOUSE
-  INVESTOR
-  RESELLER_B2B
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
@@ -24,7 +16,7 @@ model User {
   name            String
   email           String    @unique
   password        String
-  role            UserRole  @default(INVESTOR)
+  role            String    @default("INVESTOR")
   phone           String?
   avatarUrl       String?   @map("avatar_url")
   
@@ -43,22 +35,24 @@ model User {
   @@map("users")
 }
 
-enum ProjectStatus {
-  ACTIVE
-  COMPLETED
-  CANCELLED
-}
-
 model InvestmentProject {
   id              String        @id @default(uuid())
   name            String        // ex: "VR-12P · Francisco · Lote 01"
   productName     String        @map("product_name")
   investorId      String        @map("investor_id")
-  status          ProjectStatus @default(ACTIVE)
-  initialCapital  Decimal       @db.Decimal(12, 2) @map("initial_capital")
+  status          String        @default("ACTIVE")
+  initialCapital  Float         @map("initial_capital")
   maxCycles       Int           @default(8) @map("max_cycles")
-  profitSplitPct  Decimal       @db.Decimal(5, 4) @default(0.50) @map("profit_split_pct")
-  notes           String?       @db.Text
+  profitSplitPct  Float         @default(0.50) @map("profit_split_pct")
+  notes           String?       
+  
+  // Compliance & Operation
+  contractNumber  String?       @map("contract_number")
+  startDate       DateTime?     @map("start_date")
+  bankAccount     String?       @map("bank_account")
+  pixKey          String?       @map("pix_key")
+  payoutRule      String?       @default("REINVEST") @map("payout_rule") // REINVEST, WITHDRAW
+  taxProfile      String?       @default("PF") @map("tax_profile") // PF, PJ
   
   // Relations
   investor        User          @relation("InvestorProjects", fields: [investorId], references: [id])
@@ -66,30 +60,12 @@ model InvestmentProject {
   createdById     String        @map("created_by_id")
   cycles          Cycle[]
   importLots      ImportLot[]
+  documents       Document[]
 
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
   @@map("investment_projects")
-}
-
-enum LotStatus {
-  CAPTACAO
-  CAPITAL_CAPTADO
-  PEDIDO_FEITO
-  AGUARD_EMBARQUE
-  TRANSITO
-  NACIONALIZANDO
-  LIBERADO
-  ESTOQUE
-  VENDA
-  LIQUIDADO
-}
-
-enum Currency {
-  USD
-  EUR
-  GBP
 }
 
 model ImportLot {
@@ -100,18 +76,18 @@ model ImportLot {
   purchaseDate            DateTime  @map("purchase_date")
   expectedShipmentDate    DateTime? @map("expected_shipment_date")
   expectedNationalityDate DateTime? @map("expected_nationality_date")
-  currency                Currency  @default(USD)
-  exchangeRate            Decimal   @db.Decimal(10, 4) @map("exchange_rate")
-  fobValue                Decimal   @db.Decimal(12, 2) @map("fob_value")
-  freight                 Decimal   @db.Decimal(12, 2)
-  insurance               Decimal   @db.Decimal(12, 2)
-  customsTaxes            Decimal   @db.Decimal(12, 2) @map("customs_taxes")
-  customsFees             Decimal   @db.Decimal(12, 2) @map("customs_fees")
-  totalCostNationalized   Decimal   @db.Decimal(12, 2) @map("total_cost_nationalized")
+  currency                String    @default("USD")
+  exchangeRate            Float     @map("exchange_rate")
+  fobValue                Float     @map("fob_value")
+  freight                 Float     
+  insurance               Float     
+  customsTaxes            Float     @map("customs_taxes")
+  customsFees             Float     @map("customs_fees")
+  totalCostNationalized   Float     @map("total_cost_nationalized")
   quantityItems           Int       @map("quantity_items")
-  status                  LotStatus @default(CAPTACAO)
-  expectedMarginPct       Decimal   @db.Decimal(5, 2) @map("expected_margin_pct")
-  realizedMarginPct       Decimal?  @db.Decimal(5, 2) @map("realized_margin_pct")
+  status                  String    @default("CAPTACAO")
+  expectedMarginPct       Float     @map("expected_margin_pct")
+  realizedMarginPct       Float?    @map("realized_margin_pct")
   
   // Relations
   supplier              Supplier  @relation(fields: [supplierId], references: [id])
@@ -127,12 +103,6 @@ model ImportLot {
   @@map("import_lots")
 }
 
-enum ProductStatus {
-  ACTIVE
-  INACTIVE
-  ARCHIVED
-}
-
 model Product {
   id                      String        @id @default(uuid())
   sku                     String        @unique
@@ -143,18 +113,18 @@ model Product {
   species                 String
   actionType              String        @map("action_type")
   capacity                Int
-  barrelLength            Decimal       @db.Decimal(5, 2) @map("barrel_length")
+  barrelLength            Float         @map("barrel_length")
   finish                  String
   originCountry           String        @map("origin_country")
   ncm                     String
-  technicalDescription    String?       @db.Text @map("technical_description")
-  photos                  String[]      // URLs
-  videos                  String[]      // URLs
-  priceB2C                Decimal       @db.Decimal(12, 2) @map("price_b2c")
-  priceB2B                Decimal?      @db.Decimal(12, 2) @map("price_b2b")
+  technicalDescription    String?       @map("technical_description")
+  photos                  String?       // Comma separated URLs
+  videos                  String?       // Comma separated URLs
+  priceB2C                Float         @map("price_b2c")
+  priceB2B                Float?        @map("price_b2b")
   stockAvailable          Int           @default(0) @map("stock_available")
   stockReserved           Int           @default(0) @map("stock_reserved")
-  status                  ProductStatus @default(ACTIVE)
+  status                  String        @default("ACTIVE")
   
   // Relations
   importLot             ImportLot?    @relation(fields: [importLotId], references: [id])
@@ -165,21 +135,6 @@ model Product {
   updatedAt               DateTime      @updatedAt @map("updated_at")
 
   @@map("products")
-}
-
-enum WeaponStatus {
-  IMPORTADA
-  CONFERENCIA
-  ESTOQUE
-  RESERVADA
-  VENDIDA
-  FATURADA
-  TRANSPORTE
-  ENTREGUE
-  BAIXADA
-  BLOQUEADA
-  DEVOLVIDA
-  CANCELADA
 }
 
 model WeaponMap {
@@ -196,21 +151,21 @@ model WeaponMap {
   customsClearanceDate    DateTime?     @map("customs_clearance_date")
   entryInvoiceNumber      String?       @map("entry_invoice_number")
   entryDate               DateTime      @map("entry_date")
-  unitCost                Decimal       @db.Decimal(12, 2) @map("unit_cost")
+  unitCost                Float         @map("unit_cost")
   warehouseLocation       String?       @map("warehouse_location")
-  currentStatus           WeaponStatus  @default(IMPORTADA) @map("current_status")
+  currentStatus           String        @default("IMPORTADA") @map("current_status")
   lastMovementDate        DateTime      @default(now()) @map("last_movement_date")
-  observations            String?       @db.Text
+  observations            String?       
   hasDivergence           Boolean       @default(false) @map("has_divergence")
   
   // Venda
   customerId              String?       @map("customer_id")
   customerCpfCnpj         String?       @map("customer_cpf_cnpj")
-  customerState           String?       @db.VarChar(2) @map("customer_state")
+  customerState           String?       @map("customer_state")
   salesOrderId            String?       @map("sales_order_id")
   salesInvoiceNumber      String?       @map("sales_invoice_number")
   saleDate                DateTime?     @map("sale_date")
-  saleValue               Decimal?      @db.Decimal(12, 2) @map("sale_value")
+  saleValue               Float?        @map("sale_value")
   paymentMethod           String?       @map("payment_method")
   shippingCompany         String?       @map("shipping_company")
   deliveryStatus          String?       @map("delivery_status")
@@ -232,18 +187,12 @@ model WeaponMap {
   @@map("weapons_map")
 }
 
-enum CycleStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-}
-
 model Cycle {
   id                       String      @id @default(uuid())
   projectId                String      @map("project_id")
   cycleNumber              Int         @map("cycle_number")
   cycleName                String      @map("cycle_name")
-  status                   CycleStatus @default(PENDING)
+  status                   String      @default("PENDING")
   importLotId              String?     @map("import_lot_id")
 
   // Identificação
@@ -253,41 +202,41 @@ model Cycle {
 
   // Inputs
   quantity                 Int
-  salePricePerUnit         Decimal     @db.Decimal(12, 2) @map("sale_price_per_unit")
-  exchangeRateUsd          Decimal     @db.Decimal(10, 4) @map("exchange_rate_usd")
-  fobValueUsd              Decimal     @db.Decimal(12, 2) @map("fob_value_usd")
-  freightUsd               Decimal     @db.Decimal(12, 2) @map("freight_usd")
-  insuranceUsd             Decimal     @db.Decimal(12, 2) @map("insurance_usd")
+  salePricePerUnit         Float       @map("sale_price_per_unit")
+  exchangeRateUsd          Float       @map("exchange_rate_usd")
+  fobValueUsd              Float       @map("fob_value_usd")
+  freightUsd               Float       @map("freight_usd")
+  insuranceUsd             Float       @map("insurance_usd")
 
   // Tributos
-  customsValueBrl         Decimal     @db.Decimal(12, 2) @map("customs_value_brl")
-  iiTax                   Decimal     @db.Decimal(12, 2) @map("ii_tax")
-  ipiTax                  Decimal     @db.Decimal(12, 2) @map("ipi_tax")
-  afrmmTax                Decimal     @db.Decimal(12, 2) @map("afrmm_tax")
-  capatazia               Decimal     @db.Decimal(12, 2)
-  pisPasepTax             Decimal     @db.Decimal(12, 2) @map("pis_pasep_tax")
-  cofinsTax               Decimal     @db.Decimal(12, 2) @map("cofins_tax")
-  siscomexFee             Decimal     @db.Decimal(12, 2) @map("siscomex_fee")
-  icmsSt                  Decimal     @db.Decimal(12, 2) @map("icms_st")
-  simplesTax              Decimal     @db.Decimal(12, 2) @map("simples_tax")
-  operationalCost         Decimal     @db.Decimal(12, 2) @map("operational_cost")
-  calcBaseNormal          Decimal     @db.Decimal(12, 2) @map("calc_base_normal")
-  icmsBaseAltered         Decimal     @db.Decimal(12, 2) @map("icms_base_altered")
-  icmsImportTax           Decimal     @db.Decimal(12, 2) @map("icms_import_tax")
-  totalInvestment         Decimal     @db.Decimal(12, 2) @map("total_investment")
+  customsValueBrl         Float       @map("customs_value_brl")
+  iiTax                   Float       @map("ii_tax")
+  ipiTax                  Float       @map("ipi_tax")
+  afrmmTax                Float       @map("afrmm_tax")
+  capatazia               Float       
+  pisPasepTax             Float       @map("pis_pasep_tax")
+  cofinsTax               Float       @map("cofins_tax")
+  siscomexFee             Float       @map("siscomex_fee")
+  icmsSt                  Float       @map("icms_st")
+  simplesTax              Float       @map("simples_tax")
+  operationalCost         Float       @map("operational_cost")
+  calcBaseNormal          Float       @map("calc_base_normal")
+  icmsBaseAltered         Float       @map("icms_base_altered")
+  icmsImportTax           Float       @map("icms_import_tax")
+  totalInvestment         Float       @map("total_investment")
 
   // Resultado
-  grossRevenue            Decimal     @db.Decimal(12, 2) @map("gross_revenue")
-  salesTax                Decimal     @db.Decimal(12, 2) @map("sales_tax")
-  salesOperationalCost    Decimal     @db.Decimal(12, 2) @map("sales_operational_cost")
-  netRevenue              Decimal     @db.Decimal(12, 2) @map("net_revenue")
-  grossProfit             Decimal     @db.Decimal(12, 2) @map("gross_profit")
-  investorShare           Decimal     @db.Decimal(12, 2) @map("investor_share")
-  companyShare            Decimal     @db.Decimal(12, 2) @map("company_share")
-  reserveShare            Decimal     @db.Decimal(12, 2) @map("reserve_share")
-  reinvestmentShare       Decimal     @db.Decimal(12, 2) @map("reinvestment_share")
+  grossRevenue            Float       @map("gross_revenue")
+  salesTax                Float       @map("sales_tax")
+  salesOperationalCost    Float       @map("sales_operational_cost")
+  netRevenue              Float       @map("net_revenue")
+  grossProfit             Float       @map("gross_profit")
+  investorShare           Float       @map("investor_share")
+  companyShare            Float       @map("company_share")
+  reserveShare            Float       @map("reserve_share")
+  reinvestmentShare       Float       @map("reinvestment_share")
 
-  taxSnapshot             Json?       @map("tax_snapshot")
+  taxSnapshot             String?     @map("tax_snapshot")
 
   // Relations
   project               InvestmentProject @relation(fields: [projectId], references: [id])
@@ -305,9 +254,9 @@ model Supplier {
   country         String
   contactEmail    String?   @map("contact_email")
   contactPhone    String?   @map("contact_phone")
-  bankDetails     String?   @db.Text @map("bank_details")
-  rating          Decimal?  @db.Decimal(3, 2)
-  status          Status    @default(ACTIVE)
+  bankDetails     String?   @map("bank_details")
+  rating          Float?    
+  status          String    @default("ACTIVE")
   
   // Relations
   lots            ImportLot[]
@@ -319,27 +268,32 @@ model Supplier {
   @@map("suppliers")
 }
 
-enum Status {
-  ACTIVE
-  INACTIVE
-}
-
-enum CustomerType {
-  B2C
-  B2B
-}
-
 model Customer {
   id              String       @id @default(uuid())
-  type            CustomerType @default(B2C)
+  type            String       @default("B2C")
   name            String
   cpfCnpj         String       @unique @map("cpf_cnpj")
   email           String?
   phone           String
-  state           String       @db.VarChar(2)
+  state           String       
   city            String?
   address         String?
-  status          Status       @default(ACTIVE)
+  status          String       @default("ACTIVE")
+  
+  // Dados de Conformidade (Armaria)
+  crNumber        String?      @map("cr_number")
+  category        String?      // CAC, Militar, Policial, Civil
+  rg              String?      
+  birthDate       DateTime?    @map("birth_date")
+  
+  // Inteligência de Vendas
+  source          String?      // Instagram, Indicação, Google, etc
+  notes           String?      
+  
+  // Dados B2B Específicos
+  fantasyName     String?      @map("fantasy_name")
+  stateRegistration String?    @map("state_registration")
+  responsibleName String?      @map("responsible_name")
   
   // Relations
   seller          User?        @relation("CustomerSeller", fields: [sellerId], references: [id])
@@ -354,27 +308,17 @@ model Customer {
   @@map("customers")
 }
 
-enum OrderStatus {
-  RASCUNHO
-  ENVIADA
-  DOCUMENTACAO_PENDENTE
-  PAGAMENTO_PENDENTE
-  APROVADA
-  FATURADA
-  ENTREGUE
-}
-
 model SalesOrder {
   id              String      @id @default(uuid())
   orderNumber     String      @unique @map("order_number")
   customerId      String      @map("customer_id")
   sellerId        String      @map("seller_id")
-  products        Json        // [{product_id, quantity, unit_price}]
-  totalValue      Decimal     @db.Decimal(12, 2) @map("total_value")
-  status          OrderStatus @default(RASCUNHO)
+  products        String      // JSON string
+  totalValue      Float       @map("total_value")
+  status          String      @default("RASCUNHO")
   proposedDate    DateTime?   @map("proposed_date")
   paymentMethod   String?     @map("payment_method")
-  notes           String?     @db.Text
+  notes           String?     
 
   // Relations
   customer        Customer    @relation(fields: [customerId], references: [id])
@@ -388,13 +332,6 @@ model SalesOrder {
   @@map("sales_orders")
 }
 
-enum InvoiceStatus {
-  DRAFT
-  SENT
-  REJECTED
-  APPROVED
-}
-
 model Invoice {
   id              String        @id @default(uuid())
   invoiceNumber   String        @unique @map("invoice_number")
@@ -402,9 +339,9 @@ model Invoice {
   customerId      String        @map("customer_id")
   salesOrderId    String?       @map("sales_order_id")
   emissionDate    DateTime      @map("emission_date")
-  products        Json
-  totalAmount     Decimal       @db.Decimal(12, 2) @map("total_amount")
-  status          InvoiceStatus @default(DRAFT)
+  products        String        // JSON string
+  totalAmount     Float         @map("total_amount")
+  status          String        @default("DRAFT")
   nfeKey          String?       @map("nfe_key")
 
   // Relations
@@ -420,13 +357,13 @@ model Invoice {
 model FinancialDistributionRule {
   id                    String   @id @default(uuid())
   name                  String
-  reinvestmentPct       Decimal  @db.Decimal(5, 2) @map("reinvestment_pct")
-  investorPct           Decimal  @db.Decimal(5, 2) @map("investor_pct")
-  companyPct            Decimal  @db.Decimal(5, 2) @map("company_pct")
-  reservePct            Decimal  @db.Decimal(5, 2) @map("reserve_pct")
-  operationalCost       Decimal  @db.Decimal(12, 2) @map("operational_cost")
-  salesCommission       Decimal  @db.Decimal(5, 2) @map("sales_commission")
-  minBalanceNewPurchase Decimal  @db.Decimal(12, 2) @map("min_balance_new_purchase")
+  reinvestmentPct       Float    @map("reinvestment_pct")
+  investorPct           Float    @map("investor_pct")
+  companyPct            Float    @map("company_pct")
+  reservePct            Float    @map("reserve_pct")
+  operationalCost       Float    @map("operational_cost")
+  salesCommission       Float    @map("sales_commission")
+  minBalanceNewPurchase Float    @map("min_balance_new_purchase")
   newBatchCriteria      String   @map("new_batch_criteria")
   isActive              Boolean  @default(true) @map("is_active")
 
@@ -436,30 +373,20 @@ model FinancialDistributionRule {
   @@map("financial_distribution_rules")
 }
 
-enum LeadStatus {
-  NOVO
-  INTERESSADO
-  ATENDIMENTO
-  PROPOSTA
-  DOCUMENTO
-  PAGAMENTO
-  APROVADO
-  FATURADO
-  ENTREGUE
-  POS_VENDA
-}
-
 model Lead {
   id              String     @id @default(uuid())
   name            String
   email           String?
   phone           String
   company         String?
-  status          LeadStatus @default(NOVO)
+  status          String     @default("NOVO")
+  priority        String     @default("medium")
+  value           Float      @default(0)
+  source          String?
   assignedSellerId String?   @map("assigned_seller_id")
-  interests       String[]   // array de strings (produtos)
-  documents       String?    @db.Text
-  notes           String?    @db.Text
+  interests       String?    // Comma separated products
+  documents       String?    
+  notes           String?    
 
   // Relations
   assignedSeller User?       @relation("AssignedSeller", fields: [assignedSellerId], references: [id])
@@ -468,4 +395,41 @@ model Lead {
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
   @@map("leads")
+}
+
+model Document {
+  id              String             @id @default(uuid())
+  name            String
+  type            String             // "PDF", "IMAGE", etc
+  category        String             // "Legal", "Fiscal", "Importação", "Conformidade"
+  size            String             // "1.2 MB"
+  base64Data      String             // Conteúdo do arquivo gravado no banco de dados (Base64)
+  
+  projectId       String?            @map("project_id")
+  project         InvestmentProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  @@map("documents")
+}
+
+model TaxConfig {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?
+  ii              Float
+  ipi             Float
+  pisPasep        Float     @map("pis_pasep")
+  cofins          Float
+  icmsImport      Float     @map("icms_import")
+  icmsSale        Float     @map("icms_sale")
+  simplesNacional Float     @map("simples_nacional")
+  siscomexFixed   Float     @map("siscomex_fixed")
+  isDefault       Boolean   @default(false) @map("is_default")
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("tax_configs")
 }

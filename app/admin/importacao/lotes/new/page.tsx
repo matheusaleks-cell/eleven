@@ -1,30 +1,47 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Ship, DollarSign, Calculator, ArrowLeft, Save, Globe, Package, Calendar, Anchor, Info, Trash2 } from "lucide-react";
+import { Ship, DollarSign, Calculator, ArrowLeft, Save, Globe, Package, Calendar, Anchor, Info, Trash2, Plus } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-const MOCK_CATALOG = [
-  { id: "1", name: "Vezir Arms Carrera VR-12P", price: 450, sku: "VEZIR-VR12P" },
-  { id: "2", name: "Canik TP9 SFx Rival", price: 580, sku: "CANIK-TP9-RIVAL" },
-  { id: "3", name: "Derya MK-12 AS-250", price: 620, sku: "DERYA-MK12-250" },
-];
+import { getProducts } from "../../../erp/produtos/actions";
+import { createImportLot, getSuppliers } from "../actions";
+import { getProjects } from "../../../projetos/actions";
+import { maskDecimal } from "@/lib/masks";
 
 export default function NewBatchPage() {
   const router = useRouter();
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [supplierId, setSupplierId] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [eta, setEta] = useState("");
+  const [currency, setCurrency] = useState("USD");
   const [ptax, setPtax] = useState(5.1240);
   const [freight, setFreight] = useState(0);
   const [insurance, setInsurance] = useState(0);
-  const [items, setItems] = useState<any[]>([
-    { id: "1", name: "VR-12P CARRERA", qty: 100, unitFob: 450 }
-  ]);
+  const [selectedProduct, setSelectedProduct] = useState("");
+  const [items, setItems] = useState<any[]>([]);
+  const [catalog, setCatalog] = useState<any[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      getProducts(),
+      getSuppliers(),
+      getProjects()
+    ]).then(([p, s, proj]) => {
+      setCatalog(p);
+      setSuppliers(s);
+      setProjects(proj);
+    });
+  }, []);
 
   const totalFob = useMemo(() => {
     return items.reduce((acc, item) => acc + (item.qty * item.unitFob), 0);
@@ -38,16 +55,52 @@ export default function NewBatchPage() {
   const taxesEst = totalBrl * 0.48; // Estimativa de 48% de impostos totais
 
   const handleAddItem = () => {
-    const product = MOCK_CATALOG[0];
-    setItems([...items, { id: Math.random().toString(), name: product.name, qty: 1, unitFob: product.price }]);
-    toast.info("Item do catálogo adicionado ao lote.");
+    if (!selectedProduct) {
+      toast.error("Selecione um produto no catálogo.");
+      return;
+    }
+    const product = catalog.find(p => p.id === selectedProduct);
+    if (!product) return;
+
+    setItems([...items, { 
+      id: Math.random().toString(), 
+      productId: product.id,
+      name: product.commercialName, 
+      qty: 1, 
+      unitFob: product.priceB2B || (product.priceB2C * 0.6) 
+    }]);
+    toast.success(`${product.commercialName} adicionado ao lote.`);
   };
 
-  const handleSave = () => {
-    toast.success("Lote de Importação salvo e enviado para aprovação financeira!");
-    setTimeout(() => {
+  const handleSave = async () => {
+    if (items.length === 0) {
+      toast.error("Adicione ao menos um item ao lote.");
+      return;
+    }
+
+    const res = await createImportLot({
+      supplierId,
+      projectId,
+      originCountry: "Turquia",
+      currency,
+      exchangeRate: ptax,
+      fobTotal: totalFob,
+      freightTotal: freight,
+      insuranceTotal: insurance,
+      eta,
+      items: items.map(i => ({
+        productId: i.productId,
+        quantity: i.qty,
+        unitFob: i.unitFob
+      }))
+    });
+
+    if (res.success) {
+      toast.success("Lote de Importação registrado no banco de dados!");
       router.push("/admin/importacao/lotes");
-    }, 1500);
+    } else {
+      toast.error("Falha ao salvar lote.");
+    }
   };
 
   return (
@@ -84,19 +137,41 @@ export default function NewBatchPage() {
                  </h3>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-1">
-                       <label className="text-xs font-bold uppercase tracking-military text-brand-text-secondary">Fornecedor</label>
-                       <select className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent">
-                          <option>Selecionar Fornecedor...</option>
-                          <option>Turk Arms</option>
-                          <option>Canik Arms</option>
-                          <option>Vezir Arms</option>
+                       <label className="text-xs font-bold uppercase tracking-military text-brand-text-secondary">Fornecedor *</label>
+                       <select 
+                        className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent"
+                        value={supplierId}
+                        onChange={(e) => setSupplierId(e.target.value)}
+                       >
+                          <option value="">Selecionar Fornecedor...</option>
+                          {suppliers.map(s => (
+                            <option key={s.id} value={s.id}>{s.name} ({s.country})</option>
+                          ))}
+                       </select>
+                    </div>
+                    <div className="space-y-1">
+                       <label className="text-xs font-bold uppercase tracking-military text-brand-text-secondary">Projeto de Investimento (Opcional)</label>
+                       <select 
+                        className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent"
+                        value={projectId}
+                        onChange={(e) => setProjectId(e.target.value)}
+                       >
+                          <option value="">Nenhum Projeto (Lote Avulso)</option>
+                          {projects.map(p => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
                        </select>
                     </div>
                     <Input label="Código do Lote (Auto)" placeholder="BATCH-2026-XXXX" disabled />
                     <Input label="País de Origem" defaultValue="Turquia" />
                     <div className="space-y-1">
-                       <label className="text-xs font-bold uppercase tracking-military text-brand-text-secondary">Data do Pedido</label>
-                       <input type="date" className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white outline-none focus:border-brand-accent" />
+                       <label className="text-xs font-bold uppercase tracking-military text-brand-text-secondary">Data Estimada (ETA)</label>
+                       <input 
+                        type="date" 
+                        className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white outline-none focus:border-brand-accent" 
+                        value={eta}
+                        onChange={(e) => setEta(e.target.value)}
+                       />
                     </div>
                  </div>
               </Card>
@@ -109,36 +184,35 @@ export default function NewBatchPage() {
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="space-y-1">
                        <label className="text-xs font-bold uppercase tracking-military text-brand-text-secondary">Moeda</label>
-                       <select className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent">
-                          <option>USD - Dólar</option>
-                          <option>EUR - Euro</option>
-                          <option>GBP - Libra</option>
+                       <select 
+                        className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2.5 text-sm text-white outline-none focus:border-brand-accent"
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                       >
+                          <option value="USD">USD - Dólar</option>
+                          <option value="EUR">EUR - Euro</option>
+                          <option value="GBP">GBP - Libra</option>
                        </select>
                     </div>
                     <Input 
                       label="Taxa de Câmbio (Ptax)" 
-                      type="number" 
-                      step="0.0001" 
                       value={ptax}
-                      onChange={(e) => setPtax(Number(e.target.value))}
+                      onChange={(e) => setPtax(Number(maskDecimal(e.target.value)))}
                     />
                     <Input 
                       label="Valor FOB Total" 
-                      type="number" 
                       value={totalFob}
                       disabled
                     />
                     <Input 
                       label="Frete Internacional" 
-                      type="number" 
                       value={freight}
-                      onChange={(e) => setFreight(Number(e.target.value))}
+                      onChange={(e) => setFreight(Number(maskDecimal(e.target.value)))}
                     />
                     <Input 
                       label="Seguro" 
-                      type="number" 
                       value={insurance}
-                      onChange={(e) => setInsurance(Number(e.target.value))}
+                      onChange={(e) => setInsurance(Number(maskDecimal(e.target.value)))}
                     />
                     <div className="flex items-end">
                        <Button variant="secondary" className="w-full gap-2 h-10" onClick={() => toast.success("Cálculos atualizados!")}>
@@ -154,9 +228,21 @@ export default function NewBatchPage() {
                     <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-white flex items-center gap-2">
                        <Package size={16} className="text-brand-accent" /> PRODUTOS NO LOTE
                     </h3>
-                    <Button variant="ghost" size="sm" className="text-[10px] gap-2 h-8 text-brand-accent" onClick={handleAddItem}>
-                       ADICIONAR SKU
-                    </Button>
+                    <div className="flex items-center gap-3">
+                       <select 
+                        className="bg-brand-bg border border-brand-border rounded px-3 py-1 text-[10px] text-white outline-none focus:border-brand-accent h-8"
+                        value={selectedProduct}
+                        onChange={(e) => setSelectedProduct(e.target.value)}
+                       >
+                          <option value="">SELECIONAR PRODUTO...</option>
+                          {catalog.map(p => (
+                            <option key={p.id} value={p.id}>{p.sku} - {p.commercialName}</option>
+                          ))}
+                       </select>
+                       <Button variant="ghost" size="sm" className="text-[10px] gap-2 h-8 text-brand-accent border border-brand-accent/20 hover:bg-brand-accent/10" onClick={handleAddItem}>
+                          <Plus size={14} /> ADICIONAR AO LOTE
+                       </Button>
+                    </div>
                  </div>
                  <div className="p-0">
                     <table className="table-base">
@@ -247,7 +333,7 @@ export default function NewBatchPage() {
                              <span className="text-[10px] font-bold text-white uppercase tracking-wider leading-none">{step.label}</span>
                              <span className="text-[9px] font-bold text-brand-text-muted uppercase mt-1">{step.date}</span>
                           </div>
-                       </div>
+                      </div>
                     ))}
                  </div>
               </Card>

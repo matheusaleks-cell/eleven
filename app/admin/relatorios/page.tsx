@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { BarChart3, Download, FileText, PieChart, Shield, History, Users, ShoppingBag, Package, Ship, Target, UserCheck, TrendingUp, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { getInventoryReportData, getFinancialReportData, getWeaponsMapReportData } from "./actions";
 
 const REPORT_CATEGORIES = [
   { 
@@ -56,7 +57,65 @@ const REPORT_CATEGORIES = [
   }
 ];
 
+function downloadCSV(data: any[], filename: string) {
+  if (!data || data.length === 0) {
+    toast.error("Nenhum dado encontrado para exportar.");
+    return;
+  }
+  
+  const headers = Object.keys(data[0]).join(";");
+  const rows = data.map(obj => 
+    Object.values(obj).map(val => `"${String(val).replace(/"/g, '""')}"`).join(";")
+  );
+  
+  const csvContent = [headers, ...rows].join("\n");
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+  
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export default function ReportsPage() {
+  const handleExport = async (reportName: string, format: string) => {
+    if (format === "PDF") {
+      toast.success(`Preparando impressão otimizada de ${reportName}...`);
+      setTimeout(() => window.print(), 1000);
+      return;
+    }
+
+    toast.loading(`Gerando arquivo ${format} de "${reportName}"...`, { id: "export" });
+
+    try {
+      let data: any[] = [];
+      if (reportName.includes("Posição de Estoque")) {
+        const res = await getInventoryReportData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Mapa de Armas")) {
+        const res = await getWeaponsMapReportData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("DRE por Período") || reportName.includes("Distribuição de Lucros")) {
+        const res = await getFinancialReportData();
+        if (res.success) data = res.data;
+      } else {
+        toast.error("Este relatório específico será implementado em breve.", { id: "export" });
+        return;
+      }
+
+      if (data.length > 0) {
+        downloadCSV(data, reportName.replace(/[^a-z0-9]/gi, '_').toLowerCase());
+        toast.success("Download concluído com sucesso!", { id: "export" });
+      } else {
+        toast.error("Não há dados para gerar este relatório.", { id: "export" });
+      }
+    } catch (err) {
+      toast.error("Erro ao gerar relatório.", { id: "export" });
+    }
+  };
   return (
     <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
       <div className="flex flex-col gap-8 animate-fade-in">
@@ -107,7 +166,7 @@ export default function ReportsPage() {
                       {report.format.map((fmt) => (
                         <button 
                           key={fmt}
-                          onClick={() => toast.success(`Gerando arquivo ${fmt} de "${report.name}"...`)}
+                          onClick={() => handleExport(report.name, fmt)}
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-brand-input border border-brand-border text-[9px] font-bold text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-all uppercase"
                         >
                           <Download size={10} />

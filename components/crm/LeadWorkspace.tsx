@@ -19,10 +19,16 @@ import {
   Package,
   History,
   Settings,
-  Save
+  Save,
+  Calendar,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { Dialog } from "@/components/ui/Dialog";
+import { Input } from "@/components/ui/Input";
+import { jsPDF } from "jspdf";
+import { convertToOrder } from "@/app/admin/crm/funil/actions";
 
 interface LeadWorkspaceProps {
   lead: any;
@@ -31,34 +37,208 @@ interface LeadWorkspaceProps {
 }
 
 const MOCK_PRODUCTS = [
-  { id: "1", name: "Vezir Arms Carrera VR-12P", price: 8500, caliber: "12 Gauge" },
-  { id: "2", name: "Canik TP9 SFx Rival", price: 9200, caliber: "9mm" },
-  { id: "3", name: "Derya MK-12 AS-250", price: 11500, caliber: "12 Gauge" },
+  { id: "1", name: "Vezir Arms Carrera VR-12P", price: 8500, caliber: "12 Gauge", sku: "VZ-VR12P" },
+  { id: "2", name: "Canik TP9 SFx Rival", price: 9200, caliber: "9mm", sku: "CK-TP9R" },
+  { id: "3", name: "Derya MK-12 AS-250", price: 11500, caliber: "12 Gauge", sku: "DR-MK12" },
+  { id: "4", name: "Glock G17 Gen5", price: 7800, caliber: "9mm", sku: "GK-G17G5" },
+  { id: "5", name: "Sig Sauer P320 M17", price: 10500, caliber: "9mm", sku: "SS-P320" },
+  { id: "6", name: "Taurus TS9 Graphene", price: 5400, caliber: "9mm", sku: "TR-TS9G" },
 ];
 
 export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"summary" | "products" | "history">("products");
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   
-  const [dealItems, setDealItems] = useState<any[]>([
-    { id: "item-1", product: MOCK_PRODUCTS[0], quantity: 1 }
-  ]);
+  // Inicializar itens com base nos dados do lead ou criar padrão se não houver
+  const [dealItems, setDealItems] = useState<any[]>(() => {
+    if (lead.items && lead.items.length > 0) return lead.items;
+    
+    // Tentar encontrar o produto pelo nome de interesse (usando busca flexível)
+    const leadInterest = Array.isArray(lead.interests) ? lead.interests[0] : (lead.interests || "");
+    const initialProduct = MOCK_PRODUCTS.find(p => 
+      p.name.toLowerCase().includes(leadInterest.toLowerCase())
+    ) || MOCK_PRODUCTS[0];
+    
+    // Se o lead já tem um valor definido no banco, vamos ajustar o preço do item inicial para bater
+    const adjustedProduct = { ...initialProduct };
+    if (lead.value && lead.value > 0) {
+      adjustedProduct.price = lead.value;
+    }
+    
+    return [{ id: "item-init", product: adjustedProduct, quantity: 1 }];
+  });
+
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
 
   const totalValue = dealItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
 
+  const filteredProducts = MOCK_PRODUCTS.filter(p => 
+    p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
+    p.caliber.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  const handleUpdateQuantity = (id: string, qty: number) => {
+    if (qty < 1) return;
+    const updatedItems = dealItems.map(item => 
+      item.id === id ? { ...item, quantity: qty } : item
+    );
+    setDealItems(updatedItems);
+    
+    // Sincronizar com o Kanban externo, incluindo os itens persistentes
+    const total = updatedItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+    onUpdate({ ...lead, value: total, items: updatedItems });
+    
+    toast.success("Valor total atualizado!");
+  };
+
+  const handleSelectProduct = (product: any) => {
+    let updatedItems;
+    const existingItem = dealItems.find(item => item.product.id === product.id);
+    
+    if (existingItem) {
+      updatedItems = dealItems.map(item => 
+        item.id === existingItem.id ? { ...item, quantity: item.quantity + 1 } : item
+      );
+    } else {
+      updatedItems = [...dealItems, {
+        id: `item-${Date.now()}`,
+        product: product,
+        quantity: 1
+      }];
+    }
+    
+    setDealItems(updatedItems);
+    const total = updatedItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+    
+    // Atualizar o interesse externo com o nome do primeiro produto + extras se houver
+    const interestLabel = updatedItems.length > 1 
+      ? `${updatedItems[0].product.name} (+${updatedItems.length - 1})`
+      : updatedItems[0].product.name;
+
+    onUpdate({ ...lead, value: total, interest: interestLabel, items: updatedItems });
+    setIsProductModalOpen(false);
+    toast.success(`${product.name} sincronizado na proposta!`);
+  };
+
+  const handleRemoveItem = (id: string) => {
+    if (dealItems.length <= 1) {
+      toast.error("A proposta deve ter pelo menos um item.");
+      return;
+    }
+    const updatedItems = dealItems.filter(item => item.id !== id);
+    setDealItems(updatedItems);
+    
+    const total = updatedItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+    const interestLabel = updatedItems.length > 1 
+      ? `${updatedItems[0].product.name} (+${updatedItems.length - 1})`
+      : updatedItems[0].product.name;
+
+    onUpdate({ ...lead, value: total, interest: interestLabel, items: updatedItems });
+    toast.info("Item removido.");
+  };
+
   const handleUpdateInfo = (data: LeadFormData) => {
-    onUpdate(data);
+    onUpdate({ ...lead, ...data });
     setIsEditingInfo(false);
-    toast.success("Dados do lead sincronizados com sucesso!");
+    toast.success("Dados do lead sincronizados com o Kanban!");
   };
 
   const handleGenerateProposal = () => {
-    toast.info("Gerando proposta PDF personalizada...");
+    setIsGenerating(true);
+    toast.info("Gerando proposta PDF oficial...");
+    
+    try {
+      const doc = new jsPDF();
+      const timestamp = new Date().toLocaleDateString('pt-BR');
+      
+      // Estilo Eleven
+      doc.setFillColor(15, 15, 15);
+      doc.rect(0, 0, 210, 40, 'F');
+      
+      doc.setTextColor(245, 196, 0);
+      doc.setFontSize(22);
+      doc.text("ELEVEN FIREARMS", 10, 25);
+      
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(10);
+      doc.text("PROPOSTA COMERCIAL EXCLUSIVA", 10, 32);
+      doc.text(`DATA: ${timestamp}`, 160, 25);
+
+      // Dados do Lead
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(14);
+      doc.text(`CLIENTE: ${lead.name.toUpperCase()}`, 10, 60);
+      doc.setFontSize(10);
+      doc.text(`CONTATO: ${lead.phone || "N/A"} | EMAIL: ${lead.email || "N/A"}`, 10, 67);
+      
+      // Tabela de Itens
+      doc.line(10, 75, 200, 75);
+      doc.setFont("helvetica", "bold");
+      doc.text("PRODUTO", 10, 82);
+      doc.text("QTD", 120, 82);
+      doc.text("VALOR UN.", 145, 82);
+      doc.text("SUBTOTAL", 175, 82);
+      doc.line(10, 85, 200, 85);
+      
+      doc.setFont("helvetica", "normal");
+      let y = 92;
+      dealItems.forEach(item => {
+        doc.text(item.product.name.substring(0, 40), 10, y);
+        doc.text(item.quantity.toString(), 122, y);
+        doc.text(`R$ ${item.product.price.toLocaleString()}`, 145, y);
+        doc.text(`R$ ${(item.product.price * item.quantity).toLocaleString()}`, 175, y);
+        y += 10;
+      });
+
+      doc.line(10, y, 200, y);
+      doc.setFontSize(16);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(245, 196, 0);
+      doc.text(`TOTAL DA PROPOSTA: R$ ${totalValue.toLocaleString()}`, 105, y + 15, { align: 'right' });
+
+      // Rodapé
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Esta proposta tem validade de 5 dias úteis. Sujeito a disponibilidade de estoque.", 10, 280);
+      
+      doc.save(`Proposta_Eleven_${lead.name.replace(/\s+/g, '_')}.pdf`);
+      
+      setTimeout(() => {
+        setIsGenerating(false);
+        toast.success("PDF gerado e pronto para envio!");
+      }, 1000);
+    } catch (error) {
+      console.error(error);
+      setIsGenerating(false);
+      toast.error("Erro ao gerar PDF.");
+    }
   };
 
-  const handleConvertToOrder = () => {
-    toast.success("Lead convertido em PEDIDO com sucesso!");
-    onClose();
+  const handleConvertToOrder = async () => {
+    if (!confirm("Deseja converter este lead em um CLIENTE e gerar um PEDIDO DE VENDA real?")) return;
+    
+    setIsGenerating(true); // Usando como flag de loading geral aqui
+    try {
+      const res = await convertToOrder(lead.id, {
+        ...lead,
+        value: totalValue,
+        items: dealItems
+      });
+
+      if (res.success) {
+        toast.success("Lead convertido em PEDIDO com sucesso!");
+        onClose();
+        // O revalidatePath nas actions cuidará de atualizar a lista
+      } else {
+        toast.error("Erro ao converter lead: " + res.error);
+      }
+    } catch (error) {
+      toast.error("Erro crítico na conversão.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -77,7 +257,7 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
                  {lead.status}
                </span>
                <span className="text-brand-text-muted text-xs">|</span>
-               <span className="text-[10px] font-bold text-white/70 uppercase">{lead.interest}</span>
+               <span className="text-[10px] font-bold text-white/70 uppercase">{Array.isArray(lead.interests) ? lead.interests.join(", ") : (lead.interests || "Sem interesse")}</span>
             </div>
           </div>
         </div>
@@ -142,72 +322,77 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
       {/* Tab Content */}
       <div className="min-h-[400px]">
         {activeTab === "products" && (
-          <div className="animate-fade-in space-y-6">
-            <div className="flex justify-between items-center">
+          <div className="animate-fade-in space-y-8 p-6">
+            <div className="flex justify-between items-center bg-brand-surface/30 p-5 rounded-xl border border-brand-border/40">
                <div>
-                 <h4 className="text-[12px] font-bold text-white uppercase tracking-widest">Configuração da Proposta</h4>
-                 <p className="text-[10px] text-brand-text-muted uppercase font-medium">Selecione os armamentos e acessórios para este lead.</p>
+                 <h4 className="text-[15px] font-black text-white uppercase tracking-[0.2em] mb-1">Configuração da Proposta</h4>
+                 <p className="text-[12px] text-white/50 uppercase font-bold tracking-tight">Selecione os armamentos e acessórios para este lead.</p>
                </div>
-               <Button variant="secondary" size="sm" className="gap-2 h-9 text-[10px] font-bold" onClick={() => toast.info("Abrindo catálogo de produtos...")}>
-                 <Plus size={14} /> ADICIONAR ITEM
+               <Button 
+                variant="secondary" 
+                className="gap-3 h-11 px-6 text-[12px] font-black shadow-lg" 
+                onClick={() => setIsProductModalOpen(true)}
+               >
+                 <Plus size={18} /> ADICIONAR ITEM
                </Button>
             </div>
 
-            <Card className="p-0 border-brand-border bg-brand-surface/20 overflow-hidden shadow-xl">
+            <Card className="p-0 border-brand-border/60 bg-brand-surface/20 overflow-hidden shadow-2xl">
                <table className="w-full text-left">
-                 <thead className="bg-brand-surface/60 border-b border-brand-border">
+                 <thead className="bg-brand-surface/80 border-b border-brand-border">
                    <tr>
-                     <th className="px-6 py-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Produto / SKU</th>
-                     <th className="px-6 py-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Qtd</th>
-                     <th className="px-6 py-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Valor Un.</th>
-                     <th className="px-6 py-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-widest text-right">Subtotal</th>
-                     <th className="px-6 py-4 w-10"></th>
+                     <th className="px-8 py-5 text-[12px] font-black text-white/80 uppercase tracking-[0.2em]">Produto / SKU</th>
+                     <th className="px-8 py-5 text-[12px] font-black text-white/80 uppercase tracking-[0.2em]">Qtd</th>
+                     <th className="px-8 py-5 text-[12px] font-black text-white/80 uppercase tracking-[0.2em]">Valor Un.</th>
+                     <th className="px-8 py-5 text-[12px] font-black text-white/80 uppercase tracking-[0.2em] text-right">Subtotal</th>
+                     <th className="px-8 py-5 w-10"></th>
                    </tr>
                  </thead>
-                 <tbody className="divide-y divide-brand-border/50">
+                 <tbody className="divide-y divide-brand-border/40">
                    {dealItems.map((item) => (
                      <tr key={item.id} className="hover:bg-brand-accent/5 transition-colors group">
-                       <td className="px-6 py-5">
-                          <div className="flex items-center gap-4">
-                             <div className="w-10 h-10 bg-brand-input rounded border border-brand-border flex items-center justify-center text-brand-accent group-hover:scale-110 transition-transform">
-                               <Package size={20} />
+                       <td className="px-8 py-6">
+                          <div className="flex items-center gap-5">
+                             <div className="w-12 h-12 bg-brand-input rounded-lg border border-brand-border flex items-center justify-center text-brand-accent group-hover:scale-110 transition-transform">
+                               <Package size={24} />
                              </div>
                              <div>
-                               <span className="text-sm font-bold text-white uppercase block">{item.product.name}</span>
-                               <span className="text-[9px] text-brand-text-muted uppercase font-bold tracking-tighter">Calibre: {item.product.caliber}</span>
+                               <span className="text-[16px] font-black text-white uppercase block mb-1">{item.product.name}</span>
+                               <span className="text-[12px] text-white/60 uppercase font-bold tracking-tight">Calibre: {item.product.caliber}</span>
                              </div>
                           </div>
                        </td>
-                       <td className="px-6 py-5">
+                       <td className="px-8 py-6">
                           <div className="flex items-center gap-2">
                             <input 
                               type="number" 
-                              defaultValue={item.quantity}
-                              className="w-16 bg-brand-input border border-brand-border rounded-md px-3 py-1.5 text-xs text-white font-mono focus:border-brand-accent outline-none"
+                              value={item.quantity}
+                              onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value) || 0)}
+                              className="w-20 bg-brand-input border border-brand-border rounded-lg px-4 py-2.5 text-sm text-white font-mono font-bold focus:border-brand-accent outline-none"
                             />
                           </div>
                        </td>
-                       <td className="px-6 py-5 font-mono text-xs text-brand-text-secondary">
+                       <td className="px-8 py-6 font-mono text-[14px] font-bold text-white/80">
                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.product.price)}
                        </td>
-                       <td className="px-6 py-5 font-mono text-sm font-bold text-white text-right">
+                       <td className="px-8 py-6 font-mono text-[16px] font-black text-brand-accent text-right">
                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.product.price * item.quantity)}
                        </td>
-                       <td className="px-6 py-5">
+                       <td className="px-8 py-6">
                           <button 
-                            className="p-2 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger/10 rounded-full transition-all"
-                            onClick={() => toast.error("Removendo item da proposta...")}
+                            className="p-2.5 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger/10 rounded-lg transition-all border border-transparent hover:border-brand-danger/20"
+                            onClick={() => handleRemoveItem(item.id)}
                           >
-                            <Trash2 size={16} />
+                            <Trash2 size={18} />
                           </button>
                        </td>
                      </tr>
                    ))}
                  </tbody>
-                 <tfoot className="bg-brand-surface/40 border-t border-brand-border">
+                 <tfoot className="bg-brand-black/40 border-t-2 border-brand-border">
                    <tr>
-                     <td colSpan={3} className="px-6 py-5 text-[11px] font-bold text-brand-text-muted uppercase text-right tracking-widest">Valor Total da Negociação:</td>
-                     <td className="px-6 py-5 font-mono text-xl font-bold text-brand-accent text-right">
+                     <td colSpan={3} className="px-8 py-6 text-[13px] font-black text-white/80 uppercase text-right tracking-[0.2em]">Valor Total da Negociação:</td>
+                     <td className="px-8 py-6 font-mono text-2xl font-black text-brand-accent text-right">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}
                      </td>
                      <td></td>
@@ -216,16 +401,30 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
                </table>
             </Card>
 
-            <div className="flex flex-col md:flex-row gap-4">
-               <Card className="flex-1 p-5 bg-brand-warning/5 border border-brand-warning/20 rounded-lg flex gap-4">
-                  <FileText className="text-brand-warning shrink-0" size={24} />
+            <div className="flex flex-col md:flex-row gap-6">
+               <Card className="flex-1 p-6 bg-brand-warning/5 border border-brand-warning/30 rounded-xl flex gap-5">
+                  <FileText className="text-brand-warning shrink-0" size={28} />
                   <div>
-                    <p className="text-[11px] font-bold text-brand-warning uppercase mb-1">Status de Reserva</p>
-                    <p className="text-[10px] text-brand-text-muted uppercase leading-relaxed font-medium">Este lead ainda não possui reserva formal no estoque físico. Para garantir a exclusividade, converta em pedido.</p>
+                    <p className="text-[12px] font-black text-brand-warning uppercase mb-1.5 tracking-wider">Status de Reserva</p>
+                    <p className="text-[11px] text-white/80 uppercase leading-relaxed font-bold tracking-tight">Este lead ainda não possui reserva formal no estoque físico. Para garantir a exclusividade, converta em pedido.</p>
                   </div>
                </Card>
-               <Button variant="secondary" className="h-auto py-4 px-8 gap-3 text-[11px] font-bold uppercase tracking-widest" onClick={handleGenerateProposal}>
-                  <FileText size={18} /> GERAR PROPOSTA PDF
+               <Button 
+                variant="secondary" 
+                className="h-auto py-5 px-10 gap-4 text-[13px] font-black uppercase tracking-[0.2em] shadow-xl" 
+                onClick={handleGenerateProposal}
+                disabled={isGenerating}
+               >
+                  {isGenerating ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                      PROCESSANDO...
+                    </div>
+                  ) : (
+                    <>
+                      <FileText size={20} /> GERAR PROPOSTA PDF
+                    </>
+                  )}
                </Button>
             </div>
           </div>
@@ -235,17 +434,17 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
             <div className="space-y-6">
               <Card className="bg-brand-surface/30 border-brand-border p-6 shadow-xl">
-                <div className="flex justify-between items-center mb-6 border-b border-brand-border/50 pb-3">
-                   <h4 className="text-[12px] font-bold text-brand-accent uppercase tracking-widest flex items-center gap-2">
-                     <Settings size={14} /> Dados Cadastrais do Lead
+                <div className="flex justify-between items-center mb-6 border-b border-brand-border/50 pb-4">
+                   <h4 className="text-[14px] font-bold text-brand-accent uppercase tracking-widest flex items-center gap-2">
+                     <Settings size={16} /> Dados Cadastrais do Lead
                    </h4>
                    <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="h-8 px-3 text-[10px] font-bold gap-1.5 hover:bg-brand-accent/10 hover:text-brand-accent uppercase"
+                    className="h-9 px-4 text-[11px] font-bold gap-2 hover:bg-brand-accent/10 hover:text-brand-accent uppercase"
                     onClick={() => setIsEditingInfo(!isEditingInfo)}
                    >
-                     {isEditingInfo ? "Cancelar Edição" : "Editar Dados"}
+                     {isEditingInfo ? "Cancelar" : "Editar Dados"}
                    </Button>
                 </div>
                 
@@ -260,81 +459,154 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
                   </div>
                 ) : (
                   <div className="space-y-6">
-                    <div className="flex items-center gap-4 group">
-                      <div className="p-3 bg-brand-surface rounded-lg border border-brand-border text-brand-text-muted group-hover:border-brand-accent transition-colors">
-                        <Phone size={20} />
+                    <div className="grid grid-cols-2 gap-6 mb-4">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-brand-surface rounded border border-brand-border text-brand-text-muted">
+                          <Phone size={18} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1">WhatsApp</p>
+                          <p className="text-sm font-mono text-white font-bold">{lead.phone || "(Não informado)"}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] uppercase font-bold text-brand-text-muted leading-none mb-2 tracking-widest">Telefone / WhatsApp</p>
-                        <p className="text-sm font-mono text-white font-bold">{lead.phone || "(Não informado)"}</p>
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-brand-surface rounded border border-brand-border text-brand-text-muted">
+                          <Mail size={18} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1">E-mail</p>
+                          <p className="text-sm font-mono text-white font-bold truncate max-w-[150px]">{lead.email || "(Não informado)"}</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4 group">
-                      <div className="p-3 bg-brand-surface rounded-lg border border-brand-border text-brand-text-muted group-hover:border-brand-accent transition-colors">
-                        <Mail size={20} />
+
+                    <div className="h-px bg-brand-border/30 w-full my-4" />
+
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">CPF / CNPJ</p>
+                        <p className="text-sm font-bold text-white uppercase font-mono">{lead.taxId || "Não informado"}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] uppercase font-bold text-brand-text-muted leading-none mb-2 tracking-widest">E-mail para Contato</p>
-                        <p className="text-sm font-mono text-white font-bold">{lead.email || "(Não informado)"}</p>
+                        <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">Localização</p>
+                        <p className="text-sm font-bold text-white uppercase">{lead.city && lead.state ? `${lead.city} - ${lead.state}` : "Não informada"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">Tipo de Cliente</p>
+                        <p className="text-sm font-bold text-white uppercase">{lead.customerType || "PF"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">Status de CR</p>
+                        <span className={cn(
+                          "text-[10px] font-bold px-2 py-0.5 rounded border uppercase",
+                          lead.documentStatus === "ACTIVE" ? "bg-brand-success/10 text-brand-success border-brand-success/20" : 
+                          lead.documentStatus === "PENDING" ? "bg-brand-warning/10 text-brand-warning border-brand-warning/20" :
+                          "bg-brand-danger/10 text-brand-danger border-brand-danger/20"
+                        )}>
+                          {lead.documentStatus === "ACTIVE" ? "Regular" : lead.documentStatus === "PENDING" ? "Em Processo" : "Sem Registro"}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">Vendedor</p>
+                        <p className="text-sm font-bold text-brand-accent uppercase">{lead.assignedTo || "Admin Eleven"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">Pipeline / Fase</p>
+                        <select 
+                          className="bg-brand-input border border-brand-border rounded text-[11px] text-white font-bold px-2 py-1 focus:border-brand-accent outline-none uppercase"
+                          defaultValue={lead.status}
+                          onChange={(e) => handleUpdateInfo({ ...lead, status: e.target.value })}
+                        >
+                          <option value="NOVO">NOVOS LEADS</option>
+                          <option value="INTERESSADO">INTERESSADOS</option>
+                          <option value="ATENDIMENTO">ATENDIMENTO</option>
+                          <option value="PROPOSTA">PROPOSTA</option>
+                          <option value="DOCUMENTO">DOCUMENTAÇÃO</option>
+                          <option value="PAGAMENTO">PAGAMENTO</option>
+                        </select>
                       </div>
                     </div>
                   </div>
                 )}
               </Card>
+            </div>
 
+            <div className="space-y-6">
               <Card className="bg-brand-surface/30 border-brand-border p-6">
-                 <h4 className="text-[12px] font-bold text-white uppercase tracking-widest mb-6 border-b border-brand-border/50 pb-3">Qualificação Comercial</h4>
-                 <div className="grid grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                       <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest">Nível de Prioridade</p>
+                 <h4 className="text-[14px] font-bold text-white uppercase tracking-widest mb-6 border-b border-brand-border/50 pb-4">Qualificação Comercial</h4>
+                 <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-2">
+                       <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest">Prioridade</p>
                        <span className={cn(
-                        "text-[10px] font-bold px-3 py-1 rounded border uppercase inline-block",
+                        "text-[11px] font-bold px-4 py-1.5 rounded border uppercase inline-block",
                         lead.priority === "high" ? "bg-brand-danger/10 text-brand-danger border-brand-danger/30" : "bg-brand-warning/10 text-brand-warning border-brand-warning/30"
                        )}>
                          {lead.priority === "high" ? "URGENTE / HOT" : "MÉDIO / WARM"}
                        </span>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                        <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest">Canal de Origem</p>
-                       <span className="text-[10px] font-bold text-white uppercase bg-brand-surface px-3 py-1 rounded border border-brand-border">Instagram Ads</span>
+                       <span className="text-[11px] font-bold text-white uppercase bg-brand-surface px-4 py-1.5 rounded border border-brand-border tracking-wider">
+                         {lead.source || "Direto"}
+                       </span>
                     </div>
                  </div>
               </Card>
-            </div>
 
-            <div className="flex flex-col gap-4 h-full">
-              <h4 className="text-[12px] font-bold text-white uppercase tracking-widest">Observações Estratégicas</h4>
-              <textarea 
-                className="flex-1 w-full bg-brand-surface/40 border border-brand-border rounded-lg p-5 text-sm text-white focus:outline-none focus:border-brand-accent min-h-[250px] resize-none"
-                placeholder="Insira aqui notas sobre o perfil do comprador, objeções ou detalhes da negociação..."
-              ></textarea>
-              <Button 
-                className="w-full py-4 gap-2 text-[11px] font-bold uppercase tracking-widest"
-                onClick={() => toast.success("Observações salvas no histórico do lead.")}
-              >
-                <Save size={16} /> Salvar Observação
-              </Button>
+              <div className="flex flex-col gap-4">
+                <h4 className="text-[14px] font-bold text-white uppercase tracking-widest">Observações Estratégicas</h4>
+                <textarea 
+                  className="w-full bg-brand-surface/40 border border-brand-border rounded-lg p-5 text-base text-white focus:outline-none focus:border-brand-accent min-h-[180px] resize-none"
+                  placeholder="Insira aqui notas sobre o perfil do comprador, objeções ou detalhes da negociação..."
+                  defaultValue={lead.notes}
+                ></textarea>
+                <Button 
+                  className="w-full py-5 gap-3 text-[12px] font-bold uppercase tracking-[0.2em] shadow-lg"
+                  onClick={() => toast.success("Observações salvas no histórico do lead.")}
+                >
+                  <Save size={18} /> SALVAR OBSERVAÇÃO
+                </Button>
+              </div>
             </div>
           </div>
         )}
 
         {activeTab === "history" && (
-          <div className="animate-fade-in space-y-8 p-4">
-            <h4 className="text-[12px] font-bold text-white uppercase tracking-widest">Linha do Tempo da Negociação</h4>
-            <div className="space-y-8 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-brand-border">
+          <div className="animate-fade-in space-y-10 p-8">
+            <h4 className="text-[15px] font-bold text-white uppercase tracking-[0.2em] border-b border-brand-border/50 pb-4">
+              Linha do Tempo da Negociação
+            </h4>
+            
+            <div className="space-y-8 relative">
+               {/* Linha vertical de fundo */}
+               <div className="absolute left-[15px] top-0 bottom-0 w-[2px] bg-brand-border/20" />
+
                {[
                  { action: "Lead cadastrado via formulário de prospecção", time: "08/05/2026 10:30", user: "Admin Eleven" },
                  { action: "Carrera VR-12P vinculado à negociação", time: "08/05/2026 10:35", user: "Admin Eleven" },
                  { action: "Proposta inicial enviada via WhatsApp", time: "08/05/2026 11:20", user: "Admin Eleven" },
                  { action: "Status alterado para INTERESSADO", time: "08/05/2026 12:00", user: "Sistema Inteligente" },
                ].map((log, i) => (
-                 <div key={i} className="pl-10 relative group">
-                    <div className="absolute left-0 top-1 w-6 h-6 bg-brand-surface border-2 border-brand-accent rounded-full flex items-center justify-center group-hover:scale-125 transition-transform">
-                       <div className="w-2 h-2 bg-brand-accent rounded-full animate-pulse" />
+                 <div key={i} className="flex items-start gap-6 relative group">
+                    {/* Indicador (Bola) */}
+                    <div className="z-10 shrink-0 mt-0.5">
+                      <div className="w-[32px] h-[32px] bg-brand-surface border-2 border-brand-accent rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(245,196,0,0.2)] group-hover:scale-110 transition-transform">
+                        <div className="w-2 h-2 bg-brand-accent rounded-full animate-pulse" />
+                      </div>
                     </div>
-                    <div>
-                       <p className="text-sm text-white font-bold uppercase tracking-tight">{log.action}</p>
-                       <p className="text-[10px] text-brand-text-muted uppercase font-bold mt-1 tracking-widest">{log.time} · Responsável: {log.user}</p>
+
+                    {/* Conteúdo (Texto) */}
+                    <div className="flex-1 bg-brand-surface/20 p-5 rounded-lg border border-brand-border/40 group-hover:border-brand-accent/30 transition-all">
+                       <p className="text-[16px] text-white font-bold uppercase tracking-tight mb-2">
+                         {log.action}
+                       </p>
+                       <div className="flex items-center gap-3 text-white/60">
+                         <Calendar size={14} className="text-brand-accent" />
+                         <p className="text-[12px] uppercase font-black tracking-wider">
+                           {log.time} <span className="mx-2 opacity-30">|</span> 
+                           Responsável: <span className="text-brand-accent">{log.user}</span>
+                         </p>
+                       </div>
                     </div>
                  </div>
                ))}
@@ -342,6 +614,61 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
           </div>
         )}
       </div>
+
+      {/* Modal de Seleção de Produtos */}
+      <Dialog 
+        isOpen={isProductModalOpen} 
+        onClose={() => setIsProductModalOpen(false)}
+        title="Catálogo de Armamentos Eleven"
+        className="max-w-2xl"
+      >
+        <div className="space-y-6">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-accent" size={18} />
+            <Input 
+              className="pl-12 py-3 h-14 text-base" 
+              placeholder="Buscar por nome, calibre ou SKU..." 
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              autoFocus
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+            {filteredProducts.map(product => (
+              <div 
+                key={product.id}
+                className="group flex items-center justify-between p-4 bg-brand-bg/40 border border-brand-border rounded-xl hover:border-brand-accent hover:bg-brand-accent/5 transition-all cursor-pointer"
+                onClick={() => handleSelectProduct(product)}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-brand-surface rounded-lg border border-brand-border flex items-center justify-center text-brand-accent group-hover:scale-110 transition-transform">
+                    <Package size={24} />
+                  </div>
+                  <div>
+                    <h5 className="text-[15px] font-black text-white uppercase tracking-tight">{product.name}</h5>
+                    <p className="text-[11px] text-white/50 font-bold uppercase tracking-widest">{product.caliber} • SKU: {product.sku}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[16px] font-mono font-black text-brand-accent">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.price)}
+                  </p>
+                  <Button variant="ghost" size="sm" className="h-7 text-[9px] font-bold mt-1 group-hover:bg-brand-accent group-hover:text-black">
+                    SELECIONAR
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+            {filteredProducts.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-brand-text-muted font-bold uppercase tracking-widest text-sm">Nenhum produto encontrado</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }

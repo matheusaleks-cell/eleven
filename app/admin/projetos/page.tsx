@@ -7,8 +7,10 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { FilterBar } from "@/components/shared/FilterBar";
-import { mockProjects } from "@/lib/mock-data";
 import { Plus, Search, Filter, ArrowRight, Eye } from "lucide-react";
+import { getProjects } from "./actions";
+import { getInvestors } from "../investidores/actions";
+import { toast } from "sonner";
 
 export default function AdminProjectsPage() {
   const router = useRouter();
@@ -19,13 +21,32 @@ export default function AdminProjectsPage() {
   const [endDate, setEndDate] = useState("");
   const [investorId, setInvestorId] = useState("ALL");
 
+  const [projects, setProjects] = useState<any[]>([]);
+  const [investors, setInvestors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
-    if (!s) { router.push("/login"); return; }
-    const parsed = JSON.parse(s);
-    if (parsed.role !== "ADMIN") { router.push("/investor"); return; }
-    setSession(parsed);
+    if (s) setSession(JSON.parse(s));
+    
+    fetchData();
   }, []);
+
+  async function fetchData() {
+    setLoading(true);
+    try {
+      const [pData, iData] = await Promise.all([
+        getProjects(),
+        getInvestors()
+      ]);
+      setProjects(pData);
+      setInvestors(iData);
+    } catch (error) {
+      toast.error("Erro ao carregar dados");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleClearFilters = () => {
     setSearch("");
@@ -35,7 +56,7 @@ export default function AdminProjectsPage() {
     setInvestorId("ALL");
   };
 
-  const filtered = mockProjects.filter((p) => {
+  const filtered = projects.filter((p) => {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.investorName.toLowerCase().includes(search.toLowerCase()) ||
@@ -43,8 +64,6 @@ export default function AdminProjectsPage() {
     const matchStatus = statusFilter === "ALL" || p.status === statusFilter;
     const matchInvestor = investorId === "ALL" || p.investor_id === investorId;
     
-    // Simulação de filtro de data (usando a data do projeto)
-    // No mundo real, você compararia objetos Date
     const matchDate = (!startDate || p.created_at >= startDate) && (!endDate || p.created_at <= endDate);
 
     return matchSearch && matchStatus && matchInvestor && matchDate;
@@ -61,7 +80,7 @@ export default function AdminProjectsPage() {
             Projetos
           </h1>
           <p style={{ color: "#606060", fontSize: "14px", fontFamily: "'Rajdhani', sans-serif" }}>
-            {mockProjects.length} projetos cadastrados
+            {projects.length} projetos cadastrados
           </p>
         </div>
         <Link
@@ -85,6 +104,7 @@ export default function AdminProjectsPage() {
         onEndDateChange={setEndDate}
         onInvestorChange={setInvestorId}
         onClear={handleClearFilters}
+        investors={investors}
       />
 
       <div

@@ -6,7 +6,6 @@ import Link from "next/link";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
-import { mockProjects, defaultTaxConfig } from "@/lib/mock-data";
 import { getCycleName, formatMoney } from "@/lib/calculations";
 import { ArrowLeft, ChevronDown, ChevronUp, Plus, CheckCircle, Clock, FileText, Download } from "lucide-react";
 import { CycleModal } from "@/components/cycles/CycleModal";
@@ -14,6 +13,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { getProjectById, createCycle } from "../actions";
+import { uploadDocument, getProjectDocuments, deleteDocument } from "../document-actions";
+import { getTaxConfigs } from "../../configuracoes/actions";
+import { Dialog } from "@/components/ui/Dialog";
+import { Input } from "@/components/ui/Input";
 
 export default function ProjectDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -22,26 +26,170 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   const [showCycleModal, setShowCycleModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycles" | "docs">("cycles");
 
+  const [project, setProject] = useState<any>(null);
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadCategory, setUploadCategory] = useState("Legal");
+  const [isUploading, setIsUploading] = useState(false);
+  const [realTaxConfig, setRealTaxConfig] = useState<any>(null);
+
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
-    if (!s) { router.push("/login"); return; }
-    setSession(JSON.parse(s));
-  }, [router]);
+    if (s) setSession(JSON.parse(s));
+    
+    fetchProject();
+    fetchTaxes();
+  }, []);
 
-  const project = mockProjects.find((p) => p.id === params.id) || mockProjects[0];
+  async function fetchTaxes() {
+    const res = await getTaxConfigs();
+    if (res.success && res.configs.length > 0) {
+      const active = res.configs.find((c: any) => c.isDefault) || res.configs[0];
+      setRealTaxConfig({
+        name: active.name,
+        ii_rate: active.ii / 100,
+        ipi_rate: active.ipi / 100,
+        pis_rate: active.pisPasep / 100,
+        cofins_rate: active.cofins / 100,
+        icms_rate: active.icmsImport / 100,
+        icms_factor: 0.75, // Ajuste fixo temporário
+        siscomex_fixed: active.siscomexFixed,
+        operational_fixed: 1740.00,
+        sales_tax_rate: (active.icmsSale + active.simplesNacional) / 100,
+        sales_op_rate: 0.08
+      });
+    }
+  }
 
-  if (!session) return null;
+  async function fetchProject() {
+    setLoading(true);
+    try {
+      const data = await getProjectById(params.id);
+      if (data) {
+        setProject(data);
+        fetchDocs(data.id);
+      } else {
+        toast.error("Projeto não encontrado");
+        router.push("/admin/projetos");
+      }
+    } catch (error) {
+      toast.error("Erro ao carregar projeto");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchDocs(pid: string) {
+    const res = await getProjectDocuments(pid);
+    if (res.success) {
+      setDocuments(res.documents);
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setUploadFile(e.target.files[0]);
+    }
+  };
+
+  const handleUploadSubmit = async () => {
+    if (!uploadFile) {
+      toast.error("Selecione um arquivo para upload.");
+      return;
+    }
+    
+    setIsUploading(true);
+    try {
+      // Converter para base64
+      const reader = new FileReader();
+      reader.readAsDataURL(uploadFile);
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const sizeMb = (uploadFile.size / (1024 * 1024)).toFixed(2);
+        
+        const res = await uploadDocument({
+          name: uploadFile.name,
+          type: uploadFile.type.includes("pdf") ? "PDF" : uploadFile.type.includes("image") ? "IMAGEM" : "ARQUIVO",
+          category: uploadCategory,
+          size: `${sizeMb} MB`,
+          base64Data: base64,
+          projectId: project.id
+        });
+
+        if (res.success) {
+          toast.success("Documento salvo com sucesso no servidor!");
+          setIsUploadModalOpen(false);
+          setUploadFile(null);
+          fetchDocs(project.id);
+        } else {
+          toast.error("Erro ao fazer upload: " + res.error);
+        }
+        setIsUploading(false);
+      };
+      reader.onerror = () => {
+        toast.error("Falha ao ler o arquivo.");
+        setIsUploading(false);
+      };
+    } catch (err) {
+      toast.error("Erro inesperado no upload.");
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    if (confirm("Deseja realmente excluir este documento?")) {
+      const res = await deleteDocument(id, project.id);
+      if (res.success) {
+        toast.success("Documento excluído.");
+        fetchDocs(project.id);
+      } else {
+        toast.error("Falha ao excluir documento.");
+      }
+    }
+  };
+
+  const handleDownloadDoc = (doc: any) => {
+    toast.success(`Iniciando download seguro: ${doc.name}`);
+    const link = document.createElement("a");
+    link.href = doc.base64Data;
+    link.download = doc.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleSaveCycle = async (data: any) => {
+    try {
+      const result = await createCycle({
+        projectId: project.id,
+        cycleNumber: project.currentCycle + 1,
+        cycleName: getCycleName(project.currentCycle),
+        ...data.result,
+        quantity: parseFloat(data.qty),
+        salePricePerUnit: parseFloat(data.price),
+        exchangeRateUsd: parseFloat(data.rate),
+        fobValueUsd: parseFloat(data.fob),
+        freightUsd: parseFloat(data.freight),
+        insuranceUsd: parseFloat(data.insurance),
+      });
+
+      if (result.success) {
+        toast.success("Ciclo registrado com sucesso!");
+        setShowCycleModal(false);
+        fetchProject();
+      } else {
+        toast.error(result.error);
+      }
+    } catch (error) {
+      toast.error("Erro ao registrar ciclo");
+    }
+  };
+
+  if (!session || !project) return null;
 
   const isAdmin = session.role === "ADMIN";
-
-  const MOCK_DOCS = [
-    { id: 1, name: "Autorização de Importação (CII)", date: "10/01/2025", type: "PDF", category: "Legal", size: "1.2 MB" },
-    { id: 2, name: "Nota Fiscal de Entrada (Alfândega)", date: "25/01/2025", type: "PDF", category: "Fiscal", size: "850 KB" },
-    { id: 3, name: "Termo de Vistoria do Exército", date: "05/02/2025", type: "PDF", category: "Conformidade", size: "2.4 MB" },
-    { id: 4, name: "Certificado de Origem (Turquia)", date: "12/01/2025", type: "PDF", category: "Importação", size: "1.1 MB" },
-    { id: 5, name: "Comprovante de Nacionalização", date: "10/02/2025", type: "PDF", category: "Fiscal", size: "540 KB" },
-  ];
-
   return (
     <DashboardLayout role={isAdmin ? "ADMIN" : "INVESTOR"} userName={session.name} userEmail={session.email} pageTitle="Detalhe do Projeto">
       {/* Back */}
@@ -77,7 +225,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
           {[
-            { label: "Capital Inicial", value: formatMoney(project.initial_capital) },
+            { label: "Capital Inicial", value: formatMoney(project.initialCapital) },
             { label: "Ciclo Atual", value: `${project.currentCycle}/${project.max_cycles}` },
             { label: "Faturamento Total", value: formatMoney(project.totalRevenue) },
             { label: "Saldo Investidor", value: formatMoney(project.totalInvestorShare) },
@@ -196,7 +344,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         ))}
                         <div className="flex justify-between items-center py-2 mt-1" style={{ borderTop: "2px solid #4CAF50" }}>
                           <span style={{ color: "#4CAF50", fontSize: "14px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif" }}>PRÓXIMO CICLO</span>
-                          <span style={{ color: "#4CAF50", fontFamily: "'Roboto Mono', monospace", fontSize: "14px", fontWeight: 700 }}>{formatMoney(cycle.nextCycleCapital)}</span>
+                          <span style={{ color: "#4CAF50", fontFamily: "'Roboto Mono', monospace", fontSize: "14px", fontWeight: 700 }}>{formatMoney(cycle.reinvestmentShare)}</span>
                         </div>
                       </div>
                     </div>
@@ -235,7 +383,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
             <div className="p-4 border-b border-brand-border bg-brand-surface/30 flex justify-between items-center">
               <p className="text-[10px] font-bold uppercase tracking-widest text-brand-text-muted">Documentação Legal e Comprovação Material da Operação</p>
               {isAdmin && (
-                <Button size="sm" variant="secondary" className="h-8 text-[10px] gap-2">
+                <Button size="sm" variant="secondary" className="h-8 text-[10px] gap-2" onClick={() => setIsUploadModalOpen(true)}>
                   <Plus size={14} /> ANEXAR NOVO
                 </Button>
               )}
@@ -250,37 +398,57 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                 </tr>
               </thead>
               <tbody>
-                {MOCK_DOCS.map((doc) => (
-                  <tr key={doc.id} className="border-b border-brand-border/50 hover:bg-brand-accent/5 transition-colors group">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-brand-surface rounded border border-brand-border text-brand-text-muted group-hover:text-brand-accent transition-colors">
-                          <FileText size={18} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold uppercase text-white font-rajdhani tracking-tight">{doc.name}</p>
-                          <p className="text-[10px] text-brand-text-muted font-bold uppercase font-mono">{doc.type} · {doc.size}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-brand-bg border border-brand-border text-brand-text-secondary">
-                        {doc.category}
-                      </span>
-                    </td>
-                    <td className="p-4 text-xs font-mono text-brand-text-muted">{doc.date}</td>
-                    <td className="p-4 text-right">
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-brand-accent hover:bg-brand-accent/10 gap-2 font-bold uppercase text-[10px]"
-                        onClick={() => toast.success(`Iniciando download seguro: ${doc.name}`)}
-                      >
-                         Visualizar
-                      </Button>
+                {documents.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-8 text-center text-brand-text-muted text-xs uppercase font-bold tracking-widest">
+                      Nenhum documento anexado a este projeto.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  documents.map((doc) => (
+                    <tr key={doc.id} className="border-b border-brand-border/50 hover:bg-brand-accent/5 transition-colors group">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-brand-surface rounded border border-brand-border text-brand-text-muted group-hover:text-brand-accent transition-colors">
+                            <FileText size={18} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold uppercase text-white font-rajdhani tracking-tight">{doc.name}</p>
+                            <p className="text-[10px] text-brand-text-muted font-bold uppercase font-mono">{doc.type} · {doc.size}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-brand-bg border border-brand-border text-brand-text-secondary">
+                          {doc.category}
+                        </span>
+                      </td>
+                      <td className="p-4 text-xs font-mono text-brand-text-muted">{new Date(doc.createdAt).toLocaleDateString('pt-BR')}</td>
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {isAdmin && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-brand-danger hover:bg-brand-danger/10 gap-2 font-bold uppercase text-[10px]"
+                              onClick={() => handleDeleteDoc(doc.id)}
+                            >
+                              Excluir
+                            </Button>
+                          )}
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-brand-accent hover:bg-brand-accent/10 gap-2 font-bold uppercase text-[10px]"
+                            onClick={() => handleDownloadDoc(doc)}
+                          >
+                             Visualizar
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
             <div className="p-6 text-center border-t border-brand-border/30">
@@ -297,15 +465,60 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
         <CycleModal
           projectName={project.name}
           cycleNumber={project.currentCycle}
-          splitPct={project.profit_split_pct}
-          taxConfig={defaultTaxConfig}
-          onClose={() => setShowCycleModal(false)}
-          onSave={() => {
-            toast.success("Ciclo registrado com sucesso!");
-            setShowCycleModal(false);
+          splitPct={project.profitSplitPct}
+          taxConfig={realTaxConfig || {
+            name: "Padrão (Fallback)",
+            ii_rate: 0.18, ipi_rate: 0.55, pis_rate: 0.021, cofins_rate: 0.0965,
+            icms_rate: 0.25, icms_factor: 0.75, siscomex_fixed: 154.23, operational_fixed: 1740,
+            sales_tax_rate: 0.11, sales_op_rate: 0.08
           }}
+          onClose={() => setShowCycleModal(false)}
+          onSave={handleSaveCycle}
         />
       )}
+
+      {/* Upload Modal */}
+      <Dialog 
+        isOpen={isUploadModalOpen} 
+        onClose={() => setIsUploadModalOpen(false)} 
+        title="Anexar Documento do Projeto"
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-brand-text-muted font-bold uppercase">Todos os documentos enviados ficam vinculados a este projeto e ficam visíveis ao investidor.</p>
+          
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-brand-text-muted">Categoria do Documento</label>
+            <select 
+              className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white outline-none focus:border-brand-accent"
+              value={uploadCategory}
+              onChange={(e) => setUploadCategory(e.target.value)}
+            >
+              <option value="Legal">Legal (Contratos, Termos)</option>
+              <option value="Fiscal">Fiscal (NF-e, GRU)</option>
+              <option value="Importação">Importação (CII, DI)</option>
+              <option value="Conformidade">Conformidade (Exército, Polícia)</option>
+              <option value="Financeiro">Financeiro (Comprovantes Pix)</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold uppercase text-brand-text-muted">Arquivo (PDF, Imagem, etc)</label>
+            <input 
+              type="file" 
+              onChange={handleFileChange}
+              className="w-full text-sm text-brand-text-muted file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-brand-accent/10 file:text-brand-accent hover:file:bg-brand-accent/20 cursor-pointer"
+            />
+            {uploadFile && <p className="text-xs text-brand-success font-bold mt-2">Arquivo selecionado: {uploadFile.name}</p>}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4 border-t border-brand-border mt-4">
+            <Button variant="ghost" onClick={() => setIsUploadModalOpen(false)} className="text-[10px]">CANCELAR</Button>
+            <Button onClick={handleUploadSubmit} disabled={isUploading || !uploadFile} className="gap-2 text-[10px]">
+              {isUploading ? "ENVIANDO..." : "SALVAR NO BANCO"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </DashboardLayout>
   );
 }

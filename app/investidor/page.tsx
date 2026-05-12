@@ -11,29 +11,29 @@ import { CapitalGrowthChart } from "@/components/charts/CapitalGrowthChart";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { cn } from "@/lib/utils";
 
-const MOCK_PROJECTS = [
-  { id: "P1", name: "VR-12P · Francisco · Lote 01", invested: 63000, current: 84200, yield: 33.6, cycle: 2 },
-  { id: "P2", name: "Canik TP9 · Francisco · Lote 02", invested: 45000, current: 48500, yield: 7.7, cycle: 1 },
-];
+import { getInvestorDashboardData } from "./actions";
 
 
 export default function InvestorDashboard() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<any>(null);
 
   useEffect(() => {
-    try {
-      const s = localStorage.getItem("eleven_session");
-      if (!s) {
-        window.location.href = "/login";
-        return;
-      }
+    const s = localStorage.getItem("eleven_session");
+    if (s) {
       const parsed = JSON.parse(s);
       setSession(parsed);
-    } catch (e) {
-      window.location.href = "/login";
-    } finally {
+      
+      // Fetch real data
+      getInvestorDashboardData(parsed.email).then(res => {
+        if (res.success) {
+          setDashboardData(res.data);
+        }
+        setLoading(false);
+      });
+    } else {
       setLoading(false);
     }
   }, []);
@@ -80,10 +80,10 @@ export default function InvestorDashboard() {
                 <Wallet className="text-brand-accent" size={20} />
              </div>
              <div className="flex flex-col">
-                <span className="text-3xl font-bold font-mono text-white tracking-tighter">R$ 132.700,00</span>
+                <span className="text-3xl font-bold font-mono text-white tracking-tighter">R$ {dashboardData?.totalPatrimony?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}</span>
                 <div className="flex items-center gap-1.5 mt-2 text-brand-success">
                    <ArrowUpRight size={16} strokeWidth={3} />
-                   <span className="text-xs font-bold uppercase tracking-wider">+R$ 24.700 (22.8%)</span>
+                   <span className="text-xs font-bold uppercase tracking-wider">+{dashboardData?.totalYield?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}</span>
                 </div>
              </div>
           </Card>
@@ -94,8 +94,8 @@ export default function InvestorDashboard() {
                 <TrendingUp className="text-brand-success" size={20} />
              </div>
              <div className="flex flex-col">
-                <span className="text-3xl font-bold font-mono text-white tracking-tighter">R$ 24.700,00</span>
-                <p className="text-[10px] text-brand-text-muted mt-2 uppercase font-bold tracking-widest">Baseado em 2 projetos ativos</p>
+                <span className="text-3xl font-bold font-mono text-white tracking-tighter">R$ {dashboardData?.totalYield?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}</span>
+                <p className="text-[10px] text-brand-text-muted mt-2 uppercase font-bold tracking-widest">Baseado em {dashboardData?.activeProjectsCount || 0} projetos ativos</p>
              </div>
           </Card>
 
@@ -123,35 +123,28 @@ export default function InvestorDashboard() {
                  </div>
               </div>
               <div className="p-6 h-[320px]">
-                 <CapitalGrowthChart data={[
-                   { month: 'Set', capital: 63000, growth: 0 },
-                   { month: 'Out', capital: 68500, growth: 5500 },
-                   { month: 'Nov', capital: 74200, growth: 11200 },
-                   { month: 'Dez', capital: 81000, growth: 18000 },
-                   { month: 'Jan', capital: 89500, growth: 26500 },
-                   { month: 'Fev', capital: 132700, growth: 34700 },
-                 ]} />
+                 <CapitalGrowthChart data={dashboardData?.chartData || []} height={320} />
               </div>
            </Card>
 
            {/* Active Projects List */}
            <div className="flex flex-col gap-4">
               <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-brand-text-muted px-2">Projetos em Execução</h3>
-              {MOCK_PROJECTS.map((project) => (
+              {(dashboardData?.projects || []).map((project: any) => (
                 <Card key={project.id} className="p-5 border-brand-border hover:border-brand-accent/40 transition-all group cursor-pointer">
                    <div className="flex justify-between items-start mb-4">
                       <div className="w-10 h-10 bg-brand-input rounded flex items-center justify-center text-brand-accent border border-brand-border group-hover:scale-110 transition-transform">
                         <Package size={20} />
                       </div>
                       <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded border border-brand-success/20 bg-brand-success/5 text-brand-success">
-                        CICLO {project.cycle}/8
+                        CICLO {project.cycle}
                       </span>
                    </div>
                    <h4 className="text-sm font-bold text-white mb-1 group-hover:text-brand-accent transition-colors uppercase tracking-tight">{project.name}</h4>
                    <div className="flex items-center gap-3 mt-4 pt-4 border-t border-brand-border/50">
                       <div>
                          <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest mb-1">Investido</p>
-                         <p className="text-sm font-bold font-mono">R$ {project.invested.toLocaleString()}</p>
+                         <p className="text-sm font-bold font-mono">R$ {project.invested.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
                       </div>
                       <div className="h-8 w-px bg-brand-border" />
                       <div>

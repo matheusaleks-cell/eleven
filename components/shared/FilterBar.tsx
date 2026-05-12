@@ -13,6 +13,7 @@ interface FilterBarProps {
   onClear: () => void;
   onFilter?: () => void;
   showInvestorFilter?: boolean;
+  investors?: Array<{ id: string; name: string }>;
 }
 
 export function FilterBar({
@@ -25,8 +26,8 @@ export function FilterBar({
   onClear,
   onFilter,
   showInvestorFilter = true,
+  investors = [],
 }: FilterBarProps) {
-  const investors = mockUsers.filter((u) => u.role === "INVESTOR");
 
   const inputBaseStyle = {
     background: "#242424",
@@ -42,12 +43,12 @@ export function FilterBar({
 
   return (
     <div 
-      className="flex flex-wrap items-end gap-4 p-5 mb-10 rounded-[4px]" 
+      className="flex flex-wrap items-end gap-8 p-10 rounded-[4px]" 
       style={{ background: "#1E1E1E", border: "1px solid #2A2A2A" }}
     >
       {/* Período */}
       <div className="flex flex-col gap-1.5">
-        <label style={{ color: "#606060", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+        <label style={{ color: "#888", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif" }}>
           Início
         </label>
         <div className="relative">
@@ -62,7 +63,7 @@ export function FilterBar({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <label style={{ color: "#606060", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+        <label style={{ color: "#888", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif" }}>
           Fim
         </label>
         <div className="relative">
@@ -79,7 +80,7 @@ export function FilterBar({
       {/* Investidor (apenas para Admin) */}
       {showInvestorFilter && (
         <div className="flex flex-col gap-1.5 min-w-[200px] flex-1">
-          <label style={{ color: "#606060", fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          <label style={{ color: "#888", fontSize: "13px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif" }}>
             Investidor
           </label>
           <div className="relative">

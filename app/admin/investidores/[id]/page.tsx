@@ -5,32 +5,49 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { mockUsers, mockProjects } from "@/lib/mock-data";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { formatMoney } from "@/lib/calculations";
+import { getInvestorDetails } from "../actions";
 
 export default function InvestorDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
 
+  const [investor, setInvestor] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
-    if (!s) { router.push("/login"); return; }
+    if (!s) { router.push("/admin/login"); return; }
     setSession(JSON.parse(s));
+
+    fetchInvestor();
   }, []);
 
-  const investor = mockUsers.find((u) => u.id === params.id) || mockUsers[1];
-  const projects = mockProjects.filter((p) => p.investor_id === investor.id);
-  const totalReceived = projects.reduce((a, p) => a + p.totalInvestorShare, 0);
-  const totalInvested = projects.reduce((a, p) => a + p.initial_capital, 0);
+  async function fetchInvestor() {
+    setLoading(true);
+    try {
+      const data = await getInvestorDetails(params.id);
+      if (data) {
+        setInvestor(data);
+      } else {
+        router.push("/admin/investidores");
+      }
+    } catch (error) {
+      console.error(error);
+      router.push("/admin/investidores");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  if (!session) return null;
+  if (!session || !investor) return null;
 
   return (
     <DashboardLayout role="ADMIN" userName={session.name} userEmail={session.email} pageTitle="Detalhe do Investidor">
       <div className="mb-6">
-        <Link href="/admin/investors" className="inline-flex items-center gap-2 text-sm transition-all" style={{ color: "#A0A0A0", textDecoration: "none", fontFamily: "'Rajdhani', sans-serif" }}
+        <Link href="/admin/investidores" className="inline-flex items-center gap-2 text-sm transition-all" style={{ color: "#A0A0A0", textDecoration: "none", fontFamily: "'Rajdhani', sans-serif" }}
           onMouseOver={(e) => (e.currentTarget as HTMLElement).style.color = "#F5C400"}
           onMouseOut={(e) => (e.currentTarget as HTMLElement).style.color = "#A0A0A0"}>
           <ArrowLeft size={14} /> Voltar
@@ -50,10 +67,10 @@ export default function InvestorDetailPage({ params }: { params: { id: string } 
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { label: "Projetos", value: projects.length.toString() },
-            { label: "Capital Inicial Total", value: formatMoney(totalInvested) },
-            { label: "Total Recebido", value: formatMoney(totalReceived) },
-            { label: "Rentabilidade", value: `${totalInvested > 0 ? ((totalReceived / totalInvested) * 100).toFixed(1) : "0"}%` },
+            { label: "Projetos", value: investor.stats.activeProjects.toString() },
+            { label: "Capital Inicial Total", value: formatMoney(investor.stats.totalInvested) },
+            { label: "Total Recebido", value: formatMoney(investor.stats.totalReceived) },
+            { label: "Rentabilidade", value: `${investor.stats.roi.toFixed(1)}%` },
           ].map((stat) => (
             <div key={stat.label} className="p-3 rounded-[2px]" style={{ background: "#1E1E1E", border: "1px solid #2A2A2A" }}>
               <p style={{ color: "#606060", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", marginBottom: 4 }}>{stat.label}</p>
@@ -66,7 +83,7 @@ export default function InvestorDetailPage({ params }: { params: { id: string } 
       {/* Projects */}
       <div className="section-divider mb-4">★ Projetos do Investidor ★</div>
       <div className="space-y-3">
-        {projects.map((project) => (
+        {investor.projects.map((project: any) => (
           <div key={project.id} className="rounded-[4px] p-4" style={{ background: "#242424", border: "1px solid #333" }}>
             <div className="flex items-center justify-between flex-wrap gap-3">
               <div>
@@ -76,10 +93,10 @@ export default function InvestorDetailPage({ params }: { params: { id: string } 
               <div className="flex items-center gap-4">
                 <StatusBadge status={project.status} />
                 <div className="text-right">
-                  <p style={{ color: "#606060", fontSize: "11px", fontFamily: "'Rajdhani', sans-serif" }}>Saldo Investidor</p>
-                  <MoneyDisplay value={project.totalInvestorShare} size="md" />
+                  <p style={{ color: "#606060", fontSize: "11px", fontFamily: "'Rajdhani', sans-serif" }}>Capital Alocado (Capital + Lucros)</p>
+                  <MoneyDisplay value={project.currentCapital} size="md" />
                 </div>
-                <Link href={`/admin/projects/${project.id}`} className="px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase" style={{ border: "1px solid #F5C400", color: "#F5C400", fontFamily: "'Rajdhani', sans-serif", textDecoration: "none" }}>Ver</Link>
+                <Link href={`/admin/projetos/${project.id}`} className="px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase" style={{ border: "1px solid #F5C400", color: "#F5C400", fontFamily: "'Rajdhani', sans-serif", textDecoration: "none" }}>Ver Projeto</Link>
               </div>
             </div>
           </div>

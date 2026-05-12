@@ -6,17 +6,36 @@ import { Button } from "@/components/ui/Button";
 import { CreditCard, Download, Filter, Search, Calendar, ArrowUpRight, ArrowDownRight, Printer, Wallet, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const MOVIMENTACOES = [
-  { id: "1", data: "08/05/2026", descricao: "Distribuição de Lucro - Lote 01 (Ciclo 2)", tipo: "ENTRADA", valor: 12500, saldo: 132700 },
-  { id: "2", data: "15/04/2026", descricao: "Reinvestimento Automático - Lote 02", tipo: "REINVEST", valor: 8200, saldo: 120200 },
-  { id: "3", data: "10/04/2026", descricao: "Aporte de Capital - Projeto Canik", tipo: "ENTRADA", valor: 45000, saldo: 112000 },
-  { id: "4", data: "01/03/2026", descricao: "Taxa de Manutenção Administrativa", tipo: "SAIDA", valor: 150, saldo: 67000 },
-  { id: "5", data: "12/02/2026", descricao: "Rendimento Parcial - Lote 01", tipo: "ENTRADA", valor: 4200, saldo: 67150 },
-];
+import { getInvestorStatement } from "../actions";
 
 export default function ExtratoPage() {
+  const [session, setSession] = useState<any>(null);
+  const [statement, setStatement] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const s = localStorage.getItem("eleven_session");
+    if (s) {
+      const parsed = JSON.parse(s);
+      setSession(parsed);
+      getInvestorStatement(parsed.email).then((res) => {
+        if (res.success) setStatement(res.statement);
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  if (loading) return null;
+
+  const totalEntradas = statement.filter(s => s.tipo === "ENTRADA").reduce((acc, curr) => acc + curr.valor, 0);
+  const totalSaidas = statement.filter(s => s.tipo === "SAIDA").reduce((acc, curr) => acc + curr.valor, 0);
+  const totalReinvest = statement.filter(s => s.tipo === "REINVEST").reduce((acc, curr) => acc + curr.valor, 0);
+  const saldoAtual = statement.length > 0 ? statement[0].saldo : 0;
+
   return (
-    <DashboardLayout role="INVESTOR" userName="Francisco Investidor" userEmail="francisco@email.com">
+    <DashboardLayout role="INVESTOR" userName={session?.name || "Investidor"} userEmail={session?.email || ""}>
       <div className="flex flex-col gap-8 animate-fade-in pb-12">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -43,19 +62,19 @@ export default function ExtratoPage() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
            <Card className="bg-brand-bg/40 border-l-2 border-l-brand-accent">
               <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Saldo Atual</span>
-              <p className="text-2xl font-bold font-mono mt-1">R$ 132.700</p>
+              <p className="text-2xl font-bold font-mono mt-1">R$ {saldoAtual.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
            </Card>
            <Card className="bg-brand-bg/40 border-l-2 border-l-brand-success">
               <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Total Entradas</span>
-              <p className="text-2xl font-bold font-mono mt-1 text-brand-success">R$ 133.400</p>
+              <p className="text-2xl font-bold font-mono mt-1 text-brand-success">R$ {totalEntradas.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
            </Card>
            <Card className="bg-brand-bg/40 border-l-2 border-l-brand-danger">
               <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Total Saídas</span>
-              <p className="text-2xl font-bold font-mono mt-1 text-brand-danger">R$ 700</p>
+              <p className="text-2xl font-bold font-mono mt-1 text-brand-danger">R$ {totalSaidas.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
            </Card>
            <Card className="bg-brand-bg/40 border-l-2 border-l-brand-warning">
               <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Reinvestimentos</span>
-              <p className="text-2xl font-bold font-mono mt-1 text-brand-warning">R$ 38.200</p>
+              <p className="text-2xl font-bold font-mono mt-1 text-brand-warning">R$ {totalReinvest.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}</p>
            </Card>
         </div>
 
@@ -85,13 +104,13 @@ export default function ExtratoPage() {
                  </tr>
               </thead>
               <tbody>
-                 {MOVIMENTACOES.map((mov) => (
+                 {statement.map((mov) => (
                     <tr key={mov.id} className="hover:bg-brand-accent/5 transition-colors group">
-                       <td className="text-xs font-mono font-bold text-brand-text-muted group-hover:text-white transition-colors">{mov.data}</td>
+                       <td className="text-xs font-mono font-bold text-brand-text-muted group-hover:text-white transition-colors">{mov.dataStr}</td>
                        <td>
                           <div className="flex flex-col">
                              <span className="text-sm font-bold text-white group-hover:text-brand-accent transition-colors">{mov.descricao}</span>
-                             <span className="text-[10px] text-brand-text-muted uppercase font-bold mt-0.5 tracking-tighter">ID Operação: #TX-00{mov.id}</span>
+                             <span className="text-[10px] text-brand-text-muted uppercase font-bold mt-0.5 tracking-tighter">ID Operação: {mov.id}</span>
                           </div>
                        </td>
                        <td>
@@ -109,13 +128,20 @@ export default function ExtratoPage() {
                           "text-right font-mono font-bold text-sm",
                           mov.tipo === "ENTRADA" ? "text-brand-success" : mov.tipo === "REINVEST" ? "text-brand-warning" : "text-brand-danger"
                        )}>
-                          {mov.tipo === "SAIDA" ? "-" : "+"} R$ {mov.valor.toLocaleString()}
+                          {mov.tipo === "SAIDA" ? "-" : "+"} R$ {mov.valor.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}
                        </td>
                        <td className="text-right font-mono font-bold text-sm text-white">
-                          R$ {mov.saldo.toLocaleString()}
+                          R$ {mov.saldo.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}
                        </td>
                     </tr>
                  ))}
+                 {statement.length === 0 && (
+                   <tr>
+                     <td colSpan={5} className="text-center py-10 text-brand-text-muted font-rajdhani">
+                       Nenhuma movimentação registrada.
+                     </td>
+                   </tr>
+                 )}
               </tbody>
            </table>
            <div className="p-4 border-t border-brand-border bg-brand-bg/40 flex justify-center">
@@ -130,3 +156,4 @@ export default function ExtratoPage() {
 }
 
 import { RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";

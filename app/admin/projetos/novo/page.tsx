@@ -3,25 +3,78 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { mockUsers, defaultTaxConfig } from "@/lib/mock-data";
-import { Plus, ArrowLeft } from "lucide-react";
+import { Plus, ArrowLeft, Shield, Landmark, FileText, Calendar } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { getInvestors } from "../../investidores/actions";
+import { createProject } from "../actions";
+import { maskCurrency } from "@/lib/masks";
 
 export default function AdminNewProjectPage() {
   const router = useRouter();
+  const [investors, setInvestors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<any>(null);
-  const [form, setForm] = useState({ name: "", product: "", investorId: "", capital: "", maxCycles: "8", splitPct: "50", notes: "" });
+  const [form, setForm] = useState({ 
+    name: "", 
+    product: "", 
+    investorId: "", 
+    capital: "", 
+    maxCycles: "8", 
+    splitPct: "50", 
+    notes: "",
+    contractNumber: "",
+    startDate: new Date().toISOString().split('T')[0],
+    bankAccount: "",
+    pixKey: "",
+    payoutRule: "REINVEST",
+    taxProfile: "PF"
+  });
 
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
-    if (!s) { router.push("/login"); return; }
+    if (!s) { router.push("/admin/login"); return; }
     const parsed = JSON.parse(s);
     if (parsed.role !== "ADMIN") { router.push("/investor"); return; }
     setSession(parsed);
+    
+    fetchInvestors();
   }, []);
 
-  const investors = mockUsers.filter((u) => u.role === "INVESTOR");
+  async function fetchInvestors() {
+    const data = await getInvestors();
+    setInvestors(data);
+  }
+
+  const handleSubmit = async () => {
+    const rawCapital = form.capital.replace(/\D/g, "");
+    if (!form.name || !form.product || !form.investorId || !rawCapital) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await createProject({
+        ...form,
+        productName: form.product,
+        initialCapital: (parseFloat(rawCapital) / 100).toString(),
+        createdById: session.id,
+      });
+
+      if (result.success) {
+        toast.success(`Projeto "${form.name}" criado com sucesso!`);
+        router.push("/admin/projetos");
+      } else {
+        toast.error(result.error);
+      }
+    } catch (error) {
+      toast.error("Erro interno ao criar projeto");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fieldStyle = { background: "#0F0F0F", border: "1px solid #2A2A2A", borderRadius: "2px", color: "#FFFFFF", padding: "10px 12px", fontSize: "14px", width: "100%", outline: "none", fontFamily: "'Rajdhani', sans-serif" };
 
   if (!session) return null;
@@ -60,7 +113,53 @@ export default function AdminNewProjectPage() {
             </div>
             <div>
               <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Capital Inicial (R$) *</label>
-              <input type="number" value={form.capital} onChange={(e) => setForm({ ...form, capital: e.target.value })} placeholder="63000.00" style={{ ...fieldStyle, fontFamily: "'Roboto Mono', monospace" }} onFocus={(e) => (e.currentTarget.style.borderColor = "#F5C400")} onBlur={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")} />
+              <input 
+                type="text" 
+                value={form.capital} 
+                onChange={(e) => setForm({ ...form, capital: maskCurrency(e.target.value) })} 
+                placeholder="R$ 0,00" 
+                style={{ ...fieldStyle, fontFamily: "'Roboto Mono', monospace" }} 
+                onFocus={(e) => (e.currentTarget.style.borderColor = "#F5C400")} 
+                onBlur={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")} 
+              />
+            </div>
+          </div>
+
+          <div className="section-divider mb-4">★ Compliance & Jurídico ★</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Nº do Contrato</label>
+              <input type="text" value={form.contractNumber} onChange={(e) => setForm({ ...form, contractNumber: e.target.value })} placeholder="CTR-2025-XXX" style={fieldStyle} />
+            </div>
+            <div>
+              <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Data de Início</label>
+              <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} style={fieldStyle} />
+            </div>
+            <div>
+              <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Perfil Tributário</label>
+              <select value={form.taxProfile} onChange={(e) => setForm({ ...form, taxProfile: e.target.value })} style={{ ...fieldStyle, cursor: "pointer" }}>
+                <option value="PF">Pessoa Física (Retenção na Fonte)</option>
+                <option value="PJ">Pessoa Jurídica (Emissão de NF)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Regra de Payout</label>
+              <select value={form.payoutRule} onChange={(e) => setForm({ ...form, payoutRule: e.target.value })} style={{ ...fieldStyle, cursor: "pointer" }}>
+                <option value="REINVEST">Reinvestimento Automático</option>
+                <option value="WITHDRAW">Saque de Lucros (Mensal)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="section-divider mb-4">★ Dados Financeiros ★</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Chave PIX</label>
+              <input type="text" value={form.pixKey} onChange={(e) => setForm({ ...form, pixKey: e.target.value })} placeholder="E-mail, CPF ou Aleatória" style={fieldStyle} />
+            </div>
+            <div>
+              <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Conta Bancária (Se não houver PIX)</label>
+              <input type="text" value={form.bankAccount} onChange={(e) => setForm({ ...form, bankAccount: e.target.value })} placeholder="Ag, Conta e Banco" style={fieldStyle} />
             </div>
           </div>
 
@@ -86,14 +185,12 @@ export default function AdminNewProjectPage() {
           <div className="flex gap-3">
             <Link href="/admin/projetos" className="flex-1 flex items-center justify-center py-3 rounded-[2px] font-bold uppercase text-sm" style={{ border: "1px solid #333", color: "#A0A0A0", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", textDecoration: "none" }}>Cancelar</Link>
             <button
-              onClick={() => { 
-                toast.success(`Projeto "${form.name}" criado com sucesso!`);
-                router.push("/admin/projetos"); 
-              }}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[2px] font-bold uppercase text-sm"
-              style={{ background: "#F5C400", color: "#1A1A1A", border: "none", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", cursor: "pointer" }}
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-[2px] font-bold uppercase text-sm disabled:opacity-50"
+              style={{ background: "#F5C400", color: "#1A1A1A", border: "none", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", cursor: loading ? "not-allowed" : "pointer" }}
             >
-              <Plus size={15} /> ★ Criar Projeto
+              <Plus size={15} /> ★ {loading ? "CRIANDO..." : "Criar Projeto"}
             </button>
           </div>
         </div>

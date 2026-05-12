@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Menu, Bell } from "lucide-react";
 import Image from "next/image";
+import { getGlobalHeaderStats } from "@/app/admin/actions";
+import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 
 interface HeaderProps {
   onMobileMenuOpen: () => void;
@@ -14,10 +16,25 @@ interface HeaderProps {
 export function Header({ onMobileMenuOpen, userName, role, pageTitle }: HeaderProps) {
   const [isDesktop, setIsDesktop] = useState(false);
 
+  const [stats, setStats] = useState({ monthlySales: 0, inventoryValue: 0, averageMargin: 32.5, lastUsdRate: 5.82 });
+
   useEffect(() => {
     const checkScreen = () => setIsDesktop(window.innerWidth >= 1024);
     checkScreen();
     window.addEventListener("resize", checkScreen);
+    
+    // Carregar estatísticas reais do banco
+    const loadStats = async () => {
+      try {
+        const data = await getGlobalHeaderStats();
+        setStats(data);
+      } catch (error) {
+        console.error("Erro ao carregar stats do header");
+      }
+    };
+    
+    loadStats();
+
     return () => window.removeEventListener("resize", checkScreen);
   }, []);
 
@@ -30,11 +47,11 @@ export function Header({ onMobileMenuOpen, userName, role, pageTitle }: HeaderPr
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "0 28px",
-        height: 64,
+        padding: "0 40px",
+        height: 80,
         background: "#161616",
         borderBottom: "1px solid #242424",
-        gap: 16,
+        gap: 24,
       }}
     >
       {/* Left side */}
@@ -106,11 +123,38 @@ export function Header({ onMobileMenuOpen, userName, role, pageTitle }: HeaderPr
 
       {/* Right side */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-        {/* Market Rate Indicator - Hide on very small screens if needed, but keeping for now */}
+        
+        {isDesktop && role === "ADMIN" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 20, paddingRight: 20, borderRight: "1px solid #242424" }}>
+            {/* Margem Média */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+              <span style={{ color: "#555", fontSize: "9px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", lineHeight: 1 }}>MARGEM MÉDIA</span>
+              <span style={{ color: "#F5C400", fontSize: "14px", fontWeight: 700, fontFamily: "'Roboto Mono', monospace", lineHeight: 1.2 }}>{stats.averageMargin}%</span>
+            </div>
+
+            {/* Patrimônio */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+              <span style={{ color: "#555", fontSize: "9px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", lineHeight: 1 }}>PATRIMÔNIO (ESTOQUE)</span>
+              <div style={{ color: "#FFFFFF", fontSize: "14px", fontWeight: 700, fontFamily: "'Roboto Mono', monospace", lineHeight: 1.2 }}>
+                <MoneyDisplay value={stats.inventoryValue} size="sm" noSymbol />
+              </div>
+            </div>
+
+            {/* Vendas Mês */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+              <span style={{ color: "#555", fontSize: "9px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", lineHeight: 1 }}>VENDAS MÊS</span>
+              <div style={{ color: "#4CAF50", fontSize: "14px", fontWeight: 700, fontFamily: "'Roboto Mono', monospace", lineHeight: 1.2 }}>
+                <MoneyDisplay value={stats.monthlySales} size="sm" />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Market Rate Indicator */}
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderRight: "1px solid #242424", marginRight: 4 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-            <span style={{ color: "#555", fontSize: "10px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em", lineHeight: 1 }}>MERCADO ATUAL</span>
-            <span style={{ color: "#4CAF50", fontSize: "14px", fontWeight: 700, fontFamily: "'Roboto Mono', monospace", lineHeight: 1.2 }}>R$ 5,82</span>
+            <span style={{ color: "#555", fontSize: "10px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.05em", lineHeight: 1 }}>USD ATUAL</span>
+            <span style={{ color: "#4CAF50", fontSize: "14px", fontWeight: 700, fontFamily: "'Roboto Mono', monospace", lineHeight: 1.2 }}>R$ {stats.lastUsdRate.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
           </div>
           <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#4CAF50", boxShadow: "0 0 6px #4CAF50" }} />
         </div>
