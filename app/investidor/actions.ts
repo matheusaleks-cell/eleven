@@ -7,7 +7,7 @@ export async function getInvestorDashboardData(email: string) {
     const investor = await prisma.user.findUnique({
       where: { email },
       include: {
-        projects: {
+        investedProjects: {
           include: {
             cycles: {
               orderBy: { cycleNumber: 'asc' }
@@ -21,12 +21,12 @@ export async function getInvestorDashboardData(email: string) {
 
     let totalPatrimony = 0;
     let totalYield = 0;
-    const activeProjectsCount = investor.projects.filter(p => p.status === "ACTIVE").length;
+    const activeProjectsCount = investor.investedProjects.filter(p => p.status === "ACTIVE").length;
     
     // Gráfico de evolução de capital
     const chartData: any[] = [];
     // Mapeando dados formatados para a tela
-    const formattedProjects = investor.projects.map(project => {
+    const formattedProjects = investor.investedProjects.map(project => {
       let projectInvested = project.initialCapital || 0;
       let projectCurrent = projectInvested;
       
@@ -84,7 +84,7 @@ export async function getInvestorStatement(email: string) {
     const investor = await prisma.user.findUnique({
       where: { email },
       include: {
-        projects: {
+        investedProjects: {
           include: {
             cycles: true
           }
@@ -98,7 +98,7 @@ export async function getInvestorStatement(email: string) {
     let currentBalance = 0;
 
     // Aportes Iniciais (Saída do saldo imaginário / Investimento)
-    investor.projects.forEach(project => {
+    investor.investedProjects.forEach(project => {
       statement.push({
         id: `AP-${project.id.substring(0,6)}`,
         dataStr: project.startDate ? project.startDate.toLocaleDateString("pt-BR") : project.createdAt.toLocaleDateString("pt-BR"),
@@ -110,7 +110,7 @@ export async function getInvestorStatement(email: string) {
     });
 
     // Rendimentos dos Ciclos
-    investor.projects.forEach(project => {
+    investor.investedProjects.forEach(project => {
       project.cycles.forEach(cycle => {
         if (cycle.status === "COMPLETED") {
           if (cycle.investorShare > 0) {
@@ -165,7 +165,7 @@ export async function getInvestorProjects(email: string) {
     const investor = await prisma.user.findUnique({
       where: { email },
       include: {
-        projects: {
+        investedProjects: {
           include: {
             cycles: true
           }
@@ -175,7 +175,7 @@ export async function getInvestorProjects(email: string) {
 
     if (!investor) return { success: false, projects: [] };
 
-    const mapped = investor.projects.map(p => {
+    const mapped = investor.investedProjects.map(p => {
       let totalReceived = 0;
       p.cycles.forEach(c => {
         if (c.status === "COMPLETED") totalReceived += c.investorShare;
