@@ -313,32 +313,50 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                </Card>
              ))}
 
-             <label className="border-2 border-dashed border-brand-border rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:border-brand-accent/50 hover:bg-brand-accent/5 transition-all text-brand-text-muted hover:text-brand-accent cursor-pointer">
-                <Plus size={20} />
-                <span className="text-[10px] font-bold uppercase">UPLOAD DOCUMENTO</span>
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept="application/pdf,image/*"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onloadend = async () => {
-                        const base64 = reader.result as string;
-                        const res = await addLotDocument(batch.dbId || batch.id, file.name, "Importação", base64);
-                        if (res.success) {
-                          toast.success("Documento anexado ao lote!");
-                          onRefresh?.();
-                        } else {
-                          toast.error("Erro ao subir documento.");
-                        }
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-             </label>
+             <div className="border-2 border-dashed border-brand-border rounded-lg p-4 flex flex-col items-center justify-center gap-4 hover:border-brand-accent/50 hover:bg-brand-accent/5 transition-all text-brand-text-muted hover:text-brand-accent group">
+                <div className="flex flex-col items-center gap-2">
+                   <Plus size={20} />
+                   <span className="text-[10px] font-bold uppercase">UPLOAD DOCUMENTO</span>
+                </div>
+                
+                <div className="w-full space-y-2">
+                   <select 
+                     id="doc-category"
+                     className="w-full bg-brand-input border border-brand-border rounded text-[9px] font-bold uppercase p-1 outline-none focus:border-brand-accent"
+                   >
+                      <option value="Importação">Importação (CII, LI)</option>
+                      <option value="Fiscal">Fiscal (NF-e, DI)</option>
+                      <option value="Financeiro">Pagamento (Swift, Pix)</option>
+                      <option value="Logístico">Logístico (BL, AWB)</option>
+                   </select>
+                   <label className="block w-full bg-brand-accent/10 text-brand-accent text-center py-2 rounded text-[9px] font-bold uppercase cursor-pointer hover:bg-brand-accent/20 transition-colors">
+                      Selecionar Arquivo
+                      <input 
+                        type="file" 
+                        className="hidden" 
+                        accept="application/pdf,image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          const category = (document.getElementById("doc-category") as HTMLSelectElement).value;
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = async () => {
+                              const base64 = reader.result as string;
+                              const res = await addLotDocument(batch.dbId || batch.id, file.name, category, base64);
+                              if (res.success) {
+                                toast.success("Documento anexado!");
+                                onRefresh?.();
+                              } else {
+                                toast.error("Erro ao subir.");
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                   </label>
+                </div>
+             </div>
 
              {(!batch.documents || batch.documents.length === 0) && (
                <div className="md:col-span-3 py-10 text-center text-brand-text-muted text-[10px] uppercase border border-dashed border-brand-border rounded-lg">
