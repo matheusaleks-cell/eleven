@@ -14,14 +14,14 @@ export async function getImportLots() {
         _count: {
           select: { products: true }
         }
-      }
-    });
+      } as any
+    }) as any[];
     
     // Mapear campos do banco para o que a UI espera
     return lots.map(lot => ({
       ...lot,
       lotId: lot.batchCode,
-      supplier: lot.supplier.name,
+      supplier: lot.supplier?.name || "Fornecedor",
       originCountry: lot.countryOrigin,
       fobTotal: lot.fobValue,
       freightTotal: lot.freight,
@@ -47,7 +47,7 @@ export async function addLotDocument(lotId: string, name: string, category: stri
         size: `${(base64.length / 1024 / 1.33).toFixed(1)} KB`,
         base64Data: base64,
         lotId
-      }
+      } as any
     });
     revalidatePath("/admin/importacao/lotes");
     return { success: true, doc };
