@@ -102,7 +102,7 @@ export default function ClientesPage() {
       if (!response.ok) throw new Error("CNPJ não encontrado.");
       const data = await response.json();
       
-      setNewCliente(prev => ({
+      setNewCliente((prev: any) => ({
         ...prev,
         name: data.razao_social,
         fantasyName: data.nome_fantasia || data.razao_social,
