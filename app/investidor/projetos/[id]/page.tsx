@@ -56,7 +56,7 @@ export default function InvestorProjectDetailPage({ params }: { params: { id: st
       const res = await getCycleSales(cycleId);
       if (res.success) {
         setCycleSales(res.sales);
-        setTotalSoldValue(res.totalSoldValue);
+        setTotalSoldValue(res.totalSoldValue || 0);
       }
     } catch (err) {
       console.error(err);
