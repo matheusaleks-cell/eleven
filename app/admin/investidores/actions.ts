@@ -9,7 +9,7 @@ export async function getInvestors() {
     const investors = await prisma.user.findMany({
       where: { role: "INVESTOR" },
       include: {
-        projects: {
+        investedProjects: {
           include: {
             cycles: true
           }
@@ -19,23 +19,21 @@ export async function getInvestors() {
     });
 
     return investors.map(i => {
-      const totalInvested = i.projects.reduce((acc, p) => acc + (p.initialCapital || 0), 0);
+      const totalInvested = i.investedProjects.reduce((acc, p) => acc + (p.initialCapital || 0), 0);
       
       let totalReceived = 0;
-      i.projects.forEach(p => {
+      i.investedProjects.forEach(p => {
         p.cycles.forEach(c => {
           totalReceived += c.investorShare || 0;
         });
       });
 
       return {
-        id: i.id,
-        name: i.name,
-        email: i.email,
-        phone: i.phone || "—",
-        projectsCount: i.projects.length,
+        ...i,
         totalInvested,
         totalReceived,
+        projectsCount: i.investedProjects.length,
+        status: i.investedProjects.some(p => p.status === "ACTIVE") ? "ATIVO" : "INATIVO"
       };
     });
   } catch (error) {
