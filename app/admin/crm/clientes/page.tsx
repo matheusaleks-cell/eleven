@@ -22,24 +22,30 @@ export default function ClientesPage() {
   const [filterState, setFilterState] = useState("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingCustomer, setViewingCustomer] = useState<any>(null);
-  const [newCliente, setNewCliente] = useState({
-    name: "",
-    type: "B2C",
-    document: "",
-    email: "",
-    phone: "",
-    state: "",
-    city: "",
-    address: "",
-    crNumber: "",
-    category: "CAC",
-    rg: "",
-    birthDate: "",
-    source: "",
+  const [newCliente, setNewCliente] = useState<any>({ 
+    name: "", 
+    type: "B2B", 
+    document: "", 
+    email: "", 
+    phone: "", 
+    state: "", 
+    city: "", 
+    address: "", 
+    crNumber: "", 
+    category: "LOJA DE ARMAS", 
+    rg: "", 
+    birthDate: "", 
+    source: "", 
     notes: "",
     fantasyName: "",
     stateRegistration: "",
-    responsibleName: ""
+    responsibleName: "",
+    storeEmail: "",
+    cep: "",
+    addressNumber: "",
+    addressComplement: "",
+    neighborhood: "",
+    crValidityDate: ""
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -83,9 +89,42 @@ export default function ClientesPage() {
     });
   }, [clientes, search, filterType, filterState]);
 
+  const handleCNPJLookup = async (cnpj: string) => {
+    const cleanCNPJ = cnpj.replace(/\D/g, "");
+    if (cleanCNPJ.length !== 14) {
+      toast.error("CNPJ inválido para busca.");
+      return;
+    }
+
+    toast.loading("Buscando dados do CNPJ...", { id: "cnpj-lookup" });
+    try {
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCNPJ}`);
+      if (!response.ok) throw new Error("CNPJ não encontrado.");
+      const data = await response.json();
+      
+      setNewCliente(prev => ({
+        ...prev,
+        name: data.razao_social,
+        fantasyName: data.nome_fantasia || data.razao_social,
+        cep: data.cep,
+        address: data.logradouro,
+        addressNumber: data.numero,
+        addressComplement: data.complemento,
+        neighborhood: data.bairro,
+        city: data.municipio,
+        state: data.uf,
+        email: data.email || prev.email,
+        phone: data.ddd_telefone_1 ? `(${data.ddd_telefone_1.slice(0,2)}) ${data.ddd_telefone_1.slice(2)}` : prev.phone
+      }));
+      toast.success("Dados preenchidos com sucesso!", { id: "cnpj-lookup" });
+    } catch (error) {
+      toast.error("Erro ao buscar CNPJ. Verifique o número ou preencha manualmente.", { id: "cnpj-lookup" });
+    }
+  };
+
   const handleAddCliente = async () => {
-    if (!newCliente.name || !newCliente.document) {
-      toast.error("Por favor, preencha os campos obrigatórios.");
+    if (!newCliente.name || !newCliente.document || !newCliente.phone || !newCliente.state) {
+      toast.error("Por favor, preencha todos os campos obrigatórios (Nome, Documento, Telefone e UF).");
       return;
     }
 
@@ -111,7 +150,7 @@ export default function ClientesPage() {
       setIsModalOpen(false);
       setIsEditing(false);
       setEditingId(null);
-      setNewCliente({ name: "", type: "B2C", document: "", email: "", phone: "", state: "", city: "", address: "", crNumber: "", category: "CAC", rg: "", birthDate: "", source: "", notes: "", fantasyName: "", stateRegistration: "", responsibleName: "" });
+      setNewCliente({ name: "", type: "B2B", document: "", email: "", phone: "", state: "", city: "", address: "", crNumber: "", category: "LOJA DE ARMAS", rg: "", birthDate: "", source: "", notes: "", fantasyName: "", stateRegistration: "", responsibleName: "", storeEmail: "", cep: "", addressNumber: "", addressComplement: "", neighborhood: "", crValidityDate: "" });
       loadData();
     } catch (error) {
       toast.error("Erro na comunicação com o servidor.");
@@ -137,7 +176,13 @@ export default function ClientesPage() {
       notes: cliente.notes || "",
       fantasyName: cliente.fantasyName || "",
       stateRegistration: cliente.stateRegistration || "",
-      responsibleName: cliente.responsibleName || ""
+      responsibleName: cliente.responsibleName || "",
+      storeEmail: cliente.storeEmail || "",
+      cep: cliente.cep || "",
+      addressNumber: cliente.addressNumber || "",
+      addressComplement: cliente.addressComplement || "",
+      neighborhood: cliente.neighborhood || "",
+      crValidityDate: cliente.crValidityDate ? new Date(cliente.crValidityDate).toISOString().split('T')[0] : ""
     });
     setEditingId(cliente.id);
     setIsEditing(true);
@@ -204,20 +249,9 @@ export default function ClientesPage() {
             </div>
 
             <div className="flex gap-2">
-               {["ALL", "B2B", "B2C"].map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => setFilterType(type)}
-                    className={cn(
-                      "px-4 py-2 rounded border text-[10px] font-black uppercase tracking-widest transition-all",
-                      filterType === type 
-                        ? "bg-brand-accent text-black border-brand-accent shadow-[0_0_15px_rgba(245,196,0,0.3)]" 
-                        : "bg-brand-surface/40 text-brand-text-muted border-brand-border hover:border-brand-accent/50"
-                    )}
-                  >
-                    {type === "ALL" ? "TODOS" : type}
-                  </button>
-               ))}
+               <div className="px-4 py-2 rounded border text-[10px] font-black uppercase tracking-widest bg-brand-accent text-black border-brand-accent shadow-[0_0_15px_rgba(245,196,0,0.3)]">
+                 PESSOA JURÍDICA (B2B)
+               </div>
             </div>
         </div>
 
@@ -351,147 +385,259 @@ export default function ClientesPage() {
         onClose={() => {
           setIsModalOpen(false);
           setIsEditing(false);
-          setNewCliente({ name: "", type: "B2C", document: "", email: "", phone: "", state: "", city: "", address: "", crNumber: "", category: "CAC", rg: "", birthDate: "", source: "", notes: "", fantasyName: "", stateRegistration: "", responsibleName: "" });
+          setNewCliente({ name: "", type: "B2B", document: "", email: "", phone: "", state: "", city: "", address: "", crNumber: "", category: "LOJA DE ARMAS", rg: "", birthDate: "", source: "", notes: "", fantasyName: "", stateRegistration: "", responsibleName: "", storeEmail: "", cep: "", addressNumber: "", addressComplement: "", neighborhood: "", crValidityDate: "" });
         }}
         title={isEditing ? "EDITAR CLIENTE" : "CADASTRAR NOVO CLIENTE"}
-        className="max-w-4xl"
+        className="max-w-6xl"
       >
-         <div className="space-y-8 max-h-[80vh] overflow-y-auto pr-4 custom-scrollbar">
+         <div className="space-y-8 max-h-[85vh] overflow-y-auto pr-4 custom-scrollbar">
+            {/* Toggle B2B/B2C */}
+            <div className="flex justify-center p-1 bg-brand-input rounded-xl border border-brand-border w-fit mx-auto mb-6">
+               <button
+                 className={cn(
+                   "px-8 py-2.5 rounded-lg text-sm font-black transition-all",
+                   newCliente.type === "B2B" ? "bg-brand-accent text-black shadow-lg" : "text-brand-text-muted hover:text-white"
+                 )}
+                 onClick={() => setNewCliente({...newCliente, type: "B2B", category: "LOJA DE ARMAS"})}
+               >
+                 B2B (LOJA / CLUBE)
+               </button>
+               <button
+                 className={cn(
+                   "px-8 py-2.5 rounded-lg text-sm font-black transition-all",
+                   newCliente.type === "B2C" ? "bg-brand-accent text-black shadow-lg" : "text-brand-text-muted hover:text-white"
+                 )}
+                 onClick={() => setNewCliente({...newCliente, type: "B2C", category: "CAC"})}
+               >
+                 B2C (PESSOA FÍSICA)
+               </button>
+            </div>
+
             {/* Seção 1: Dados Pessoais */}
-            <div className="space-y-4">
-               <h3 className="text-xs font-black text-brand-accent uppercase tracking-widest flex items-center gap-2">
-                  <Users size={14} /> {newCliente.type === "B2B" ? "DADOS INSTITUCIONAIS / RAZÃO SOCIAL" : "DADOS PESSOAIS / IDENTIFICAÇÃO"}
+            <div className="space-y-6">
+               <h3 className="text-sm font-black text-brand-accent uppercase tracking-widest flex items-center gap-2">
+                  <Users size={16} /> {newCliente.type === "B2B" ? "DADOS INSTITUCIONAIS / RAZÃO SOCIAL" : "DADOS PESSOAIS / IDENTIFICAÇÃO"}
                </h3>
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2 md:col-span-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">{newCliente.type === "B2B" ? "Razão Social *" : "Nome Completo *"}</label>
-                     <Input 
-                       placeholder={newCliente.type === "B2B" ? "Ex: Clube de Tiro Eleven LTDA" : "Nome Completo"} 
-                       value={newCliente.name}
-                       onChange={(e) => setNewCliente({...newCliente, name: e.target.value})}
-                     />
-                  </div>
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">Tipo</label>
-                     <select 
-                       className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white outline-none focus:border-brand-accent"
-                       value={newCliente.type}
-                       onChange={(e) => setNewCliente({...newCliente, type: e.target.value as any})}
-                     >
-                        <option value="B2C">B2C (Pessoa Física)</option>
-                        <option value="B2B">B2B (Empresa/Clube)</option>
-                     </select>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="space-y-2 md:col-span-3">
+                      <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">
+                        {newCliente.type === "B2B" ? "Razão Social *" : "Nome Completo *"}
+                      </label>
+                      <Input 
+                        className="h-12 text-base"
+                        placeholder={newCliente.type === "B2B" ? "Ex: Clube de Tiro Eleven LTDA" : "Ex: João Silva"} 
+                        value={newCliente.name}
+                        onChange={(e) => setNewCliente({...newCliente, name: e.target.value})}
+                      />
                   </div>
                   
-                  {newCliente.type === "B2B" && (
+                  {newCliente.type === "B2B" ? (
                     <>
                       <div className="space-y-2 md:col-span-2">
-                         <label className="text-[10px] font-bold uppercase text-brand-text-muted">Nome Fantasia</label>
-                         <Input 
-                           placeholder="Como o clube é conhecido" 
-                           value={newCliente.fantasyName}
-                           onChange={(e) => setNewCliente({...newCliente, fantasyName: e.target.value})}
-                         />
+                          <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Nome Fantasia *</label>
+                          <Input 
+                            className="h-12 text-base"
+                            placeholder="Como o clube é conhecido" 
+                            value={newCliente.fantasyName}
+                            onChange={(e) => setNewCliente({...newCliente, fantasyName: e.target.value})}
+                          />
                       </div>
                       <div className="space-y-2">
-                         <label className="text-[10px] font-bold uppercase text-brand-text-muted">Inscrição Estadual (IE)</label>
-                         <Input 
-                           placeholder="ISENTO ou número" 
-                           value={newCliente.stateRegistration}
-                           onChange={(e) => setNewCliente({...newCliente, stateRegistration: e.target.value})}
-                         />
+                          <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Inscrição Estadual (IE)</label>
+                          <Input 
+                            className="h-12 text-base"
+                            placeholder="ISENTO ou número" 
+                            value={newCliente.stateRegistration}
+                            onChange={(e) => setNewCliente({...newCliente, stateRegistration: e.target.value})}
+                          />
                       </div>
                     </>
-                  )}
-
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">{newCliente.type === "B2B" ? "CNPJ *" : "CPF *"}</label>
-                     <Input 
-                       placeholder={newCliente.type === "B2B" ? "00.000.000/0000-00" : "000.000.000-00"} 
-                       value={newCliente.document}
-                       onChange={(e) => {
-                         const val = e.target.value;
-                         setNewCliente({
-                           ...newCliente, 
-                           document: newCliente.type === "B2B" ? maskCNPJ(val) : maskCPF(val)
-                         });
-                       }}
-                     />
-                  </div>
-
-                  {newCliente.type === "B2B" ? (
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-bold uppercase text-brand-text-muted">Responsável Legal</label>
-                       <Input 
-                         placeholder="Nome do Presidente/Dono" 
-                         value={newCliente.responsibleName}
-                         onChange={(e) => setNewCliente({...newCliente, responsibleName: e.target.value})}
-                       />
-                    </div>
                   ) : (
                     <>
                       <div className="space-y-2">
-                         <label className="text-[10px] font-bold uppercase text-brand-text-muted">RG</label>
-                         <Input 
-                           placeholder="00.000.000-0" 
-                           value={newCliente.rg}
-                           onChange={(e) => setNewCliente({...newCliente, rg: e.target.value})}
-                         />
+                          <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">RG</label>
+                          <Input 
+                            className="h-12 text-base"
+                            placeholder="0.000.000-0" 
+                            value={newCliente.rg}
+                            onChange={(e) => setNewCliente({...newCliente, rg: e.target.value})}
+                          />
                       </div>
                       <div className="space-y-2">
-                         <label className="text-[10px] font-bold uppercase text-brand-text-muted">Data de Nascimento</label>
-                         <Input 
-                           type="date"
-                           value={newCliente.birthDate}
-                           onChange={(e) => setNewCliente({...newCliente, birthDate: e.target.value})}
-                         />
+                          <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Data de Nascimento</label>
+                          <Input 
+                            className="h-12 text-base"
+                            type="date"
+                            value={newCliente.birthDate}
+                            onChange={(e) => setNewCliente({...newCliente, birthDate: e.target.value})}
+                          />
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">CPF *</label>
+                          <Input 
+                            className="h-12 text-base"
+                            placeholder="000.000.000-00" 
+                            value={newCliente.document}
+                            onChange={(e) => setNewCliente({...newCliente, document: maskCPF(e.target.value)})}
+                          />
                       </div>
                     </>
                   )}
+
+                  {newCliente.type === "B2B" && (
+                    <div className="space-y-2">
+                       <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">CNPJ *</label>
+                       <div className="flex gap-2">
+                          <Input 
+                            className="h-12 text-base"
+                            placeholder="00.000.000/0000-00" 
+                            value={newCliente.document}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setNewCliente({
+                                ...newCliente, 
+                                document: maskCNPJ(val)
+                              });
+                            }}
+                          />
+                          <Button 
+                            variant="secondary" 
+                            className="h-12 px-4 shrink-0"
+                            onClick={() => handleCNPJLookup(newCliente.document)}
+                            title="Buscar dados via CNPJ"
+                          >
+                            <Search size={18} />
+                          </Button>
+                       </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Responsável Legal</label>
+                     <Input 
+                       className="h-12 text-base"
+                       placeholder="Nome do Presidente/Dono" 
+                       value={newCliente.responsibleName}
+                       onChange={(e) => setNewCliente({...newCliente, responsibleName: e.target.value})}
+                     />
+                  </div>
                </div>
             </div>
 
             {/* Seção 2: Contato e Endereço */}
-            <div className="space-y-4 pt-4 border-t border-brand-border/30">
-               <h3 className="text-xs font-black text-brand-accent uppercase tracking-widest flex items-center gap-2">
-                  <MapPin size={14} /> CONTATO E LOCALIZAÇÃO
+            <div className="space-y-6 pt-6 border-t border-brand-border/30">
+               <h3 className="text-sm font-black text-brand-accent uppercase tracking-widest flex items-center gap-2">
+                  <MapPin size={16} /> CONTATO E LOCALIZAÇÃO
                </h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">E-mail</label>
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">E-mail</label>
                      <Input 
+                       className="h-12 text-base"
                        placeholder="cliente@email.com" 
                        value={newCliente.email}
                        onChange={(e) => setNewCliente({...newCliente, email: e.target.value})}
                      />
                   </div>
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">Telefone</label>
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Telefone</label>
                      <Input 
+                       className="h-12 text-base"
                        placeholder="(00) 00000-0000" 
                        value={newCliente.phone}
                        onChange={(e) => setNewCliente({...newCliente, phone: maskPhone(e.target.value)})}
                      />
                   </div>
+                  {newCliente.type === "B2B" && (
+                    <div className="space-y-2 md:col-span-2">
+                       <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">E-mail da Loja (Secundário)</label>
+                       <Input 
+                         className="h-12 text-base"
+                         placeholder="loja@dominio.com.br" 
+                         value={newCliente.storeEmail}
+                         onChange={(e) => setNewCliente({...newCliente, storeEmail: e.target.value})}
+                       />
+                    </div>
+                  )}
                   <div className="space-y-2 md:col-span-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">Endereço Completo</label>
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">CEP</label>
+                     <div className="flex gap-2">
+                       <Input 
+                         className="h-12 text-base max-w-[240px]"
+                         placeholder="00000-000" 
+                         value={newCliente.cep}
+                         onChange={async (e) => {
+                           const val = e.target.value.replace(/\D/g, '');
+                           const formattedCep = val.replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
+                           setNewCliente({...newCliente, cep: formattedCep});
+                           if (val.length === 8) {
+                             try {
+                               const res = await fetch(`https://viacep.com.br/ws/${val}/json/`);
+                               const data = await res.json();
+                               if (!data.erro) {
+                                 setNewCliente({
+                                   ...newCliente,
+                                   address: data.logradouro,
+                                   neighborhood: data.bairro,
+                                   city: data.localidade,
+                                   state: data.uf
+                                 });
+                               }
+                             } catch (err) {}
+                           }
+                         }}
+                       />
+                     </div>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Logradouro / Rua</label>
                      <Input 
-                       placeholder="Rua, Número, Bairro..." 
+                       className="h-12 text-base"
+                       placeholder="Ex: Avenida Paulista" 
                        value={newCliente.address}
                        onChange={(e) => setNewCliente({...newCliente, address: e.target.value})}
                      />
                   </div>
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">Cidade</label>
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Número</label>
                      <Input 
+                       className="h-12 text-base"
+                       placeholder="Ex: 1000" 
+                       value={newCliente.addressNumber}
+                       onChange={(e) => setNewCliente({...newCliente, addressNumber: e.target.value})}
+                     />
+                  </div>
+                  <div className="space-y-2">
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Complemento</label>
+                     <Input 
+                       className="h-12 text-base"
+                       placeholder="Ex: Sala 42" 
+                       value={newCliente.addressComplement}
+                       onChange={(e) => setNewCliente({...newCliente, addressComplement: e.target.value})}
+                     />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Bairro</label>
+                     <Input 
+                       className="h-12 text-base"
+                       placeholder="Ex: Bela Vista" 
+                       value={newCliente.neighborhood}
+                       onChange={(e) => setNewCliente({...newCliente, neighborhood: e.target.value})}
+                     />
+                  </div>
+                  <div className="space-y-2">
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Cidade</label>
+                     <Input 
+                       className="h-12 text-base"
                        placeholder="Ex: São Paulo" 
                        value={newCliente.city}
                        onChange={(e) => setNewCliente({...newCliente, city: e.target.value})}
                      />
                   </div>
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">Estado (UF)</label>
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Estado (UF)</label>
                      <Input 
+                       className="h-12 text-base"
                        placeholder="SP" 
                        value={newCliente.state}
                        onChange={(e) => setNewCliente({...newCliente, state: e.target.value})}
@@ -501,30 +647,53 @@ export default function ClientesPage() {
             </div>
 
             {/* Seção 3: Conformidade Técnica (Armaria) */}
-            <div className="space-y-4 pt-4 border-t border-brand-border/30">
-               <h3 className="text-xs font-black text-brand-warning uppercase tracking-widest flex items-center gap-2">
-                  <ShieldCheck size={14} /> CONFORMIDADE LEGAL (SIGMA/SINARM)
+            <div className="space-y-6 pt-6 border-t border-brand-border/30">
+               <h3 className="text-sm font-black text-brand-warning uppercase tracking-widest flex items-center gap-2">
+                  <ShieldCheck size={16} /> CONFORMIDADE LEGAL (SIGMA/SINARM)
                </h3>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">Número do CR (Certificado de Registro)</label>
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Número do CR (Certificado de Registro)</label>
                      <Input 
+                       className="h-12 text-base"
                        placeholder="Ex: 123456" 
                        value={newCliente.crNumber}
                        onChange={(e) => setNewCliente({...newCliente, crNumber: e.target.value})}
                      />
                   </div>
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold uppercase text-brand-text-muted">Categoria</label>
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Validade do CR</label>
+                     <Input 
+                       className="h-12 text-base"
+                       type="date"
+                       value={newCliente.crValidityDate}
+                       onChange={(e) => setNewCliente({...newCliente, crValidityDate: e.target.value})}
+                     />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                     <label className="text-[11px] font-bold uppercase text-brand-text-muted tracking-widest">Categoria do Cliente</label>
                      <select 
-                       className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                       className="w-full bg-brand-input border border-brand-border rounded-military px-4 py-3 text-base text-white outline-none focus:border-brand-accent transition-all"
                        value={newCliente.category}
                        onChange={(e) => setNewCliente({...newCliente, category: e.target.value})}
                      >
-                        <option value="CAC">CAC (Caçador/Atirador/Colecionador)</option>
-                        <option value="MILITAR">MILITAR / FORÇAS DE SEGURANÇA</option>
-                        <option value="CIVIL">CIVIL / DEFESA PESSOAL</option>
-                        <option value="JURIDICO">JURÍDICO / CLUBE DE TIRO</option>
+                        {newCliente.type === "B2B" ? (
+                           <>
+                              <option value="LOJA DE ARMAS">LOJA DE ARMAS</option>
+                              <option value="CLUBE DE TIRO">CLUBE DE TIRO</option>
+                              <option value="INSTRUTOR">INSTRUTOR (PJ)</option>
+                              <option value="OUTROS">OUTROS (PJ)</option>
+                           </>
+                        ) : (
+                           <>
+                              <option value="CAC">CAC (COLECIONADOR, ATIRADOR, CAÇADOR)</option>
+                              <option value="POLICIAL">POLICIAL (FEDERAL/ESTADUAL)</option>
+                              <option value="GM">GM (GUARDA MUNICIPAL)</option>
+                              <option value="MILITAR">MILITAR (FORÇAS ARMADAS)</option>
+                              <option value="CIVIL">CIVIL COM POSSE</option>
+                              <option value="MAGISTRADO">MAGISTRADO / PROMOTOR</option>
+                           </>
+                        )}
                      </select>
                   </div>
                </div>
@@ -560,7 +729,7 @@ export default function ClientesPage() {
                <Button variant="ghost" onClick={() => {
                  setIsModalOpen(false);
                  setIsEditing(false);
-                 setNewCliente({ name: "", type: "B2C", document: "", email: "", phone: "", state: "", city: "", address: "", crNumber: "", category: "CAC", rg: "", birthDate: "", source: "", notes: "", fantasyName: "", stateRegistration: "", responsibleName: "" });
+                 setNewCliente({ name: "", type: "B2B", document: "", email: "", phone: "", state: "", city: "", address: "", crNumber: "", category: "LOJA DE ARMAS", rg: "", birthDate: "", source: "", notes: "", fantasyName: "", stateRegistration: "", responsibleName: "", storeEmail: "", cep: "", addressNumber: "", addressComplement: "", neighborhood: "", crValidityDate: "" });
                }} className="text-[10px] font-bold tracking-widest uppercase">
                   CANCELAR
                </Button>
@@ -572,9 +741,10 @@ export default function ClientesPage() {
       </Dialog>
 
       <CustomerProfile 
-        customer={viewingCustomer}
+        customer={clientes.find(c => c.id === viewingCustomer?.id) || viewingCustomer}
         isOpen={!!viewingCustomer}
         onClose={() => setViewingCustomer(null)}
+        onRefresh={loadData}
       />
     </DashboardLayout>
   );

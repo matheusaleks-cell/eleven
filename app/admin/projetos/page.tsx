@@ -7,8 +7,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { FilterBar } from "@/components/shared/FilterBar";
-import { Plus, Search, Filter, ArrowRight, Eye } from "lucide-react";
-import { getProjects } from "./actions";
+import { Plus, Search, Filter, ArrowRight, Eye, Trash2 } from "lucide-react";
+import { getProjects, deleteProject } from "./actions";
 import { getInvestors } from "../investidores/actions";
 import { toast } from "sonner";
 
@@ -54,6 +54,21 @@ export default function AdminProjectsPage() {
     setStartDate("");
     setEndDate("");
     setInvestorId("ALL");
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir este projeto?")) return;
+    try {
+      const res = await deleteProject(id);
+      if (res.success) {
+        toast.success("Projeto excluído com sucesso.");
+        fetchData();
+      } else {
+        toast.error(res.error || "Erro ao excluir projeto.");
+      }
+    } catch {
+      toast.error("Erro na comunicação com o servidor.");
+    }
   };
 
   const filtered = projects.filter((p) => {
@@ -188,15 +203,26 @@ export default function AdminProjectsPage() {
                       <StatusBadge status={project.status} />
                     </td>
                     <td className="text-right">
-                      <Link
-                        href={`/admin/projetos/${project.id}`}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase transition-all"
-                        style={{ border: "1px solid #F5C400", color: "#F5C400", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", textDecoration: "none" }}
-                        onMouseOver={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(245,196,0,0.1)"}
-                        onMouseOut={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}
-                      >
-                        <Eye size={12} /> Ver
-                      </Link>
+                      <div className="flex justify-end gap-2">
+                        <Link
+                          href={`/admin/projetos/${project.id}`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase transition-all"
+                          style={{ border: "1px solid #F5C400", color: "#F5C400", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", textDecoration: "none" }}
+                          onMouseOver={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(245,196,0,0.1)"}
+                          onMouseOut={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}
+                        >
+                          <Eye size={12} /> Ver
+                        </Link>
+                        <button
+                          onClick={() => handleDelete(project.id)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase transition-all"
+                          style={{ border: "1px solid #E53935", color: "#E53935", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", cursor: "pointer", background: "transparent" }}
+                          onMouseOver={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(229,57,53,0.1)"}
+                          onMouseOut={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

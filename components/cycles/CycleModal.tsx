@@ -60,20 +60,26 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, onCl
   const [rate, setRate] = useState("");
   const [fob, setFob] = useState("");
   const [freight, setFreight] = useState("");
-  const [insurance, setInsurance] = useState("0");
+  const [insurance, setInsurance] = useState("R$ 0,00");
   const [procNum, setProcNum] = useState("");
   const [diNum, setDiNum] = useState("");
   const [diDate, setDiDate] = useState("");
   const [result, setResult] = useState<any>(null);
 
+  // Helper para limpar máscara
+  const clean = (val: string) => {
+    const num = Number(val.replace(/\D/g, "")) / 100;
+    return isNaN(num) ? 0 : num;
+  };
+
   // Calcular em tempo real
   useEffect(() => {
     const q = parseFloat(qty);
-    const p = parseFloat(price);
-    const r = parseFloat(rate);
-    const f = parseFloat(fob);
-    const fr = parseFloat(freight);
-    const ins = parseFloat(insurance) || 0;
+    const p = clean(price);
+    const r = clean(rate);
+    const f = clean(fob);
+    const fr = clean(freight);
+    const ins = clean(insurance) || 0;
 
     if (q > 0 && p > 0 && r > 0 && f > 0 && fr >= 0) {
       const res = calculateCycle({ quantity: q, salePricePerUnit: p, exchangeRate: r, fobUSD: f, freightUSD: fr, insuranceUSD: ins }, taxConfig, splitPct);
@@ -84,6 +90,15 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, onCl
   }, [qty, price, rate, fob, freight, insurance]);
 
   const canSave = result && result.profitToSplit > 0;
+
+  const handleMask = (val: string, setter: (v: string) => void) => {
+    const value = val.replace(/\D/g, "");
+    const formatted = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(Number(value) / 100);
+    setter(formatted);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -133,12 +148,30 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, onCl
             ★ Dados de Importação
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
-            <Field label="Taxa Cambial (USD)" value={rate} onChange={setRate} placeholder="5.80" />
-            <Field label="Quantidade de Unidades" value={qty} onChange={setQty} placeholder="20" />
-            <Field label="Valor FOB (USD)" value={fob} onChange={setFob} placeholder="4200.00" />
-            <Field label="Frete Internacional (USD)" value={freight} onChange={setFreight} placeholder="1200.00" />
-            <Field label="Seguro (USD)" value={insurance} onChange={setInsurance} placeholder="0.00" />
-            <Field label="Preço de Venda / Unidade (R$)" value={price} onChange={setPrice} placeholder="5500.00" />
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Taxa Cambial (USD)</label>
+              <input value={rate} onChange={(e) => handleMask(e.target.value, setRate)} placeholder="R$ 0,00" style={inputStyle} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Quantidade de Unidades</label>
+              <input type="number" value={qty} onChange={(e) => setQty(e.target.value)} placeholder="20" style={inputStyle} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Valor FOB (USD)</label>
+              <input value={fob} onChange={(e) => handleMask(e.target.value, setFob)} placeholder="R$ 0,00" style={inputStyle} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Frete Internacional (USD)</label>
+              <input value={freight} onChange={(e) => handleMask(e.target.value, setFreight)} placeholder="R$ 0,00" style={inputStyle} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Seguro (USD)</label>
+              <input value={insurance} onChange={(e) => handleMask(e.target.value, setInsurance)} placeholder="R$ 0,00" style={inputStyle} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Preço de Venda / Unidade (R$)</label>
+              <input value={price} onChange={(e) => handleMask(e.target.value, setPrice)} placeholder="R$ 0,00" style={inputStyle} />
+            </div>
           </div>
 
           {/* Preview */}

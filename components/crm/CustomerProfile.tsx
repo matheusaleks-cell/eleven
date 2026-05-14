@@ -1,26 +1,80 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { 
   User, Building2, Mail, Phone, MapPin, ShoppingBag, 
   Clock, FileText, Download, ExternalLink, ShieldCheck,
-  TrendingUp, CreditCard, Calendar
+  TrendingUp, CreditCard, Calendar, Plus, Printer,
+  FileText as FileIcon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { uploadCustomerDocument, getDocumentContent } from "@/app/admin/crm/clientes/actions";
+import { toast } from "sonner";
+import { jsPDF } from "jspdf";
+import { generateAnexoP } from "./AnexoPGenerator";
+
 
 interface CustomerProfileProps {
   customer: any;
   isOpen: boolean;
   onClose: () => void;
+  onRefresh?: () => void;
 }
 
-export function CustomerProfile({ customer, isOpen, onClose }: CustomerProfileProps) {
+export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: CustomerProfileProps) {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview" | "orders" | "docs">("overview");
 
   if (!customer) return null;
+
+  const handleDownload = async (docId: string, fileName: string) => {
+    try {
+      const loadToast = toast.loading("Preparando download...");
+      const res = await getDocumentContent(docId);
+      toast.dismiss(loadToast);
+      
+      if (!res?.base64Data) {
+        toast.error("Conteúdo do arquivo não encontrado.");
+        return;
+      }
+
+      // Converte Base64 para Blob para um download mais robusto
+      const parts = res.base64Data.split(';base64,');
+      const contentType = parts[0].split(':')[1];
+      const raw = window.atob(parts[1]);
+      const rawLength = raw.length;
+      const uInt8Array = new Uint8Array(rawLength);
+
+      for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+      }
+
+      const blob = new Blob([uInt8Array], { type: contentType });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Limpeza
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      
+      toast.success("Download iniciado!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao realizar download.");
+    }
+  };
+
 
   return (
     <Dialog 
@@ -126,19 +180,32 @@ export function CustomerProfile({ customer, isOpen, onClose }: CustomerProfilePr
                 </div>
               </Card>
 
-              <Card className="bg-brand-surface/40 border-brand-border p-6 space-y-4">
+              <Card className="bg-brand-surface/40 border-brand-border p-6 space-y-4 flex flex-col">
                 <h3 className="text-xs font-black text-white uppercase tracking-widest flex items-center gap-2">
                   <Clock size={14} className="text-brand-accent" /> Atividade Recente
                 </h3>
-                <div className="space-y-4">
-                   <div className="flex gap-4">
-                      <div className="w-1 h-12 bg-brand-accent rounded-full" />
-                      <div>
-                         <p className="text-[11px] font-black text-white uppercase">Pedido Finalizado</p>
-                         <p className="text-[10px] text-brand-text-muted font-bold">{customer.lastOrder}</p>
-                      </div>
-                   </div>
-                   <div className="flex gap-4 opacity-50">
+                <div className="space-y-4 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar flex-1">
+                   {customer.ordersCount > 0 && (
+                     <div className="flex gap-4">
+                        <div className="w-1 h-12 bg-brand-accent rounded-full" />
+                        <div>
+                           <p className="text-[11px] font-black text-white uppercase">Pedido Finalizado</p>
+                           <p className="text-[10px] text-brand-text-muted font-bold">{customer.lastOrder}</p>
+                        </div>
+                     </div>
+                   )}
+                   
+                   {customer.documents && customer.documents.map((doc: any) => (
+                     <div key={doc.id} className="flex gap-4">
+                        <div className="w-1 h-12 bg-blue-500 rounded-full" />
+                        <div>
+                           <p className="text-[11px] font-black text-white uppercase">Documento Enviado</p>
+                           <p className="text-[10px] text-brand-text-muted font-bold">{doc.category}: {doc.name}</p>
+                        </div>
+                     </div>
+                   ))}
+
+                   <div className="flex gap-4 opacity-70">
                       <div className="w-1 h-12 bg-brand-border rounded-full" />
                       <div>
                          <p className="text-[11px] font-black text-white uppercase">Cliente Cadastrado</p>
@@ -186,38 +253,139 @@ export function CustomerProfile({ customer, isOpen, onClose }: CustomerProfilePr
           )}
 
           {activeTab === "docs" && (
-            <div className="grid grid-cols-2 gap-4 animate-fade-in">
-               {[
-                 { label: "Certificado de Registro (CR)", status: "Ativo", date: "Vence em 12/2026" },
-                 { label: "Documento de Identidade", status: "Validado", date: "Verificado em sistema" },
-                 { label: "Comprovante de Endereço", status: "Pendente", date: "Necessário atualizar" },
-                 { label: "Autorização de Compra", status: "N/A", date: "-" },
-               ].map((doc, idx) => (
-                 <div key={idx} className="p-4 bg-brand-surface/30 border border-brand-border rounded-lg flex items-center justify-between group hover:border-brand-accent transition-all">
-                    <div>
-                       <p className="text-[11px] font-black text-white uppercase tracking-tight">{doc.label}</p>
-                       <p className="text-[10px] text-brand-text-muted font-bold">{doc.date}</p>
+             <div className="space-y-4 animate-fade-in">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Documentos e Certidões B2B</h3>
+                  <div className="flex gap-2">
+                    <select 
+                      id="doc-category"
+                      className="bg-brand-input border border-brand-border rounded px-3 py-1 text-[10px] font-bold text-white uppercase outline-none focus:border-brand-accent"
+                    >
+                      <option value="CARTÃO CNPJ">CARTÃO CNPJ</option>
+                      <option value="CONTRATO SOCIAL">CONTRATO SOCIAL</option>
+                      <option value="INSCRIÇÃO ESTADUAL">INSCRIÇÃO ESTADUAL</option>
+                      <option value="ID RESPONSÁVEL">IDENTIDADE RESPONSÁVEL</option>
+                      <option value="OUTROS">OUTROS</option>
+                    </select>
+                    
+                    <input 
+                      type="file" 
+                      id="doc-upload" 
+                      className="hidden" 
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        
+                        const categorySelect = document.getElementById('doc-category') as HTMLSelectElement;
+                        const category = categorySelect.value;
+                        
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                          const base64 = event.target?.result as string;
+                          const loadingToast = toast.loading(`Enviando ${category}...`);
+                          
+                          const res = await uploadCustomerDocument(customer.id, {
+                            name: file.name,
+                            type: file.type.split('/')[1].toUpperCase(),
+                            category: category,
+                            size: (file.size / 1024 / 1024).toFixed(2) + " MB",
+                            base64Data: base64
+                          });
+                          
+                          toast.dismiss(loadingToast);
+                          
+                          if (res.success) {
+                            toast.success(`${category} enviado com sucesso!`);
+                            if (onRefresh) onRefresh();
+                          } else {
+                            toast.error("Erro ao enviar documento.");
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="gap-2 text-[10px] font-bold uppercase tracking-wider"
+                      onClick={() => document.getElementById('doc-upload')?.click()}
+                    >
+                      <Plus size={14} /> ENVIAR
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
+                  {customer.documents && customer.documents.length > 0 ? (
+                    customer.documents.map((doc: any) => (
+                      <div key={doc.id} className="p-4 bg-brand-surface/30 border border-brand-border rounded-lg flex items-center justify-between group hover:border-brand-accent transition-all">
+                         <div>
+                            <p className="text-[11px] font-black text-white uppercase tracking-tight">{doc.category}</p>
+                            <p className="text-[10px] text-brand-text-muted font-bold">{doc.name} • {doc.size}</p>
+                         </div>
+                         <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-brand-success/20 text-brand-success">
+                              OK
+                            </span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0"
+                              onClick={() => handleDownload(doc.id, doc.name)}
+                            >
+                               <Download size={14} />
+                            </Button>
+                         </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-2 p-12 bg-brand-input/30 border border-dashed border-brand-border rounded-xl text-center">
+                       <ShieldCheck size={48} className="mx-auto text-brand-text-muted mb-4 opacity-20" />
+                       <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
+                         Nenhum documento anexado para este cliente B2B.
+                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                       <span className={cn(
-                         "text-[9px] font-black px-2 py-0.5 rounded uppercase",
-                         doc.status === "Ativo" || doc.status === "Validado" ? "bg-brand-success/20 text-brand-success" : "bg-brand-warning/20 text-brand-warning"
-                       )}>
-                         {doc.status}
-                       </span>
-                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <Download size={14} />
-                       </Button>
-                    </div>
-                 </div>
-               ))}
-            </div>
+                  )}
+                </div>
+
+                {/* Checklist B2B Dinâmico */}
+                <Card className="bg-brand-accent/5 border-brand-accent/20 p-4 mt-6">
+                   <h4 className="text-[10px] font-black text-brand-accent uppercase tracking-widest mb-3">Checklist de Conformidade B2B</h4>
+                   <div className="grid grid-cols-2 gap-3">
+                      {[
+                        { name: "Cartão CNPJ", key: "CARTÃO CNPJ" },
+                        { name: "Contrato Social", key: "CONTRATO SOCIAL" },
+                        { name: "Inscrição Estadual", key: "INSCRIÇÃO ESTADUAL" },
+                        { name: "Identidade do Responsável", key: "ID RESPONSÁVEL" },
+                      ].map((item, i) => {
+                        const isUploaded = customer.documents?.some((d: any) => d.category === item.key);
+                        return (
+                          <div key={i} className="flex items-center gap-2 text-[10px] font-bold text-white/80">
+                             <div className={cn(
+                               "w-4 h-4 rounded flex items-center justify-center border",
+                               isUploaded ? "bg-brand-success border-brand-success text-black" : "border-brand-border"
+                             )}>
+                                {isUploaded && <ShieldCheck size={10} />}
+                             </div>
+                             {item.name}
+                          </div>
+                        );
+                      })}
+                   </div>
+                </Card>
+             </div>
+
+
           )}
         </div>
 
         {/* Footer Actions */}
         <div className="flex justify-end gap-3 pt-6 border-t border-brand-border">
-          <Button variant="secondary" className="gap-2 text-[10px] font-bold tracking-widest uppercase">
+          <Button 
+            variant="secondary" 
+            className="gap-2 text-[10px] font-bold tracking-widest uppercase"
+            onClick={() => router.push("/admin/erp/produtos")}
+          >
             <ExternalLink size={16} /> ABRIR NO ERP
           </Button>
           <Button onClick={onClose} className="text-[10px] font-bold tracking-widest uppercase">

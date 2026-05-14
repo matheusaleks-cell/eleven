@@ -250,3 +250,43 @@ export async function getInvestorProjectDetails(id: string, email: string) {
     return { success: false, project: null };
   }
 }
+
+export async function getCycleSales(cycleId: string) {
+  try {
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: cycleId },
+      include: {
+        importLot: {
+          include: {
+            weapons: {
+              where: { currentStatus: "VENDIDA" },
+              include: {
+                product: true,
+                customer: true,
+                salesOrder: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!cycle || !cycle.importLot) return { success: false, sales: [] };
+
+    const sales = cycle.importLot.weapons.map(w => ({
+      id: w.id,
+      productName: w.product.commercialName,
+      serialNumber: w.serialNumber,
+      saleDate: w.saleDate?.toLocaleDateString("pt-BR"),
+      saleValue: w.saleValue || 0,
+      customerName: w.customer?.name || "Cliente Final",
+    }));
+
+    const totalSoldValue = sales.reduce((acc, s) => acc + s.saleValue, 0);
+
+    return { success: true, sales, totalSoldValue };
+  } catch (error) {
+    console.error(error);
+    return { success: false, sales: [] };
+  }
+}

@@ -19,16 +19,23 @@ model User {
   role            String    @default("INVESTOR")
   phone           String?
   avatarUrl       String?   @map("avatar_url")
+  cpfCnpj         String?   @map("cpf_cnpj")
+  rg              String?
+  address         String?
+  bankDetails     String?   @map("bank_details")
+  bankReferences  String?   @map("bank_references")
+  commercialRefs  String?   @map("commercial_refs")
+  profession      String?
   
   // Relations
-  projects        InvestmentProject[] @relation("InvestorProjects")
-  createdProjects InvestmentProject[] @relation("CreatedBy")
-  assignedLeads  Lead[]              @relation("AssignedSeller")
-  assignedCustomers Customer[]       @relation("CustomerSeller")
-  salesOrders     SalesOrder[]        @relation("OrderSeller")
-  checkedWeapons  WeaponMap[]         @relation("WeaponCheckedBy")
-  soldWeapons     WeaponMap[]         @relation("WeaponSoldBy")
-  
+  investedProjects InvestmentProject[] @relation("InvestorProjects")
+  createdProjects  InvestmentProject[] @relation("AdminProjects")
+  assignedLeads    Lead[]              @relation("AssignedSeller")
+  managedCustomers Customer[]          @relation("CustomerSeller")
+  salesOrders      SalesOrder[]        @relation("OrderSeller")
+  weaponsMapped    WeaponMap[]         @relation("CheckerUser")
+  weaponsSold      WeaponMap[]         @relation("SellerUser")
+
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -36,34 +43,33 @@ model User {
 }
 
 model InvestmentProject {
-  id              String        @id @default(uuid())
-  name            String        // ex: "VR-12P · Francisco · Lote 01"
-  productName     String        @map("product_name")
-  investorId      String        @map("investor_id")
-  status          String        @default("ACTIVE")
-  initialCapital  Float         @map("initial_capital")
-  maxCycles       Int           @default(8) @map("max_cycles")
-  profitSplitPct  Float         @default(0.50) @map("profit_split_pct")
-  notes           String?       
+  id              String    @id @default(uuid())
+  name            String
+  productName     String    @map("product_name")
+  investorId      String    @map("investor_id")
+  status          String    @default("ACTIVE") // ACTIVE, COMPLETED, PAUSED
+  initialCapital  Float     @map("initial_capital")
+  maxCycles       Int       @default(8) @map("max_cycles")
+  profitSplitPct  Float     @default(0.50) @map("profit_split_pct")
+  notes           String?
+  contractNumber  String?   @map("contract_number")
+  startDate       DateTime? @map("start_date")
+  bankAccount     String?   @map("bank_account")
+  pixKey          String?   @map("pix_key")
+  payoutRule      String?   @default("REINVEST") @map("payout_rule") // REINVEST, PAYOUT
+  taxProfile      String?   @default("PF") @map("tax_profile") // PF, PJ
   
-  // Compliance & Operation
-  contractNumber  String?       @map("contract_number")
-  startDate       DateTime?     @map("start_date")
-  bankAccount     String?       @map("bank_account")
-  pixKey          String?       @map("pix_key")
-  payoutRule      String?       @default("REINVEST") @map("payout_rule") // REINVEST, WITHDRAW
-  taxProfile      String?       @default("PF") @map("tax_profile") // PF, PJ
-  
+  createdById     String    @map("created_by_id")
+
   // Relations
-  investor        User          @relation("InvestorProjects", fields: [investorId], references: [id])
-  createdBy       User          @relation("CreatedBy", fields: [createdById], references: [id])
-  createdById     String        @map("created_by_id")
+  investor        User      @relation("InvestorProjects", fields: [investorId], references: [id])
+  createdBy       User      @relation("AdminProjects", fields: [createdById], references: [id])
   cycles          Cycle[]
   importLots      ImportLot[]
   documents       Document[]
 
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   @@map("investment_projects")
 }
@@ -79,171 +85,176 @@ model ImportLot {
   currency                String    @default("USD")
   exchangeRate            Float     @map("exchange_rate")
   fobValue                Float     @map("fob_value")
-  freight                 Float     
-  insurance               Float     
+  freight                 Float
+  insurance               Float
   customsTaxes            Float     @map("customs_taxes")
   customsFees             Float     @map("customs_fees")
   totalCostNationalized   Float     @map("total_cost_nationalized")
   quantityItems           Int       @map("quantity_items")
-  status                  String    @default("CAPTACAO")
+  status                  String    @default("CAPTACAO") // CAPTACAO, TRANSITO, NACIONALIZADO, ESTOQUE
   expectedMarginPct       Float     @map("expected_margin_pct")
   realizedMarginPct       Float?    @map("realized_margin_pct")
   
-  // Relations
-  supplier              Supplier  @relation(fields: [supplierId], references: [id])
-  investmentProject     InvestmentProject? @relation(fields: [investmentProjectId], references: [id])
-  investmentProjectId   String?   @map("investment_project_id")
-  products              Product[]
-  weapons               WeaponMap[]
-  cycles                Cycle[]
+  investmentProjectId     String?   @map("investment_project_id")
 
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
+  // Relations
+  supplier                Supplier  @relation(fields: [supplierId], references: [id])
+  investmentProject       InvestmentProject? @relation(fields: [investmentProjectId], references: [id])
+  products                Product[]
+  weapons                 WeaponMap[]
+  cycles                  Cycle[]
+  documents               Document[]
+
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   @@map("import_lots")
 }
 
 model Product {
-  id                      String        @id @default(uuid())
-  sku                     String        @unique
-  commercialName          String        @map("commercial_name")
-  brand                   String
-  model                   String
-  caliber                 String
-  species                 String
-  actionType              String        @map("action_type")
-  capacity                Int
-  barrelLength            Float         @map("barrel_length")
-  finish                  String
-  originCountry           String        @map("origin_country")
-  ncm                     String
-  technicalDescription    String?       @map("technical_description")
-  photos                  String?       // Comma separated URLs
-  videos                  String?       // Comma separated URLs
-  priceB2C                Float         @map("price_b2c")
-  priceB2B                Float?        @map("price_b2b")
-  stockAvailable          Int           @default(0) @map("stock_available")
-  stockReserved           Int           @default(0) @map("stock_reserved")
-  status                  String        @default("ACTIVE")
+  id                  String    @id @default(uuid())
+  sku                 String    @unique
+  commercialName      String    @map("commercial_name")
+  brand               String
+  model               String
+  caliber             String
+  species             String
+  actionType          String    @map("action_type")
+  capacity            Int
+  barrelLength        Float     @map("barrel_length")
+  finish              String
+  originCountry       String    @map("origin_country")
+  ncm                 String
+  technicalDescription String?  @map("technical_description")
+  photos              String?   // JSON array string
+  videos              String?   // JSON array string
   
-  // Relations
-  importLot             ImportLot?    @relation(fields: [importLotId], references: [id])
-  importLotId           String?       @map("import_lot_id")
-  weapons               WeaponMap[]
+  priceB2C            Float     @map("price_b2c")
+  priceB2B            Float?    @map("price_b2b")
+  
+  stockAvailable      Int       @default(0) @map("stock_available")
+  stockReserved       Int       @default(0) @map("stock_reserved")
+  
+  status              String    @default("ACTIVE")
+  
+  importLotId         String?   @map("import_lot_id")
 
-  createdAt               DateTime      @default(now()) @map("created_at")
-  updatedAt               DateTime      @updatedAt @map("updated_at")
+  // Relations
+  importLot           ImportLot? @relation(fields: [importLotId], references: [id])
+  weapons             WeaponMap[]
+
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
 
   @@map("products")
 }
 
 model WeaponMap {
-  id                      String        @id @default(uuid())
-  productId               String        @map("product_id")
-  serialNumber            String        @unique @map("serial_number")
-  classification          String?
-  supplierId              String        @map("supplier_id")
-  importLotId             String        @map("import_lot_id")
-  importProcessNumber     String?       @map("import_process_number")
-  liNumber                String?       @map("li_number")
-  diNumber                String?       @map("di_number")
-  diDate                  DateTime?     @map("di_date")
-  customsClearanceDate    DateTime?     @map("customs_clearance_date")
-  entryInvoiceNumber      String?       @map("entry_invoice_number")
-  entryDate               DateTime      @map("entry_date")
-  unitCost                Float         @map("unit_cost")
-  warehouseLocation       String?       @map("warehouse_location")
-  currentStatus           String        @default("IMPORTADA") @map("current_status")
-  lastMovementDate        DateTime      @default(now()) @map("last_movement_date")
-  observations            String?       
-  hasDivergence           Boolean       @default(false) @map("has_divergence")
+  id                    String    @id @default(uuid())
+  productId             String    @map("product_id")
+  serialNumber          String    @unique @map("serial_number")
+  classification        String?   // CAC, Militar, etc
+  supplierId            String    @map("supplier_id")
+  importLotId           String    @map("import_lot_id")
+  importProcessNumber   String?   @map("import_process_number")
+  liNumber              String?   @map("li_number")
+  diNumber              String?   @map("di_number")
+  diDate                DateTime? @map("di_date")
+  customsClearanceDate  DateTime? @map("customs_clearance_date")
+  entryInvoiceNumber    String?   @map("entry_invoice_number")
+  entryDate             DateTime  @map("entry_date")
+  unitCost              Float     @map("unit_cost")
+  warehouseLocation     String?   @map("warehouse_location")
+  currentStatus         String    @default("IMPORTADA") @map("current_status")
+  lastMovementDate      DateTime  @default(now()) @map("last_movement_date")
+  observations          String?
+  hasDivergence         Boolean   @default(false) @map("has_divergence")
   
-  // Venda
-  customerId              String?       @map("customer_id")
-  customerCpfCnpj         String?       @map("customer_cpf_cnpj")
-  customerState           String?       @map("customer_state")
-  salesOrderId            String?       @map("sales_order_id")
-  salesInvoiceNumber      String?       @map("sales_invoice_number")
-  saleDate                DateTime?     @map("sale_date")
-  saleValue               Float?        @map("sale_value")
-  paymentMethod           String?       @map("payment_method")
-  shippingCompany         String?       @map("shipping_company")
-  deliveryStatus          String?       @map("delivery_status")
+  customerId            String?   @map("customer_id")
+  customerCpfCnpj       String?   @map("customer_cpf_cnpj")
+  customerState         String?   @map("customer_state")
+  salesOrderId          String?   @map("sales_order_id")
+  salesInvoiceNumber    String?   @map("sales_invoice_number")
+  saleDate              DateTime? @map("sale_date")
+  saleValue             Float?    @map("sale_value")
+  paymentMethod         String?   @map("payment_method")
+  shippingCompany       String?   @map("shipping_company")
+  deliveryStatus        String?   @map("delivery_status")
+  
+  checkedById           String?   @map("checked_by_id")
+  sellingUserId         String?   @map("selling_user_id")
 
   // Relations
-  product               Product       @relation(fields: [productId], references: [id])
-  supplier              Supplier      @relation(fields: [supplierId], references: [id])
-  importLot             ImportLot     @relation(fields: [importLotId], references: [id])
-  customer              Customer?     @relation(fields: [customerId], references: [id])
-  checkedBy             User?         @relation("WeaponCheckedBy", fields: [checkedById], references: [id])
-  checkedById           String?       @map("checked_by_id")
-  sellingUser           User?         @relation("WeaponSoldBy", fields: [sellingUserId], references: [id])
-  sellingUserId         String?       @map("selling_user_id")
-  salesOrder            SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  product               Product    @relation(fields: [productId], references: [id])
+  supplier              Supplier   @relation(fields: [supplierId], references: [id])
+  importLot             ImportLot  @relation(fields: [importLotId], references: [id])
+  customer              Customer?  @relation(fields: [customerId], references: [id])
+  checker               User?      @relation("CheckerUser", fields: [checkedById], references: [id])
+  seller                User?      @relation("SellerUser", fields: [sellingUserId], references: [id])
+  salesOrder            SalesOrder? @relation(fields: [salesOrderId], references: [id])
 
-  createdAt               DateTime      @default(now()) @map("created_at")
-  updatedAt               DateTime      @updatedAt @map("updated_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   @@map("weapons_map")
 }
 
 model Cycle {
-  id                       String      @id @default(uuid())
-  projectId                String      @map("project_id")
-  cycleNumber              Int         @map("cycle_number")
-  cycleName                String      @map("cycle_name")
-  status                   String      @default("PENDING")
-  importLotId              String?     @map("import_lot_id")
-
-  // Identificação
-  processNumber            String?     @map("process_number")
-  diNumber                 String?     @map("di_number")
-  diDate                   DateTime?   @map("di_date")
-
-  // Inputs
-  quantity                 Int
-  salePricePerUnit         Float       @map("sale_price_per_unit")
-  exchangeRateUsd          Float       @map("exchange_rate_usd")
-  fobValueUsd              Float       @map("fob_value_usd")
-  freightUsd               Float       @map("freight_usd")
-  insuranceUsd             Float       @map("insurance_usd")
-
-  // Tributos
-  customsValueBrl         Float       @map("customs_value_brl")
-  iiTax                   Float       @map("ii_tax")
-  ipiTax                  Float       @map("ipi_tax")
-  afrmmTax                Float       @map("afrmm_tax")
-  capatazia               Float       
-  pisPasepTax             Float       @map("pis_pasep_tax")
-  cofinsTax               Float       @map("cofins_tax")
-  siscomexFee             Float       @map("siscomex_fee")
-  icmsSt                  Float       @map("icms_st")
-  simplesTax              Float       @map("simples_tax")
-  operationalCost         Float       @map("operational_cost")
-  calcBaseNormal          Float       @map("calc_base_normal")
-  icmsBaseAltered         Float       @map("icms_base_altered")
-  icmsImportTax           Float       @map("icms_import_tax")
-  totalInvestment         Float       @map("total_investment")
-
-  // Resultado
-  grossRevenue            Float       @map("gross_revenue")
-  salesTax                Float       @map("sales_tax")
-  salesOperationalCost    Float       @map("sales_operational_cost")
-  netRevenue              Float       @map("net_revenue")
-  grossProfit             Float       @map("gross_profit")
-  investorShare           Float       @map("investor_share")
-  companyShare            Float       @map("company_share")
-  reserveShare            Float       @map("reserve_share")
-  reinvestmentShare       Float       @map("reinvestment_share")
-
-  taxSnapshot             String?     @map("tax_snapshot")
-
+  id                    String    @id @default(uuid())
+  projectId             String    @map("project_id")
+  cycleNumber           Int       @map("cycle_number")
+  cycleName             String    @map("cycle_name")
+  status                String    @default("PENDING") @map("status") // PENDING, IN_PROGRESS, COMPLETED
+  
+  importLotId           String?   @map("import_lot_id")
+  
+  processNumber         String?   @map("process_number")
+  diNumber              String?   @map("di_number")
+  diDate                DateTime? @map("di_date")
+  quantity              Int
+  salePricePerUnit      Float     @map("sale_price_per_unit")
+  exchangeRateUsd       Float     @map("exchange_rate_usd")
+  
+  fobValueUsd           Float     @map("fob_value_usd")
+  freightUsd            Float     @map("freight_usd")
+  insuranceUsd          Float     @map("insurance_usd")
+  customsValueBrl       Float     @map("customs_value_brl")
+  
+  iiTax                 Float     @map("ii_tax")
+  ipiTax                Float     @map("ipi_tax")
+  afrmmTax              Float     @map("afrmm_tax")
+  capatazia             Float
+  pisPasepTax           Float     @map("pis_pasep_tax")
+  cofinsTax             Float     @map("cofins_tax")
+  siscomexFee           Float     @map("siscomex_fee")
+  icmsSt                Float     @map("icms_st")
+  simplesTax            Float     @map("simples_tax")
+  operationalCost       Float     @map("operational_cost")
+  
+  calcBaseNormal        Float     @map("calc_base_normal")
+  icmsBaseAltered       Float     @map("icms_base_altered")
+  icmsImportTax         Float     @map("icms_import_tax")
+  
+  totalInvestment       Float     @map("total_investment")
+  grossRevenue          Float     @map("gross_revenue")
+  salesTax              Float     @map("sales_tax")
+  salesOperationalCost  Float     @map("sales_operational_cost")
+  netRevenue            Float     @map("net_revenue")
+  grossProfit           Float     @map("gross_profit")
+  
+  investorShare         Float     @map("investor_share")
+  companyShare          Float     @map("company_share")
+  reserveShare          Float     @map("reserve_share")
+  reinvestmentShare     Float     @map("reinvestment_share")
+  
+  taxSnapshot           String?   @map("tax_snapshot") // JSON string
+  
   // Relations
   project               InvestmentProject @relation(fields: [projectId], references: [id])
   importLot             ImportLot?        @relation(fields: [importLotId], references: [id])
 
-  createdAt               DateTime    @default(now()) @map("created_at")
-  updatedAt               DateTime    @updatedAt @map("updated_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   @@map("cycles")
 }
@@ -255,11 +266,11 @@ model Supplier {
   contactEmail    String?   @map("contact_email")
   contactPhone    String?   @map("contact_phone")
   bankDetails     String?   @map("bank_details")
-  rating          Float?    
+  rating          Float?
   status          String    @default("ACTIVE")
   
   // Relations
-  lots            ImportLot[]
+  importLots      ImportLot[]
   weapons         WeaponMap[]
 
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -270,7 +281,7 @@ model Supplier {
 
 model Customer {
   id              String       @id @default(uuid())
-  type            String       @default("B2C")
+  type            String       @default("B2B") // B2C, B2B
   name            String
   cpfCnpj         String       @unique @map("cpf_cnpj")
   email           String?
@@ -278,13 +289,18 @@ model Customer {
   state           String       
   city            String?
   address         String?
+  addressNumber   String?      @map("address_number")
+  addressComplement String?    @map("address_complement")
+  neighborhood    String?
+  cep             String?
   status          String       @default("ACTIVE")
   
   // Dados de Conformidade (Armaria)
   crNumber        String?      @map("cr_number")
-  category        String?      // CAC, Militar, Policial, Civil
+  category        String?      // LOJA DE ARMAS, CLUBE DE TIRO
   rg              String?      
   birthDate       DateTime?    @map("birth_date")
+  crValidityDate  DateTime?    @map("cr_validity_date")
   
   // Inteligência de Vendas
   source          String?      // Instagram, Indicação, Google, etc
@@ -294,6 +310,7 @@ model Customer {
   fantasyName     String?      @map("fantasy_name")
   stateRegistration String?    @map("state_registration")
   responsibleName String?      @map("responsible_name")
+  storeEmail      String?      @map("store_email")
   
   // Relations
   seller          User?        @relation("CustomerSeller", fields: [sellerId], references: [id])
@@ -301,6 +318,7 @@ model Customer {
   salesOrders     SalesOrder[]
   weapons         WeaponMap[]
   invoices        Invoice[]
+  documents       Document[]
 
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
@@ -333,23 +351,23 @@ model SalesOrder {
 }
 
 model Invoice {
-  id              String        @id @default(uuid())
-  invoiceNumber   String        @unique @map("invoice_number")
-  invoiceSeries   String        @map("invoice_series")
-  customerId      String        @map("customer_id")
-  salesOrderId    String?       @map("sales_order_id")
-  emissionDate    DateTime      @map("emission_date")
-  products        String        // JSON string
-  totalAmount     Float         @map("total_amount")
-  status          String        @default("DRAFT")
-  nfeKey          String?       @map("nfe_key")
+  id              String      @id @default(uuid())
+  invoiceNumber   String      @unique @map("invoice_number")
+  invoiceSeries   String      @map("invoice_series")
+  customerId      String      @map("customer_id")
+  salesOrderId    String?     @map("sales_order_id")
+  emissionDate    DateTime    @map("emission_date")
+  products        String      // JSON string
+  totalAmount     Float       @map("total_amount")
+  status          String      @default("DRAFT")
+  nfeKey          String?     @map("nfe_key")
 
   // Relations
-  customer        Customer      @relation(fields: [customerId], references: [id])
-  salesOrder      SalesOrder?   @relation(fields: [salesOrderId], references: [id])
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  salesOrder      SalesOrder? @relation(fields: [salesOrderId], references: [id])
 
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
   @@map("invoices")
 }
@@ -387,14 +405,37 @@ model Lead {
   interests       String?    // Comma separated products
   documents       String?    
   notes           String?    
+  
+  taxId           String?    @map("tax_id")
+  state           String?
+  city            String?
+  customerType    String?    @map("customer_type")
+  documentStatus  String?    @map("document_status")
+  category        String?
+  crNumber        String?    @map("cr_number")
+  crValidity      String?    @map("cr_validity")
 
   // Relations
   assignedSeller User?       @relation("AssignedSeller", fields: [assignedSellerId], references: [id])
 
+  isArchived      Boolean    @default(false) @map("is_archived")
+  logs            LeadLog[]
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
   @@map("leads")
+}
+
+model LeadLog {
+  id        String   @id @default(uuid())
+  leadId    String   @map("lead_id")
+  action    String
+  user      String   @default("Sistema")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@map("lead_logs")
 }
 
 model Document {
@@ -407,6 +448,12 @@ model Document {
   
   projectId       String?            @map("project_id")
   project         InvestmentProject? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  customerId      String?            @map("customer_id")
+  customer        Customer?          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  lotId           String?            @map("lot_id")
+  importLot       ImportLot?         @relation(fields: [lotId], references: [id], onDelete: Cascade)
   
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")

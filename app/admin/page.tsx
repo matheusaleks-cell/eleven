@@ -127,14 +127,24 @@ export default function AdminDashboard() {
             Visão geral do sistema de investimentos
           </p>
         </div>
-        <Link
-          href="/admin/projetos/novo"
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[2px] font-bold uppercase transition-all"
-          style={{ background: "#F5C400", color: "#1A1A1A", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif" }}
-        >
-          <Plus size={16} />
-          Novo Projeto
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            href="/admin/investidores"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[2px] font-bold uppercase transition-all"
+            style={{ border: "1px solid #333", background: "#242424", color: "#FFFFFF", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif" }}
+          >
+            <Users size={16} />
+            Gestão de Investidores
+          </Link>
+          <Link
+            href="/admin/projetos/novo"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-[2px] font-bold uppercase transition-all"
+            style={{ background: "#F5C400", color: "#1A1A1A", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif" }}
+          >
+            <Plus size={16} />
+            Novo Projeto
+          </Link>
+        </div>
       </div>
 
       {/* Filtros */}

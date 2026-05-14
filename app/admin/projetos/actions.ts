@@ -35,6 +35,24 @@ export async function getProjects() {
 
 export async function createProject(data: any) {
   try {
+    // 1. Atualizar os dados do investidor
+    if (data.investorId) {
+      await prisma.user.update({
+        where: { id: data.investorId },
+        data: {
+          cpfCnpj: data.cpfCnpj,
+          rg: data.rg,
+          address: data.address,
+          phone: data.phone,
+          bankDetails: data.bankDetails,
+          bankReferences: data.bankReferences,
+          commercialRefs: data.commercialRefs,
+          profession: data.profession,
+        }
+      }).catch(err => console.error("Erro ao atualizar dados do investidor:", err));
+    }
+
+    // 2. Criar o Projeto
     const project = await prisma.investmentProject.create({
       data: {
         name: data.name,
@@ -139,5 +157,18 @@ export async function createCycle(data: any) {
   } catch (error) {
     console.error("Erro ao criar ciclo:", error);
     return { success: false, error: "Falha ao registrar ciclo" };
+  }
+}
+
+export async function deleteProject(id: string) {
+  try {
+    await prisma.investmentProject.delete({
+      where: { id }
+    });
+    revalidatePath("/admin/projetos");
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao excluir projeto:", error);
+    return { success: false, error: "Este projeto possui ciclos ou lotes atrelados e não pode ser excluído." };
   }
 }

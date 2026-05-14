@@ -76,8 +76,26 @@ export default function TaxesPage() {
 
   const handleSave = async (isNew: boolean) => {
     try {
+      const cleanValue = (val: string) => {
+        if (typeof val !== 'string') return val;
+        const num = Number(val.replace(/\D/g, "")) / 100;
+        return isNaN(num) ? 0 : num;
+      };
+
+      const payload = {
+        ...config,
+        siscomexFixed: cleanValue(config.siscomexFixed),
+        ii: parseFloat(config.ii),
+        ipi: parseFloat(config.ipi),
+        pisPasep: parseFloat(config.pisPasep),
+        cofins: parseFloat(config.cofins),
+        icmsImport: parseFloat(config.icmsImport),
+        icmsSale: parseFloat(config.icmsSale),
+        simplesNacional: parseFloat(config.simplesNacional)
+      };
+
       if (isNew || !config.id) {
-        const res = await createTaxConfig({...config, isDefault: true});
+        const res = await createTaxConfig({...payload, isDefault: true});
         if (res.success) {
           toast.success("Nova configuração salva e ativada com sucesso!");
           loadConfigs();
@@ -85,7 +103,7 @@ export default function TaxesPage() {
           toast.error(res.error);
         }
       } else {
-        const res = await updateTaxConfig(config.id, {...config, isDefault: true});
+        const res = await updateTaxConfig(config.id, {...payload, isDefault: true});
         if (res.success) {
           toast.success("Configuração atualizada e ativada!");
           loadConfigs();
@@ -102,23 +120,38 @@ export default function TaxesPage() {
 
   if (!session || loading) return null;
 
-  const Field = ({ label, value, key: k, suffix = "%" }: { label: string; value: string; key: string; suffix?: string }) => (
-    <div>
-      <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>{label}</label>
-      <div className="relative">
-        <input
-          type="number"
-          step="any"
-          value={value}
-          onChange={(e) => setConfig({ ...config, [k]: e.target.value })}
-          style={fieldStyle}
-          onFocus={(e) => (e.currentTarget.style.borderColor = "#F5C400")}
-          onBlur={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
-        />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}>{suffix}</span>
+  const Field = ({ label, value, k, suffix = "%" }: { label: string; value: string; k: string; suffix?: string }) => {
+    const handleValueChange = (val: string) => {
+      if (suffix === "R$") {
+        const numeric = val.replace(/\D/g, "");
+        const formatted = new Intl.NumberFormat("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }).format(Number(numeric) / 100);
+        setConfig({ ...config, [k]: formatted });
+      } else {
+        setConfig({ ...config, [k]: val });
+      }
+    };
+
+    return (
+      <div>
+        <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>{label}</label>
+        <div className="relative">
+          <input
+            type={suffix === "R$" ? "text" : "number"}
+            step="any"
+            value={value}
+            onChange={(e) => handleValueChange(e.target.value)}
+            style={fieldStyle}
+            onFocus={(e) => (e.currentTarget.style.borderColor = "#F5C400")}
+            onBlur={(e) => (e.currentTarget.style.borderColor = "#2A2A2A")}
+          />
+          <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}>{suffix}</span>
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <DashboardLayout role="ADMIN" userName={session.name} userEmail={session.email} pageTitle="Configuração de Tributos">

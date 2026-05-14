@@ -39,7 +39,7 @@ export default function ProductsPage() {
     priceB2B: "",
     stockInitial: "0",
     technicalDescription: "",
-    photos: ""
+    photos: [] as string[]
   });
 
   const refreshProducts = useCallback(async () => {
@@ -74,15 +74,26 @@ export default function ProductsPage() {
       return;
     }
 
+    // Limpar valores monetários para números antes de salvar
+    const cleanPrice = (val: string) => {
+      const num = Number(val.replace(/\D/g, "")) / 100;
+      return isNaN(num) ? 0 : num;
+    };
+
+    const payload = {
+      ...newProduct,
+      priceB2C: cleanPrice(newProduct.priceB2C),
+      priceB2B: cleanPrice(newProduct.priceB2B),
+      stockAvailable: Number(newProduct.stockInitial),
+      photos: JSON.stringify(newProduct.photos) // Salvar como string JSON
+    };
+
     try {
       let res;
       if (editingId) {
-        res = await updateProduct(editingId, {
-          ...newProduct,
-          stockAvailable: Number(newProduct.stockInitial)
-        });
+        res = await updateProduct(editingId, payload);
       } else {
-        res = await createProduct(newProduct);
+        res = await createProduct(payload);
       }
 
       if (res.success) {
@@ -94,7 +105,7 @@ export default function ProductsPage() {
           species: "Pistola", actionType: "Semiautomática", capacity: "18",
           barrelLength: "4.5", finish: "Preto Fosco", originCountry: "Turquia",
           ncm: "9302.00.00", priceB2C: "", priceB2B: "", stockInitial: "0",
-          technicalDescription: "", photos: ""
+          technicalDescription: "", photos: []
         });
         refreshProducts();
       } else {
@@ -106,6 +117,22 @@ export default function ProductsPage() {
   };
 
   const handleOpenEdit = (product: any) => {
+    const format = (val: number) => {
+      return new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(val || 0);
+    };
+
+    let productPhotos: string[] = [];
+    try {
+      if (product.photos) {
+        productPhotos = typeof product.photos === 'string' ? JSON.parse(product.photos) : product.photos;
+      }
+    } catch (e) {
+      productPhotos = product.photos ? [product.photos] : [];
+    }
+
     setNewProduct({
       name: product.commercialName,
       sku: product.sku,
@@ -119,11 +146,11 @@ export default function ProductsPage() {
       finish: product.finish,
       originCountry: product.originCountry,
       ncm: product.ncm,
-      priceB2C: String(product.priceB2C),
-      priceB2B: String(product.priceB2B),
+      priceB2C: format(product.priceB2C),
+      priceB2B: format(product.priceB2B),
       stockInitial: String(product.stockAvailable),
       technicalDescription: product.technicalDescription || "",
-      photos: product.photos || ""
+      photos: Array.isArray(productPhotos) ? productPhotos : []
     });
     setEditingId(product.id);
     setIsModalOpen(true);
@@ -221,6 +248,7 @@ export default function ProductsPage() {
                   <th>SKU</th>
                   <th>CALIBRE</th>
                   <th>ESTOQUE</th>
+                  <th>VALOR B2B</th>
                   <th>VALOR B2C</th>
                   <th>STATUS</th>
                   <th className="text-right">AÇÕES</th>
@@ -231,8 +259,20 @@ export default function ProductsPage() {
                   <tr key={product.id} className="hover:bg-brand-accent/5 transition-colors group">
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-brand-bg rounded border border-brand-border flex items-center justify-center text-brand-text-muted group-hover:text-brand-accent transition-colors">
-                          <ImageIcon size={24} />
+                        <div className="w-12 h-12 bg-brand-bg rounded border border-brand-border flex items-center justify-center text-brand-text-muted group-hover:text-brand-accent transition-colors overflow-hidden">
+                          {(() => {
+                            let firstPhoto = "";
+                            try {
+                              const photos = typeof product.photos === 'string' ? JSON.parse(product.photos) : product.photos;
+                              if (Array.isArray(photos) && photos.length > 0) firstPhoto = photos[0];
+                            } catch (e) {}
+                            
+                            return firstPhoto ? (
+                              <img src={firstPhoto} alt={product.commercialName} className="w-full h-full object-cover" />
+                            ) : (
+                              <ImageIcon size={24} />
+                            );
+                          })()}
                         </div>
                         <div className="flex flex-col">
                           <span className="font-bold text-sm uppercase text-white">{product.name}</span>
@@ -260,6 +300,9 @@ export default function ProductsPage() {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="font-mono text-sm text-brand-success font-bold">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.priceB2B)}
                     </td>
                     <td className="font-mono text-sm text-brand-accent font-bold">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.priceB2C)}
@@ -386,27 +429,41 @@ export default function ProductsPage() {
               <div className="space-y-2">
                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">País de Origem</label>
                  <Input 
-                   value={newProduct.originCountry}
+                value={newProduct.originCountry}
                    onChange={(e) => setNewProduct({...newProduct, originCountry: e.target.value})}
                  />
               </div>
 
-              <div className="space-y-2">
-                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preço B2C (R$)</label>
-                 <Input 
-                   placeholder="0.00"
-                   value={newProduct.priceB2C}
-                   onChange={(e) => setNewProduct({...newProduct, priceB2C: maskDecimal(e.target.value)})}
-                 />
-              </div>
-              <div className="space-y-2">
-                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preço B2B (R$)</label>
-                 <Input 
-                   placeholder="0.00"
-                   value={newProduct.priceB2B}
-                   onChange={(e) => setNewProduct({...newProduct, priceB2B: maskDecimal(e.target.value)})}
-                 />
-              </div>
+               <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preço B2C (R$)</label>
+                  <Input 
+                    placeholder="R$ 0,00"
+                    value={newProduct.priceB2C}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      const formatted = new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      }).format(Number(value) / 100);
+                      setNewProduct({...newProduct, priceB2C: formatted});
+                    }}
+                  />
+               </div>
+               <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preço B2B (R$)</label>
+                  <Input 
+                    placeholder="R$ 0,00"
+                    value={newProduct.priceB2B}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/\D/g, "");
+                      const formatted = new Intl.NumberFormat("pt-BR", {
+                        style: "currency",
+                        currency: "BRL",
+                      }).format(Number(value) / 100);
+                      setNewProduct({...newProduct, priceB2B: formatted});
+                    }}
+                  />
+               </div>
               <div className="space-y-2">
                  <label className="text-[10px] font-bold uppercase text-brand-text-muted">Estoque Inicial</label>
                  <Input 
@@ -451,21 +508,79 @@ export default function ProductsPage() {
                    onChange={(e) => setNewProduct({...newProduct, finish: e.target.value})}
                  />
               </div>
-              <div className="space-y-2 md:col-span-1">
-                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">URL da Foto</label>
-                 <Input 
-                   placeholder="https://..." 
-                   value={newProduct.photos}
-                   onChange={(e) => setNewProduct({...newProduct, photos: e.target.value})}
-                 />
-              </div>
-              <div className="space-y-2 md:col-span-1">
-                 <label className="text-[10px] font-bold uppercase text-brand-text-muted">Preview Visual</label>
-                 <div className="w-full h-10 bg-brand-bg rounded border border-brand-border flex items-center justify-center overflow-hidden">
-                    {newProduct.photos ? (
-                      <img src={newProduct.photos} alt="Preview" className="h-full w-full object-cover" />
-                    ) : (
-                      <ImageIcon size={20} className="text-brand-text-muted opacity-30" />
+              <div className="space-y-4 md:col-span-3 border-t border-brand-border/30 pt-4">
+                 <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold uppercase text-brand-text-muted">Galeria de Imagens (Carrossel)</label>
+                    <label className="cursor-pointer bg-brand-accent/10 hover:bg-brand-accent/20 text-brand-accent text-[10px] font-bold px-3 py-1.5 rounded border border-brand-accent/20 transition-colors flex items-center gap-2">
+                       <Plus size={14} /> ADICIONAR FOTO
+                       <input 
+                         type="file" 
+                         className="hidden" 
+                         accept="image/*"
+                         onChange={(e) => {
+                           const file = e.target.files?.[0];
+                           if (file) {
+                             const reader = new FileReader();
+                             reader.onloadend = () => {
+                               setNewProduct({
+                                 ...newProduct, 
+                                 photos: [...newProduct.photos, reader.result as string]
+                               });
+                             };
+                             reader.readAsDataURL(file);
+                           }
+                         }}
+                       />
+                    </label>
+                 </div>
+
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {newProduct.photos.map((photo, index) => (
+                       <div key={index} className="relative group aspect-square bg-brand-bg rounded border border-brand-border overflow-hidden">
+                          <img src={photo} alt={`Foto ${index + 1}`} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                             <Button 
+                               variant="ghost" 
+                               size="sm" 
+                               className="p-1 h-auto text-brand-danger"
+                               onClick={() => {
+                                 const updated = [...newProduct.photos];
+                                 updated.splice(index, 1);
+                                 setNewProduct({...newProduct, photos: updated});
+                               }}
+                             >
+                                <Trash2 size={16} />
+                             </Button>
+                             {index !== 0 && (
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="p-1 h-auto text-brand-accent"
+                                 onClick={() => {
+                                   const updated = [...newProduct.photos];
+                                   const item = updated.splice(index, 1)[0];
+                                   updated.unshift(item); // Torna principal
+                                   setNewProduct({...newProduct, photos: updated});
+                                   toast.success("Imagem definida como principal!");
+                                 }}
+                               >
+                                  <ArrowUpDown size={16} />
+                               </Button>
+                             )}
+                          </div>
+                          {index === 0 && (
+                            <div className="absolute top-1 left-1 bg-brand-accent text-[8px] font-bold px-1.5 py-0.5 rounded uppercase text-black">
+                               Principal
+                            </div>
+                          )}
+                       </div>
+                    ))}
+                    
+                    {newProduct.photos.length === 0 && (
+                       <div className="md:col-span-4 h-24 border-2 border-dashed border-brand-border/40 rounded-military flex flex-col items-center justify-center text-brand-text-muted/40">
+                          <ImageIcon size={24} className="mb-1" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest">Nenhuma imagem carregada</span>
+                       </div>
                     )}
                  </div>
               </div>

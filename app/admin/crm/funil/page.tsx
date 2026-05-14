@@ -8,23 +8,44 @@ import { Input } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
 import { LeadForm, LeadFormData } from "@/components/crm/LeadForm";
 import { LeadWorkspace } from "@/components/crm/LeadWorkspace";
-import { Search, Plus, Filter, GripVertical, ShoppingBag, Kanban, List as ListIcon, MoreHorizontal, Clock, ArrowRight, User as UserIcon, Building2, Phone, Mail, FileText, Trash2, Edit3, AlertCircle, Users, TrendingUp, Calendar } from "lucide-react";
+import { 
+  Users, 
+  Search, 
+  Filter, 
+  GripVertical, 
+  Calendar, 
+  Phone, 
+  Mail, 
+  Plus, 
+  ArrowRight, 
+  TrendingUp,
+  MoreVertical,
+  Trash2,
+  Archive,
+  Edit2,
+  Kanban,
+  ShoppingBag,
+  List as ListIcon
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { 
   getLeads, 
   createLead, 
   updateLead, 
-  deleteLead 
+  deleteLead,
+  archiveLead
 } from "./actions";
 
 const STAGES = [
-  { id: "NOVO", label: "Novos Leads", color: "border-t-blue-500" },
-  { id: "INTERESSADO", label: "Interessados", color: "border-t-indigo-500" },
-  { id: "ATENDIMENTO", label: "Atendimento", color: "border-t-purple-500" },
-  { id: "PROPOSTA", label: "Proposta", color: "border-t-brand-accent" },
-  { id: "DOCUMENTO", label: "Documentação", color: "border-t-orange-500" },
-  { id: "PAGAMENTO", label: "Pagamento", color: "border-t-brand-success" },
+  { id: "NOVOS LEADS", label: "Novos Leads", color: "border-t-blue-500" },
+  { id: "INTERESSADOS EM ATENDIMENTO", label: "Interessados em Atendimento", color: "border-t-indigo-500" },
+  { id: "PROPOSTA ENVIADA", label: "Proposta Enviada", color: "border-t-purple-500" },
+  { id: "DOCUMENTAÇÃO RECEBIDA", label: "Documentação Recebida", color: "border-t-orange-500" },
+  { id: "PAGAMENTO EFETUADO", label: "Pagamento Efetuado", color: "border-t-brand-accent" },
+  { id: "FATURADO", label: "Faturado", color: "border-t-teal-500" },
+  { id: "ENVIO PARA ENTREGA", label: "Envio para Entrega", color: "border-t-cyan-500" },
+  { id: "CONCLUÍDO", label: "Concluído", color: "border-t-brand-success" },
 ];
 
 const INITIAL_LEADS = [
@@ -37,7 +58,7 @@ const INITIAL_LEADS = [
     value: 8500, 
     time: "2h atrás", 
     priority: "high", 
-    status: "NOVO",
+    status: "NOVOS LEADS",
     source: "INSTAGRAM",
     customerType: "CAC",
     documentStatus: "ACTIVE",
@@ -57,7 +78,7 @@ const INITIAL_LEADS = [
     value: 9200, 
     time: "5h atrás", 
     priority: "medium", 
-    status: "NOVO",
+    status: "NOVOS LEADS",
     source: "SITE",
     customerType: "PJ",
     documentStatus: "ACTIVE",
@@ -158,7 +179,9 @@ export default function CRMFunnelPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
-
+  const [showArchived, setShowArchived] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{type: "delete" | "archive", id: string, isArchived?: boolean} | null>(null);
+  
   const refreshLeads = useCallback(async () => {
     setLoading(true);
     try {
@@ -197,9 +220,11 @@ export default function CRMFunnelPage() {
       const matchesPriority = priorityFilter === "ALL" || lead.priority === priorityFilter;
       const matchesSource = sourceFilter === "ALL" || lead.source === sourceFilter;
       
-      return matchesSearch && matchesPriority && matchesSource;
+      const matchesArchive = (lead.isArchived || false) === showArchived;
+      
+      return matchesSearch && matchesPriority && matchesSource && matchesArchive;
     });
-  }, [leads, search, priorityFilter, sourceFilter]);
+  }, [leads, search, priorityFilter, sourceFilter, showArchived]);
 
   const leadsByStage = useMemo(() => {
     const grouped: Record<string, any[]> = {};
@@ -208,7 +233,7 @@ export default function CRMFunnelPage() {
       if (grouped[lead.status]) {
         grouped[lead.status].push(lead);
       } else {
-        grouped["NOVO"]?.push(lead);
+        grouped["NOVOS LEADS"]?.push(lead);
       }
     });
     return grouped;
@@ -218,7 +243,7 @@ export default function CRMFunnelPage() {
     try {
       await createLead({
         ...data,
-        status: "NOVO",
+        status: "NOVOS LEADS",
         priority: "medium",
         value: 0
       });
@@ -230,21 +255,46 @@ export default function CRMFunnelPage() {
     }
   };
 
-  const handleDeleteLead = async (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // Evitar abrir o modal ao clicar em deletar
-    if (!confirm("Tem certeza que deseja excluir este lead permanentemente?")) return;
+  const handleDeleteLead = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConfirmAction({ type: "delete", id });
+  };
+
+  const handleArchiveLead = (id: string, e: React.MouseEvent, currentArchived: boolean) => {
+    e.stopPropagation();
+    setConfirmAction({ type: "archive", id, isArchived: currentArchived });
+  };
+
+  const executeAction = async () => {
+    if (!confirmAction) return;
     
-    try {
-      const res = await deleteLead(id);
-      if (res.success) {
-        toast.success("Lead excluído com sucesso.");
-        refreshLeads();
-      } else {
-        toast.error("Erro ao excluir lead.");
+    if (confirmAction.type === "delete") {
+      try {
+        const res = await deleteLead(confirmAction.id);
+        if (res.success) {
+          toast.success("Lead excluído com sucesso.");
+          refreshLeads();
+        } else {
+          toast.error("Erro ao excluir lead.");
+        }
+      } catch (error) {
+        toast.error("Erro na operação de exclusão.");
       }
-    } catch (error) {
-      toast.error("Erro na operação de exclusão.");
+    } else if (confirmAction.type === "archive") {
+      try {
+        const res = await archiveLead(confirmAction.id, !confirmAction.isArchived);
+        if (res.success) {
+          toast.success(confirmAction.isArchived ? "Lead desarquivado!" : "Lead arquivado!");
+          refreshLeads();
+        } else {
+          toast.error(`Erro ao processar arquivamento: ${res.error}`);
+        }
+      } catch (error: any) {
+        toast.error(`Erro na operação de arquivamento: ${error.message}`);
+      }
     }
+    
+    setConfirmAction(null);
   };
 
   const handleUpdateLead = async (updatedLead: any) => {
@@ -295,7 +345,7 @@ export default function CRMFunnelPage() {
 
   return (
     <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
-      <div className="flex flex-col gap-6 h-[calc(100vh-120px)] animate-fade-in overflow-hidden">
+      <div className="flex flex-col gap-6 h-[calc(100vh-220px)] animate-fade-in overflow-hidden">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-4">
@@ -305,13 +355,13 @@ export default function CRMFunnelPage() {
             <div>
               <h1 className="text-2xl font-bold tracking-tight mb-1 font-rajdhani uppercase text-white">FUNIL DE VENDAS (CRM)</h1>
               <div className="flex items-center gap-3">
-                <p className="text-brand-text-secondary text-sm font-medium uppercase tracking-wider text-[10px]">Gestão de Pipeline Comercial · {filteredLeads.length} Leads</p>
+                <p className="text-brand-text-secondary text-[11px] font-bold uppercase tracking-widest">Gestão de Pipeline Comercial · {filteredLeads.length} Leads</p>
                 <span className="text-brand-border h-3 w-px" />
-                <p className="text-brand-accent text-sm font-bold uppercase tracking-wider text-[10px]">
+                <p className="text-brand-accent text-[11px] font-black uppercase tracking-widest">
                   Ticket Médio: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(avgTicket)}
                 </p>
                 <span className="text-brand-border h-3 w-px" />
-                <p className="text-brand-success text-sm font-bold uppercase tracking-wider text-[10px]">
+                <p className="text-brand-success text-[11px] font-black uppercase tracking-widest">
                   Conversão Est.: {conversionEst.toFixed(0)}%
                 </p>
               </div>
@@ -354,7 +404,7 @@ export default function CRMFunnelPage() {
              <div className="h-6 w-px bg-brand-border/50 shrink-0" />
              
              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-tighter">Prioridade:</span>
+                <span className="text-[11px] font-black text-brand-text-muted uppercase tracking-widest">Prioridade:</span>
                 <select 
                   className="bg-brand-input/60 border border-brand-border/50 rounded h-10 px-3 text-[11px] font-black uppercase text-white outline-none focus:border-brand-accent/50 transition-all cursor-pointer min-w-[100px]"
                   value={priorityFilter}
@@ -368,7 +418,7 @@ export default function CRMFunnelPage() {
              </div>
 
              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-tighter">Origem:</span>
+                <span className="text-[11px] font-black text-brand-text-muted uppercase tracking-widest">Origem:</span>
                 <select 
                   className="bg-brand-input/60 border border-brand-border/50 rounded h-10 px-3 text-[11px] font-black uppercase text-white outline-none focus:border-brand-accent/50 transition-all cursor-pointer min-w-[120px]"
                   value={sourceFilter}
@@ -420,13 +470,25 @@ export default function CRMFunnelPage() {
              >
                LISTA
              </Button>
+             <div className="h-6 w-px bg-brand-border/50 self-center" />
+             <Button 
+                variant={showArchived ? "secondary" : "ghost"} 
+                size="sm" 
+                className={cn(
+                  "h-10 px-5 text-[11px] font-black gap-2",
+                  showArchived ? "bg-brand-surface border-brand-accent/50 text-brand-accent" : "text-brand-text-muted"
+                )} 
+                onClick={() => setShowArchived(!showArchived)}
+              >
+                <Archive size={16} /> {showArchived ? "ATIVOS" : "ARQUIVADOS"}
+              </Button>
           </div>
         </div>
 
         {/* Dynamic Content: Kanban or List */}
         <div className="flex-1 overflow-hidden">
           {viewMode === "kanban" ? (
-        <div className="flex gap-4 overflow-x-auto pb-4 h-full scrollbar-thin scrollbar-thumb-brand-border/50">
+        <div className="flex gap-6 overflow-x-auto h-full scrollbar-premium pb-4">
           {STAGES.map((stage) => {
             const stageLeads = leadsByStage[stage.id] || [];
             const stageTotal = stageLeads.reduce((acc, l) => acc + l.value, 0);
@@ -440,96 +502,122 @@ export default function CRMFunnelPage() {
               >
                 {/* Stage Header */}
                 <div className={cn(
-                  "flex flex-col gap-2 px-4 py-3 border-t-2 bg-brand-surface/20 rounded-b-md border-x border-b border-brand-border/30",
+                  "flex flex-col gap-2 px-4 py-4 border-t-4 bg-brand-surface border-x border-b border-brand-border/40 rounded-b-xl shadow-lg shrink-0",
                   stage.color
                 )}>
                   <div className="flex items-center justify-between">
-                    <h3 className="text-[15px] font-black uppercase tracking-[0.25em] text-white">{stage.label}</h3>
-                    <span className="bg-brand-input px-2.5 py-1 rounded text-[12px] font-black text-brand-accent border border-brand-border">
+                    <h3 className="text-[14px] font-black uppercase tracking-[0.2em] text-white/90">{stage.label}</h3>
+                    <span className="bg-brand-bg px-2.5 py-1 rounded text-[11px] font-black text-brand-accent border border-brand-border">
                       {stageLeads.length}
                     </span>
                   </div>
-                  <p className="text-[13px] font-mono text-brand-accent/90 font-black">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stageTotal)}
-                  </p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-[12px] font-mono text-brand-accent font-black">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stageTotal)}
+                    </p>
+                    <button 
+                      onClick={() => setIsAddModalOpen(true)}
+                      className="p-1.5 hover:bg-brand-accent/20 rounded text-brand-text-muted hover:text-brand-accent transition-all"
+                      title="Adicionar Lead nesta etapa"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Stage Body - Column */}
                   <div className="flex-1 bg-brand-surface/10 rounded-xl p-3 border border-brand-border/20 flex flex-col gap-4 overflow-y-auto min-h-0 custom-scrollbar">
                     {stageLeads.map((lead) => (
-                      <div 
-                        key={lead.id} 
-                        className={cn(
-                          "bg-brand-surface border border-brand-border/60 p-5 rounded-xl shadow-md hover:border-brand-accent hover:shadow-[0_8px_20px_rgba(245,196,0,0.1)] transition-all cursor-grab active:cursor-grabbing group relative overflow-hidden",
-                          lead.priority === "high" ? "border-l-4 border-l-brand-danger shadow-[0_0_25px_rgba(239,68,68,0.1)]" : "border-l-4 border-l-brand-accent/40"
-                        )}
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, lead.id)}
-                        onClick={() => setEditingLead(lead)}
-                      >
+                        <div 
+                          key={lead.id} 
+                          className={cn(
+                            "bg-brand-surface border border-brand-border/60 p-4 rounded-xl shadow-md hover:border-brand-accent hover:shadow-[0_8px_20px_rgba(245,196,0,0.1)] transition-all group relative",
+                            lead.priority === "high" ? "border-l-4 border-l-brand-danger shadow-[0_0_25px_rgba(239,68,68,0.1)]" : "border-l-4 border-l-brand-accent/40"
+                          )}
+                        >
                         <div className="flex justify-between items-start mb-4">
-                          <span className={cn(
-                            "text-[10px] font-black uppercase px-2.5 py-1 rounded border tracking-[0.15em] flex items-center gap-1.5",
-                            lead.priority === "high" ? "bg-brand-danger text-white border-brand-danger animate-pulse" :
-                            lead.priority === "medium" ? "bg-brand-warning/20 text-brand-warning border-brand-warning/40" :
-                            "bg-brand-text-muted/20 text-brand-text-muted border-brand-border"
-                          )}>
-                            {lead.priority === "high" && <span className="w-1.5 h-1.5 bg-white rounded-full" />}
-                            {lead.priority === "high" ? "URGENTE / HOT" : lead.priority === "medium" ? "WARM LEAD" : "COLD LEAD"}
-                          </span>
-                          <GripVertical size={18} className="text-brand-text-muted group-hover:text-brand-accent transition-colors" />
+                          <div className="flex items-center gap-2">
+                              <span className={cn(
+                               "text-[10px] font-black uppercase px-2.5 py-1 rounded-md border tracking-widest flex items-center gap-1.5 shadow-sm",
+                               lead.priority === "high" ? "bg-brand-danger/20 text-brand-danger border-brand-danger/40 animate-pulse ring-1 ring-brand-danger/20" :
+                               lead.priority === "medium" ? "bg-orange-500/20 text-orange-500 border-orange-500/40" :
+                               "bg-blue-500/20 text-blue-400 border-blue-500/30"
+                             )}>
+                               {lead.priority === "high" && <span className="w-1.5 h-1.5 bg-brand-danger rounded-full" />}
+                               {lead.priority === "medium" && <span className="w-1.5 h-1.5 bg-orange-500 rounded-full" />}
+                               {lead.priority === "low" && <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />}
+                               {lead.priority === "high" ? "URGENTE" : lead.priority === "medium" ? "MORNO" : "FRIO"}
+                             </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                             <button 
+                               type="button"
+                               onClick={(e) => handleArchiveLead(lead.id, e, !!lead.isArchived)}
+                               className="p-2 opacity-0 group-hover:opacity-100 text-brand-text-muted hover:text-brand-accent transition-all rounded hover:bg-brand-accent/10 relative z-50 cursor-pointer"
+                               title={lead.isArchived ? "Desarquivar Lead" : "Arquivar Lead"}
+                             >
+                               {lead.isArchived ? <TrendingUp size={14} /> : <Archive size={14} />}
+                             </button>
+                             <button 
+                               type="button"
+                               onClick={(e) => handleDeleteLead(lead.id, e)}
+                               className="p-2 opacity-0 group-hover:opacity-100 text-brand-text-muted hover:text-brand-danger transition-all rounded hover:bg-brand-danger/10 relative z-50 cursor-pointer"
+                               title="Excluir Lead"
+                             >
+                               <Trash2 size={14} />
+                             </button>
+                             <div 
+                               draggable 
+                               onDragStart={(e) => handleDragStart(e, lead.id)}
+                               className="p-1 cursor-grab active:cursor-grabbing text-brand-text-muted group-hover:text-brand-accent transition-colors opacity-30 hover:opacity-100"
+                             >
+                               <GripVertical size={16} />
+                             </div>
+                          </div>
                         </div>
 
-                      <h4 className="text-[17px] font-black mb-2 leading-tight text-white group-hover:text-brand-accent transition-colors uppercase tracking-tight">{lead.name}</h4>
-                      <div className="flex items-center gap-2.5 mb-5 text-white/90">
-                         <ShoppingBag size={15} className="text-brand-accent" />
-                         <span className="text-[14px] font-black uppercase truncate tracking-wide">
+                      <h4 
+                        className="text-[14px] font-black mb-1.5 text-white group-hover:text-brand-accent transition-colors uppercase tracking-widest break-words leading-relaxed cursor-pointer"
+                        onClick={() => setEditingLead(lead)}
+                      >
+                        {lead.name}
+                      </h4>
+                      <div className="flex items-center gap-2 mb-4 text-brand-text-secondary">
+                         <ShoppingBag size={14} className="text-brand-accent opacity-70" />
+                         <span className="text-[11px] font-bold uppercase truncate tracking-wider">
                            {Array.isArray(lead.interests) ? lead.interests.join(", ") : (lead.interests || "Sem interesse")}
                          </span>
                       </div>
 
-                      <div className="flex items-center justify-between mt-auto pt-4 border-t border-brand-border/60">
-                         <div className="flex gap-2.5">
-                            <button className="p-2.5 bg-brand-input rounded-lg hover:bg-brand-accent/20 transition-colors text-brand-text-muted hover:text-brand-accent border border-brand-border">
-                              <Phone size={15} />
+                      <div className="flex items-center justify-between mt-auto pt-3 border-t border-brand-border/40">
+                         <div className="flex gap-2">
+                            <button className="p-2 bg-brand-input rounded-md hover:bg-brand-accent/20 transition-colors text-brand-text-muted hover:text-brand-accent border border-brand-border">
+                              <Phone size={14} />
                             </button>
-                            <button className="p-2.5 bg-brand-input rounded-lg hover:bg-brand-accent/20 transition-colors text-brand-text-muted hover:text-brand-accent border border-brand-border">
-                              <Mail size={15} />
+                            <button className="p-2 bg-brand-input rounded-md hover:bg-brand-accent/20 transition-colors text-brand-text-muted hover:text-brand-accent border border-brand-border">
+                              <Mail size={14} />
                             </button>
-                            <button 
-                               className="p-2.5 bg-brand-input rounded-lg hover:bg-brand-danger/20 transition-colors text-brand-text-muted hover:text-brand-danger border border-brand-border"
-                               onClick={(e) => handleDeleteLead(lead.id, e)}
-                             >
-                               <Trash2 size={15} />
-                             </button>
                          </div>
-                         <div className="text-right">
-                            <p className="text-[18px] font-mono font-black text-brand-accent leading-none mb-2">
+                         <div className="text-right flex flex-col justify-end">
+                            <p className="text-[15px] font-mono font-black text-brand-accent leading-relaxed">
                               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.value)}
                             </p>
-                            <div className="flex items-center gap-1.5 justify-end text-white/60">
-                               <Calendar size={13} />
-                               <span className="text-[12px] uppercase font-black tracking-tighter">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('pt-BR') : "RECÉM-CRIADO"}</span>
+                            <div className="flex items-center gap-1.5 justify-end text-brand-text-muted mt-0.5">
+                               <Calendar size={12} className="opacity-70" />
+                               <span className="text-[10px] uppercase font-bold tracking-widest">{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString('pt-BR') : "NOVO"}</span>
                             </div>
                          </div>
                       </div>
                     </div>
                   ))}
                   
-                  <Button 
-                    variant="ghost" 
-                    className="w-full py-2 h-auto text-[10px] border border-dashed border-brand-border hover:border-brand-accent/50 hover:bg-brand-accent/5 gap-2 text-brand-text-muted"
-                    onClick={() => setIsAddModalOpen(true)}
-                  >
-                    <Plus size={14} /> NOVO LEAD
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
         ) : (
-            <div className="flex-1 overflow-hidden pb-8">
+          <div className="flex-1 overflow-hidden">
               <Card className="h-full border-brand-border bg-brand-surface/20 overflow-hidden shadow-2xl flex flex-col rounded-xl">
                 <div className="overflow-y-auto custom-scrollbar flex-1">
                   <table className="w-full text-left border-collapse">
@@ -582,13 +670,18 @@ export default function CRMFunnelPage() {
                           </td>
                           <td className="px-8 py-6">
                             <span className={cn(
-                              "text-[10px] font-black px-3 py-1.5 rounded border uppercase tracking-[0.15em] flex items-center gap-2 w-fit",
-                              lead.priority === "high" ? "bg-brand-danger text-white border-brand-danger" :
-                              lead.priority === "medium" ? "bg-brand-warning/20 text-brand-warning border-brand-warning/40" :
-                              "bg-brand-text-muted/20 text-brand-text-muted border-brand-border"
+                              "text-[10px] font-black px-3 py-1.5 rounded-md border uppercase tracking-[0.1em] flex items-center gap-2 w-fit shadow-sm",
+                              lead.priority === "high" ? "bg-brand-danger/20 text-brand-danger border-brand-danger/40" :
+                              lead.priority === "medium" ? "bg-orange-500/20 text-orange-500 border-orange-500/40" :
+                              "bg-blue-500/20 text-blue-400 border-blue-500/30"
                             )}>
-                              {lead.priority === "high" && <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
-                              {lead.priority === "high" ? "URGENTE" : lead.priority === "medium" ? "WARM" : "COLD"}
+                              <div className={cn(
+                                "w-2 h-2 rounded-full",
+                                lead.priority === "high" ? "bg-brand-danger animate-pulse" :
+                                lead.priority === "medium" ? "bg-orange-500" :
+                                "bg-blue-400"
+                              )} />
+                              {lead.priority === "high" ? "URGENTE" : lead.priority === "medium" ? "MORNO" : "FRIO"}
                             </span>
                           </td>
                           <td className="px-8 py-6 text-right">
@@ -599,7 +692,18 @@ export default function CRMFunnelPage() {
                                <Button 
                                  variant="ghost" 
                                  size="sm" 
-                                 className="h-11 w-11 p-0 hover:bg-brand-danger hover:text-white"
+                                 className="h-11 w-11 p-0 hover:bg-brand-accent hover:text-black z-30"
+                                 onMouseDown={(e) => e.stopPropagation()}
+                                 onClick={(e) => handleArchiveLead(lead.id, e, !!lead.isArchived)}
+                                 title={lead.isArchived ? "Desarquivar" : "Arquivar"}
+                               >
+                                 {lead.isArchived ? <TrendingUp size={16} /> : <Archive size={16} />}
+                               </Button>
+                               <Button 
+                                 variant="ghost" 
+                                 size="sm" 
+                                 className="h-11 w-11 p-0 hover:bg-brand-danger hover:text-white z-30"
+                                 onMouseDown={(e) => e.stopPropagation()}
                                  onClick={(e) => handleDeleteLead(lead.id, e)}
                                >
                                  <Trash2 size={16} />
@@ -643,7 +747,35 @@ export default function CRMFunnelPage() {
         />
       </Dialog>
 
+      <Dialog
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        title="Confirmar Ação"
+        className="max-w-sm"
+      >
+        <div className="p-6">
+          <p className="text-white text-base mb-8">
+            {confirmAction?.type === "delete" 
+              ? "Tem certeza que deseja excluir este lead permanentemente? Esta ação não pode ser desfeita." 
+              : confirmAction?.isArchived 
+                ? "Deseja restaurar (desarquivar) este lead para o funil ativo?" 
+                : "Deseja mover este lead para o arquivo? Você poderá restaurá-lo depois se quiser."}
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="ghost" onClick={() => setConfirmAction(null)}>Cancelar</Button>
+            <Button 
+              variant="primary" 
+              className={confirmAction?.type === "delete" ? "bg-brand-danger text-white border-brand-danger hover:bg-brand-danger/90" : ""}
+              onClick={executeAction}
+            >
+              {confirmAction?.type === "delete" ? "Excluir Definitivamente" : "Confirmar"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
       <style jsx global>{`
+
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
         }

@@ -24,9 +24,9 @@ export default function NewBatchPage() {
   const [projectId, setProjectId] = useState("");
   const [eta, setEta] = useState("");
   const [currency, setCurrency] = useState("USD");
-  const [ptax, setPtax] = useState(5.1240);
-  const [freight, setFreight] = useState(0);
-  const [insurance, setInsurance] = useState(0);
+  const [ptax, setPtax] = useState("R$ 5,12");
+  const [freight, setFreight] = useState("R$ 0,00");
+  const [insurance, setInsurance] = useState("R$ 0,00");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [items, setItems] = useState<any[]>([]);
   const [catalog, setCatalog] = useState<any[]>([]);
@@ -43,13 +43,19 @@ export default function NewBatchPage() {
     });
   }, []);
 
+  // Helper para limpar máscara
+  const cleanCurrency = (val: string) => {
+    const num = Number(val.replace(/\D/g, "")) / 100;
+    return isNaN(num) ? 0 : num;
+  };
+
   const totalFob = useMemo(() => {
     return items.reduce((acc, item) => acc + (item.qty * item.unitFob), 0);
   }, [items]);
 
   const totalBrl = useMemo(() => {
-    const totalForeign = totalFob + freight + insurance;
-    return totalForeign * ptax;
+    const totalForeign = totalFob + cleanCurrency(freight) + cleanCurrency(insurance);
+    return totalForeign * cleanCurrency(ptax);
   }, [totalFob, freight, insurance, ptax]);
 
   const taxesEst = totalBrl * 0.48; // Estimativa de 48% de impostos totais
@@ -83,10 +89,10 @@ export default function NewBatchPage() {
       projectId,
       originCountry: "Turquia",
       currency,
-      exchangeRate: ptax,
+      exchangeRate: cleanCurrency(ptax),
       fobTotal: totalFob,
-      freightTotal: freight,
-      insuranceTotal: insurance,
+      freightTotal: cleanCurrency(freight),
+      insuranceTotal: cleanCurrency(insurance),
       eta,
       items: items.map(i => ({
         productId: i.productId,
@@ -197,22 +203,43 @@ export default function NewBatchPage() {
                     <Input 
                       label="Taxa de Câmbio (Ptax)" 
                       value={ptax}
-                      onChange={(e) => setPtax(Number(maskDecimal(e.target.value)))}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        const formatted = new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(Number(value) / 100);
+                        setPtax(formatted);
+                      }}
                     />
                     <Input 
                       label="Valor FOB Total" 
-                      value={totalFob}
+                      value={totalFob.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                       disabled
                     />
                     <Input 
                       label="Frete Internacional" 
                       value={freight}
-                      onChange={(e) => setFreight(Number(maskDecimal(e.target.value)))}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        const formatted = new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(Number(value) / 100);
+                        setFreight(formatted);
+                      }}
                     />
                     <Input 
                       label="Seguro" 
                       value={insurance}
-                      onChange={(e) => setInsurance(Number(maskDecimal(e.target.value)))}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, "");
+                        const formatted = new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(Number(value) / 100);
+                        setInsurance(formatted);
+                      }}
                     />
                     <div className="flex items-end">
                        <Button variant="secondary" className="w-full gap-2 h-10" onClick={() => toast.success("Cálculos atualizados!")}>

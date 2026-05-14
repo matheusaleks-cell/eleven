@@ -6,13 +6,14 @@ import { revalidatePath } from "next/cache";
 export async function getLeads() {
   try {
     const leads = await prisma.lead.findMany({
+      include: {
+        logs: {
+          orderBy: { createdAt: "desc" }
+        }
+      },
       orderBy: { createdAt: "desc" },
     });
-    // Converter interesses de string para array se necessário para o frontend
-    return leads.map(l => ({
-      ...l,
-      interests: l.interests ? l.interests.split(",") : []
-    }));
+    return leads;
   } catch (error) {
     console.error("Erro ao buscar leads:", error);
     return [];
@@ -25,14 +26,27 @@ export async function createLead(data: any) {
       data: {
         name: data.name,
         email: data.email,
-        phone: data.phone || "(00) 00000-0000",
-        company: data.company,
+        phone: data.phone,
         status: data.status || "NOVO",
         priority: data.priority || "medium",
         value: Number(data.value) || 0,
         source: data.source || "Direto",
         notes: data.notes,
         interests: Array.isArray(data.interests) ? data.interests.join(",") : data.interests || data.interest || "",
+        taxId: data.taxId,
+        state: data.state,
+        city: data.city,
+        customerType: data.customerType,
+        documentStatus: data.documentStatus,
+        category: data.category,
+        crNumber: data.crNumber,
+        crValidity: data.crValidity,
+        logs: {
+          create: {
+            action: "Lead cadastrado via formulário de prospecção",
+            user: data.assignedTo || "Admin Eleven"
+          }
+        }
       },
     });
     revalidatePath("/admin/crm/funil");
@@ -58,7 +72,6 @@ export async function updateLead(id: string, data: any) {
       where: { id },
       data: {
         ...updateData,
-        updatedAt: new Date(),
       },
     });
     revalidatePath("/admin/crm/funil");
@@ -82,6 +95,20 @@ export async function deleteLead(id: string) {
   }
 }
 
+export async function archiveLead(id: string, isArchived: boolean = true) {
+  try {
+    await prisma.lead.update({
+      where: { id },
+      data: { isArchived },
+    });
+    revalidatePath("/admin/crm/funil");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro ao arquivar lead:", error);
+    return { success: false, error: error.message || "Falha ao arquivar lead" };
+  }
+}
+
 export async function convertToOrder(leadId: string, data: any) {
   try {
     // 1. Criar ou encontrar o cliente (Customer)
@@ -101,7 +128,7 @@ export async function convertToOrder(leadId: string, data: any) {
         cpfCnpj: data.taxId || `TEMP-${leadId}`,
         city: data.city,
         state: data.state,
-        type: data.customerType || "B2C",
+        type: "B2B",
       }
     });
 
@@ -110,9 +137,9 @@ export async function convertToOrder(leadId: string, data: any) {
       data: {
         orderNumber: `ORD-${Date.now()}`,
         customerId: customer.id,
-        sellerId: data.assignedSellerId || "system-admin", // Idealmente pegar da sessão
+        sellerId: data.assignedSellerId || "system-admin", 
         totalValue: Number(data.value) || 0,
-        status: "PAGO", // Conversão direta para pago para teste
+        status: "PAGO", 
         products: JSON.stringify(data.items || []),
         notes: `Convertido de Lead: ${leadId}. Notas: ${data.notes || ""}`,
         proposedDate: new Date(),
@@ -125,11 +152,74 @@ export async function convertToOrder(leadId: string, data: any) {
     });
 
     revalidatePath("/admin/crm/funil");
-    revalidatePath("/admin"); // Revalidar dashboard principal também
+    revalidatePath("/admin"); 
     
     return { success: true, orderId: order.id };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao converter lead:", error);
-    return { success: false, error: "Falha na conversão" };
+    return { success: false, error: error.message };
+  }
+}
+
+export async function convertToCustomer(leadId: string) {
+  try {
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId }
+    });
+
+    if (!lead) throw new Error("Lead não encontrado");
+
+    const customer = await prisma.customer.upsert({
+      where: { cpfCnpj: lead.taxId || `TEMP-${leadId}` },
+      update: {
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        city: lead.city,
+        state: lead.state,
+        source: lead.source,
+      },
+      create: {
+        name: lead.name,
+        email: lead.email,
+        phone: lead.phone,
+        cpfCnpj: lead.taxId || `TEMP-${leadId}`,
+        city: lead.city,
+        state: lead.state,
+        type: lead.customerType === "PJ" ? "B2B" : "B2C",
+        source: lead.source,
+        notes: lead.notes,
+        status: "ACTIVE"
+      }
+    });
+
+    await prisma.lead.delete({
+      where: { id: leadId }
+    });
+
+    revalidatePath("/admin/crm/funil");
+    revalidatePath("/admin/crm/clientes");
+    
+    return { success: true, customerId: customer.id };
+  } catch (error: any) {
+    console.error("Erro ao converter para cliente:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function addLeadLog(leadId: string, action: string, user: string = "Admin Eleven") {
+  try {
+    await prisma.leadLog.create({
+      data: {
+        leadId,
+        action,
+        user
+      }
+    });
+    revalidatePath("/admin/crm/funil");
+    return { success: true };
+  } catch (error) {
+    console.error("Error adding lead log:", error);
+    return { success: false };
   }
 }

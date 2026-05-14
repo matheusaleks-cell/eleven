@@ -10,6 +10,7 @@ export async function getImportLots() {
       include: {
         supplier: true,
         products: true,
+        documents: true,
         _count: {
           select: { products: true }
         }
@@ -31,6 +32,41 @@ export async function getImportLots() {
   } catch (error) {
     console.error("Erro ao buscar lotes:", error);
     return [];
+  }
+}
+
+// ... (createImportLot, updateLotStatus, deleteImportLot mantidos)
+
+export async function addLotDocument(lotId: string, name: string, category: string, base64: string) {
+  try {
+    const doc = await prisma.document.create({
+      data: {
+        name,
+        type: "PDF",
+        category,
+        size: `${(base64.length / 1024 / 1.33).toFixed(1)} KB`,
+        base64Data: base64,
+        lotId
+      }
+    });
+    revalidatePath("/admin/importacao/lotes");
+    return { success: true, doc };
+  } catch (error) {
+    console.error("Erro ao adicionar documento:", error);
+    return { success: false };
+  }
+}
+
+export async function deleteLotDocument(id: string) {
+  try {
+    await prisma.document.delete({
+      where: { id }
+    });
+    revalidatePath("/admin/importacao/lotes");
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao excluir documento:", error);
+    return { success: false };
   }
 }
 

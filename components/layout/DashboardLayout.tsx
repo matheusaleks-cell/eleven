@@ -43,11 +43,12 @@ export function DashboardLayout({ children, role, userName, userEmail, pageTitle
         style={{
           display: "flex",
           flexDirection: "column",
-          minHeight: "100vh",
+          height: "100vh",
           flex: 1,
           width: "100%",
-          marginLeft: isDesktop ? "280px" : "0", // Match sidebar width
+          marginLeft: isDesktop ? "280px" : "0",
           transition: "margin-left 0.3s cubic-bezier(0.4,0,0.2,1)",
+          overflow: "hidden"
         }}
       >
         <Header
@@ -57,14 +58,14 @@ export function DashboardLayout({ children, role, userName, userEmail, pageTitle
           pageTitle={pageTitle}
         />
 
-        {/* Page content */}
         <main
           style={{
             flex: 1,
-            padding: isDesktop ? "60px" : "30px",
+            padding: isDesktop ? "32px" : "16px",
             width: "100%",
-            maxWidth: "1600px",
-            margin: "0 auto",
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column"
           }}
         >
           {children}

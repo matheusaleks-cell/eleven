@@ -23,6 +23,8 @@ const leadSchema = z.object({
   taxId: z.string().min(11, "CPF/CNPJ inválido"),
   state: z.string().min(2, "Informe a UF"),
   city: z.string().min(2, "Informe a cidade"),
+  crNumber: z.string().optional(),
+  crValidity: z.string().optional(),
 });
 
 export type LeadFormData = {
@@ -79,7 +81,12 @@ export function LeadForm({ initialData, onSubmit, onCancel, submitLabel = "Salva
   });
 
   return (
-    <form onSubmit={handleSubmit((data) => onSubmit({ ...data, value: Number(data.value) }))} className="space-y-8 max-h-[70vh] overflow-y-auto px-2 custom-scrollbar">
+    <form onSubmit={handleSubmit((data) => {
+      const cleanValue = typeof data.value === "string" 
+        ? Number(data.value.replace(/\D/g, "")) / 100 
+        : Number(data.value);
+      onSubmit({ ...data, value: cleanValue });
+    })} className="space-y-8 max-h-[70vh] overflow-y-auto px-2 custom-scrollbar">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Seção: Informações Básicas */}
         <div className="space-y-5 md:col-span-2">
@@ -220,7 +227,19 @@ export function LeadForm({ initialData, onSubmit, onCancel, submitLabel = "Salva
             </div>
             <div>
               <label className="text-[12px] font-bold text-brand-text-muted uppercase mb-2 block tracking-widest">Valor Estimado (R$)</label>
-              <Input {...register("value")} type="number" step="0.01" className="h-12 text-base px-4 font-mono" />
+              <Input 
+                {...register("value")} 
+                className="h-12 text-base px-4 font-mono"
+                placeholder="R$ 0,00"
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, "");
+                  const formatted = new Intl.NumberFormat("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  }).format(Number(value) / 100);
+                  e.target.value = formatted;
+                }}
+              />
               {errors.value && <p className="text-brand-danger text-[11px] mt-1.5 uppercase font-bold">{errors.value.message}</p>}
             </div>
             <div>
@@ -234,6 +253,17 @@ export function LeadForm({ initialData, onSubmit, onCancel, submitLabel = "Salva
                 <option value="medium">MORNO (Média)</option>
                 <option value="high">QUENTE (Urgente)</option>
               </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+            <div>
+              <label className="text-[12px] font-bold text-brand-text-muted uppercase mb-2 block tracking-widest">Nº CR (Exército)</label>
+              <Input {...register("crNumber")} placeholder="Ex: 113397" className="h-12 text-base px-4" />
+            </div>
+            <div>
+              <label className="text-[12px] font-bold text-brand-text-muted uppercase mb-2 block tracking-widest">Validade do CR</label>
+              <Input {...register("crValidity")} placeholder="Ex: 13/01/2033" className="h-12 text-base px-4" />
             </div>
           </div>
         </div>

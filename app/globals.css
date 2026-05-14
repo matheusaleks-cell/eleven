@@ -48,10 +48,19 @@ html {
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-family: "Rajdhani", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.011em;
+}
+
+h1, h2, h3, h4, h5, h6, .font-rajdhani {
+  font-family: var(--font-rajdhani);
+}
+
+p, span, label, input, textarea, select, td {
+  font-family: "Inter", sans-serif;
 }
 
 /* Scrollbar customizada */
@@ -67,6 +76,24 @@ body {
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
+}
+
+.scrollbar-premium::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+
+.scrollbar-premium::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.scrollbar-premium::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 10px;
+}
+
+.scrollbar-premium::-webkit-scrollbar-thumb:hover {
   background: var(--color-accent);
 }
 
@@ -119,11 +146,17 @@ body {
   border: 1px solid var(--color-border);
   border-radius: 2px;
   color: var(--color-text-primary);
-  padding: 10px 14px;
-  font-size: 14px;
+  padding: 12px 16px;
+  font-size: 15px;
   width: 100%;
   outline: none;
   transition: border-color 0.15s;
+}
+
+.legible-info {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
 }
 
 .input-base:focus {
@@ -132,6 +165,7 @@ body {
 
 .input-base::placeholder {
   color: var(--color-text-muted);
+  font-size: 14px;
 }
 
 /* Animações */
@@ -218,7 +252,7 @@ body {
 
 /* Mobile */
 @media (max-width: 768px) {
-  html { font-size: 14px; }
+  html { font-size: 15px; }
 }
 
 /* Sidebar layout utilities */

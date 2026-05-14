@@ -17,11 +17,12 @@ import {
   AlertCircle,
   History,
   Plus,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { updateLotStatus } from "@/app/admin/importacao/lotes/actions";
+import { updateLotStatus, addLotDocument, deleteLotDocument } from "@/app/admin/importacao/lotes/actions";
 import Link from "next/link";
 
 interface BatchWorkspaceProps {
@@ -261,13 +262,7 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
 
         {activeTab === "docs" && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-             {[
-               { name: "Commercial Invoice", type: "PDF", status: "VERIFICADO" },
-               { name: "Packing List", type: "PDF", status: "VERIFICADO" },
-               { name: "Bill of Lading (B/L)", type: "PDF", status: "AGUARDANDO" },
-               { name: "Certificado de Origem", type: "PDF", status: "VERIFICADO" },
-               { name: "LI - Licença de Importação", type: "PDF", status: "PROCESSANDO" },
-             ].map((doc, i) => (
+             {batch.documents?.map((doc: any, i: number) => (
                <Card key={i} className="p-4 border-brand-border bg-brand-surface/30 flex flex-col gap-3 hover:border-brand-accent/30 transition-all cursor-pointer group shadow-sm">
                   <div className="flex items-center gap-3">
                      <div className="p-2 bg-brand-bg rounded border border-brand-border text-brand-text-muted group-hover:text-brand-accent transition-colors">
@@ -275,29 +270,81 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                      </div>
                      <div className="flex flex-col">
                         <span className="text-[10px] font-bold text-white uppercase leading-tight">{doc.name}</span>
-                        <span className="text-[9px] text-brand-text-muted uppercase font-mono">{doc.type}</span>
+                        <span className="text-[9px] text-brand-text-muted uppercase font-mono">{doc.type} • {doc.size}</span>
                      </div>
                   </div>
                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-brand-border/50">
                      <span className={cn(
-                       "text-[8px] font-bold px-1.5 py-0.5 rounded border",
-                       doc.status === "VERIFICADO" ? "bg-brand-success/10 text-brand-success border-brand-success/20" :
-                       doc.status === "PROCESSANDO" ? "bg-brand-warning/10 text-brand-warning border-brand-warning/20" :
-                       "bg-brand-text-muted/10 text-brand-text-muted border-brand-border"
+                       "text-[8px] font-bold px-1.5 py-0.5 rounded border uppercase",
+                       "bg-brand-success/10 text-brand-success border-brand-success/20"
                      )}>
-                       {doc.status}
+                       {doc.category || "Verificado"}
                      </span>
-                     <Download size={14} className="text-brand-text-muted group-hover:text-brand-accent transition-colors" />
+                     <div className="flex items-center gap-2">
+                        <button 
+                          onClick={async () => {
+                            if (confirm("Deseja realmente excluir este documento?")) {
+                              const res = await deleteLotDocument(doc.id);
+                              if (res.success) {
+                                toast.success("Documento removido!");
+                                onRefresh?.();
+                              } else {
+                                toast.error("Erro ao excluir.");
+                              }
+                            }
+                          }}
+                          className="p-1 hover:text-brand-danger transition-colors"
+                        >
+                          <Trash2 size={14} className="text-brand-text-muted hover:text-brand-danger" />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const link = document.createElement("a");
+                            link.href = doc.base64Data;
+                            link.download = doc.name;
+                            link.click();
+                          }}
+                          className="p-1 hover:text-brand-accent transition-colors"
+                        >
+                          <Download size={14} className="text-brand-text-muted" />
+                        </button>
+                     </div>
                   </div>
                </Card>
              ))}
-             <button 
-              className="border-2 border-dashed border-brand-border rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:border-brand-accent/50 hover:bg-brand-accent/5 transition-all text-brand-text-muted hover:text-brand-accent"
-              onClick={() => toast.info("Selecione o arquivo para upload (LI/DI/Invoice)...")}
-             >
+
+             <label className="border-2 border-dashed border-brand-border rounded-lg p-4 flex flex-col items-center justify-center gap-2 hover:border-brand-accent/50 hover:bg-brand-accent/5 transition-all text-brand-text-muted hover:text-brand-accent cursor-pointer">
                 <Plus size={20} />
                 <span className="text-[10px] font-bold uppercase">UPLOAD DOCUMENTO</span>
-             </button>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="application/pdf,image/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = async () => {
+                        const base64 = reader.result as string;
+                        const res = await addLotDocument(batch.dbId || batch.id, file.name, "Importação", base64);
+                        if (res.success) {
+                          toast.success("Documento anexado ao lote!");
+                          onRefresh?.();
+                        } else {
+                          toast.error("Erro ao subir documento.");
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+             </label>
+
+             {(!batch.documents || batch.documents.length === 0) && (
+               <div className="md:col-span-3 py-10 text-center text-brand-text-muted text-[10px] uppercase border border-dashed border-brand-border rounded-lg">
+                 Nenhum documento anexado a este processo.
+               </div>
+             )}
           </div>
         )}
 

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { Prisma } from "@prisma/client";
 
 export async function getInvestors() {
   try {
@@ -55,10 +56,17 @@ export async function createInvestor(data: any) {
       },
     });
     revalidatePath("/admin/investidores");
-    return investor;
+    return { success: true, investor };
   } catch (error) {
     console.error("Erro ao criar investidor:", error);
-    throw new Error("E-mail já cadastrado ou erro no banco.");
+    
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        return { success: false, error: "Este e-mail já está cadastrado para outro usuário." };
+      }
+    }
+    
+    return { success: false, error: "Erro interno ao cadastrar investidor." };
   }
 }
 
@@ -112,10 +120,17 @@ export async function getInvestorDetails(id: string) {
       email: investor.email,
       phone: investor.phone || "—",
       createdAt: investor.createdAt.toISOString(),
+      cpfCnpj: investor.cpfCnpj || "",
+      rg: investor.rg || "",
+      address: investor.address || "",
+      bankDetails: investor.bankDetails || "",
+      bankReferences: investor.bankReferences || "",
+      commercialRefs: investor.commercialRefs || "",
+      profession: investor.profession || "",
       stats: {
         totalInvested,
         totalReceived,
-        roi: totalInvested > 0 ? (totalReceived / totalInvested) * 100 : 0,
+        roi: totalInvested > 0 ? ((totalReceived - totalInvested) / totalInvested) * 100 : 0,
         activeProjects: investor.projects.length,
         totalCycles: totalCicles
       },
@@ -124,5 +139,51 @@ export async function getInvestorDetails(id: string) {
   } catch (error) {
     console.error("Erro ao buscar detalhes do investidor:", error);
     return null;
+  }
+}
+
+export async function updateInvestor(id: string, data: any) {
+  try {
+    await prisma.user.update({
+      where: { id },
+      data: {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        cpfCnpj: data.cpfCnpj,
+        rg: data.rg,
+        address: data.address,
+        bankDetails: data.bankDetails,
+        bankReferences: data.bankReferences,
+        commercialRefs: data.commercialRefs,
+        profession: data.profession,
+      }
+    });
+    revalidatePath(`/admin/investidores/${id}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao atualizar investidor:", error);
+    return { success: false, error: "Erro ao atualizar dados do investidor." };
+  }
+}
+
+export async function deleteInvestorProject(projectId: string) {
+  try {
+    // Verificar se o projeto existe
+    const project = await prisma.investmentProject.findUnique({
+      where: { id: projectId }
+    });
+
+    if (!project) return { success: false, error: "Projeto não encontrado." };
+
+    await prisma.investmentProject.delete({
+      where: { id: projectId }
+    });
+
+    revalidatePath(`/admin/investidores/${project.investorId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao deletar projeto:", error);
+    return { success: false, error: "Erro ao deletar projeto de investimento." };
   }
 }

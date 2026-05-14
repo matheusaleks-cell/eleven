@@ -116,12 +116,20 @@ export async function getGlobalHeaderStats() {
       ? ((totalSaleValue - totalCostValue) / totalSaleValue) * 100 
       : 32.5; // Fallback para margem projetada se não houver vendas
 
-    // 4. Última Taxa de Câmbio (USD)
-    const lastLot = await prisma.importLot.findFirst({
-      where: { currency: "USD" },
-      orderBy: { createdAt: "desc" }
-    });
-    const lastUsdRate = lastLot?.exchangeRate || 5.82;
+    // 4. Cotação do Dólar em Tempo Real (via AwesomeAPI)
+    let lastUsdRate = 5.82;
+    try {
+      const response = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", { next: { revalidate: 3600 } });
+      const data = await response.json();
+      lastUsdRate = parseFloat(data.USDBRL.bid);
+    } catch (apiError) {
+      console.warn("[USD API] Falha ao buscar cotação real, tentando banco de dados...");
+      const lastLot = await prisma.importLot.findFirst({
+        where: { currency: "USD" },
+        orderBy: { createdAt: "desc" }
+      });
+      lastUsdRate = lastLot?.exchangeRate || 5.82;
+    }
 
     return {
       monthlySales,
