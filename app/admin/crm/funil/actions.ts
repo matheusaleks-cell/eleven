@@ -175,20 +175,20 @@ export async function convertToCustomer(leadId: string) {
         name: lead.name,
         email: lead.email,
         phone: lead.phone,
-        city: lead.city,
-        state: lead.state,
-        source: lead.source,
+        city: lead.city ?? undefined,
+        state: lead.state ?? "",
+        source: lead.source ?? undefined,
       },
       create: {
         name: lead.name,
         email: lead.email,
         phone: lead.phone,
         cpfCnpj: lead.taxId || `TEMP-${leadId}`,
-        city: lead.city,
-        state: lead.state,
+        city: lead.city ?? undefined,
+        state: lead.state ?? "",
         type: lead.customerType === "PJ" ? "B2B" : "B2C",
-        source: lead.source,
-        notes: lead.notes,
+        source: lead.source ?? undefined,
+        notes: lead.notes ?? undefined,
         status: "ACTIVE"
       }
     });
