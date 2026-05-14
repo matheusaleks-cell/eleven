@@ -178,18 +178,18 @@ export default function TaxesPage() {
 
           <div className="section-divider mb-8">★ Tributos de Importação ★</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-            <Field label="II — Imposto de Importação (%)" value={config.ii} key="ii" />
-            <Field label="IPI (%)" value={config.ipi} key="ipi" />
-            <Field label="PIS-PASEP (%)" value={config.pisPasep} key="pisPasep" />
-            <Field label="COFINS (%)" value={config.cofins} key="cofins" />
-            <Field label="ICMS Importação — Alíquota (%)" value={config.icmsImport} key="icmsImport" />
-            <Field label="Taxa de Siscomex (R$)" value={config.siscomexFixed} key="siscomexFixed" suffix="R$" />
+            <Field label="II — Imposto de Importação (%)" value={config.ii} k="ii" />
+            <Field label="IPI (%)" value={config.ipi} k="ipi" />
+            <Field label="PIS-PASEP (%)" value={config.pisPasep} k="pisPasep" />
+            <Field label="COFINS (%)" value={config.cofins} k="cofins" />
+            <Field label="ICMS Importação — Alíquota (%)" value={config.icmsImport} k="icmsImport" />
+            <Field label="Taxa de Siscomex (R$)" value={config.siscomexFixed} k="siscomexFixed" suffix="R$" />
           </div>
 
           <div className="section-divider mb-8">★ Tributação sobre Vendas ★</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
-            <Field label="ICMS Venda (%)" value={config.icmsSale} key="icmsSale" />
-            <Field label="Simples Nacional (%)" value={config.simplesNacional} key="simplesNacional" />
+            <Field label="ICMS Venda (%)" value={config.icmsSale} k="icmsSale" />
+            <Field label="Simples Nacional (%)" value={config.simplesNacional} k="simplesNacional" />
           </div>
 
           {/* Actions */}
