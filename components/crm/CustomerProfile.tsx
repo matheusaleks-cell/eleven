@@ -305,7 +305,7 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
                       }}
                     />
                     <Button 
-                      variant="outline" 
+                      variant="secondary" 
                       size="sm" 
                       className="gap-2 text-[10px] font-bold uppercase tracking-wider"
                       onClick={() => document.getElementById('doc-upload')?.click()}
