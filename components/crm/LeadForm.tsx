@@ -44,6 +44,8 @@ export type LeadFormData = {
   taxId: string;
   state: string;
   city: string;
+  crNumber?: string;
+  crValidity?: string;
 };
 
 interface LeadFormProps {
@@ -77,6 +79,8 @@ export function LeadForm({ initialData, onSubmit, onCancel, submitLabel = "Salva
       taxId: initialData?.taxId || "",
       state: initialData?.state || "",
       city: initialData?.city || "",
+      crNumber: initialData?.crNumber || "",
+      crValidity: initialData?.crValidity || "",
     },
   });
 

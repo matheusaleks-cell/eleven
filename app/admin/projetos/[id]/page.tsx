@@ -293,14 +293,14 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                       <p style={{ color: "#F5C400", fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, marginBottom: 12 }}>Importação</p>
                       <div className="space-y-2">
                         {[
-                          ["Valor Aduaneiro", cycle.customsValueBRL],
-                          ["Imposto de Importação (18%)", cycle.ii],
-                          ["IPI (55%)", cycle.ipi],
-                          ["PIS-PASEP (2,1%)", cycle.pisPasep],
-                          ["COFINS (9,65%)", cycle.cofins],
-                          ["Taxa Siscomex", cycle.siscomex],
-                          ["Custo Operacional", cycle.opCost],
-                          ["ICMS Importação (25%)", cycle.icmsImport],
+                          ["Valor Aduaneiro", cycle.customsValueBrl],
+                          ["Imposto de Importação (18%)", cycle.iiTax],
+                          ["IPI (55%)", cycle.ipiTax],
+                          ["PIS-PASEP (2,1%)", cycle.pisPasepTax],
+                          ["COFINS (9,65%)", cycle.cofinsTax],
+                          ["Taxa Siscomex", cycle.siscomexFee],
+                          ["Custo Operacional", cycle.operationalCost],
+                          ["ICMS Importação (25%)", cycle.icmsImportTax],
                         ].map(([label, value]) => (
                           <div key={label as string} className="flex justify-between items-center py-1" style={{ borderBottom: "1px solid #2A2A2A" }}>
                             <span style={{ color: "#A0A0A0", fontSize: "13px", fontFamily: "'Rajdhani', sans-serif" }}>{label}</span>
@@ -320,8 +320,8 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                         {[
                           ["Faturamento Bruto", cycle.grossRevenue],
                           ["Tributação (4.5%)", cycle.salesTax],
-                          ["Custo Operacional (8%)", cycle.salesOpCost],
-                          ["Saldo Apurado", cycle.netBalance],
+                          ["Custo Operacional (8%)", cycle.salesOperationalCost],
+                          ["Saldo Apurado", cycle.netRevenue],
                         ].map(([label, value]) => (
                           <div key={label as string} className="flex justify-between items-center py-1" style={{ borderBottom: "1px solid #2A2A2A" }}>
                             <span style={{ color: "#A0A0A0", fontSize: "13px", fontFamily: "'Rajdhani', sans-serif" }}>{label}</span>
@@ -333,9 +333,9 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
                       <p style={{ color: "#F5C400", fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, marginTop: 20, marginBottom: 12 }}>Distribuição Financeira</p>
                       <div className="space-y-2">
                         {[
-                          ["Saldo a dividir", cycle.profitToSplit, false],
-                          [`Investidor (${(project.profit_split_pct * 100).toFixed(0)}%)`, cycle.investorShare, true],
-                          [`Empresa (${((1 - project.profit_split_pct) * 100).toFixed(0)}%)`, cycle.companyShare, false],
+                          ["Saldo a dividir", cycle.grossProfit, false],
+                          [`Investidor (${(project.profitSplitPct * 100).toFixed(0)}%)`, cycle.investorShare, true],
+                          [`Empresa (${((1 - project.profitSplitPct) * 100).toFixed(0)}%)`, cycle.companyShare, false],
                         ].map(([label, value, accent]) => (
                           <div key={label as string} className="flex justify-between items-center py-1" style={{ borderBottom: "1px solid #2A2A2A" }}>
                             <span style={{ color: accent ? "#F5C400" : "#A0A0A0", fontSize: "13px", fontFamily: "'Rajdhani', sans-serif", fontWeight: accent ? 700 : 400 }}>{label}</span>

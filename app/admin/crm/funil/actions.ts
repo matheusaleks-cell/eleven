@@ -118,16 +118,16 @@ export async function convertToOrder(leadId: string, data: any) {
         name: data.name,
         email: data.email,
         phone: data.phone,
-        city: data.city,
-        state: data.state,
+        city: data.city ?? undefined,
+        state: data.state ?? "",
       },
       create: {
         name: data.name,
         email: data.email,
         phone: data.phone,
         cpfCnpj: data.taxId || `TEMP-${leadId}`,
-        city: data.city,
-        state: data.state,
+        city: data.city ?? undefined,
+        state: data.state ?? "",
         type: "B2B",
       }
     });
