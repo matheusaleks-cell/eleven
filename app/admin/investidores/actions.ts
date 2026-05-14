@@ -73,7 +73,7 @@ export async function getInvestorDetails(id: string) {
     const investor = await prisma.user.findUnique({
       where: { id },
       include: {
-        projects: {
+        investedProjects: {
           include: {
             cycles: {
               orderBy: { cycleNumber: "asc" }
@@ -89,7 +89,7 @@ export async function getInvestorDetails(id: string) {
     let totalReceived = 0;
     let totalCicles = 0;
 
-    const mappedProjects = investor.projects.map(p => {
+    const mappedProjects = investor.investedProjects.map(p => {
       totalInvested += p.initialCapital;
       
       let projectReceived = 0;
@@ -129,7 +129,7 @@ export async function getInvestorDetails(id: string) {
         totalInvested,
         totalReceived,
         roi: totalInvested > 0 ? ((totalReceived - totalInvested) / totalInvested) * 100 : 0,
-        activeProjects: investor.projects.length,
+        activeProjects: investor.investedProjects.length,
         totalCycles: totalCicles
       },
       projects: mappedProjects
