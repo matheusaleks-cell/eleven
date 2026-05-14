@@ -83,7 +83,7 @@ export function LeadForm({ initialData, onSubmit, onCancel, submitLabel = "Salva
   return (
     <form onSubmit={handleSubmit((data) => {
       const cleanValue = typeof data.value === "string" 
-        ? Number(data.value.replace(/\D/g, "")) / 100 
+        ? Number((data.value as string).replace(/\D/g, "")) / 100 
         : Number(data.value);
       onSubmit({ ...data, value: cleanValue });
     })} className="space-y-8 max-h-[70vh] overflow-y-auto px-2 custom-scrollbar">
