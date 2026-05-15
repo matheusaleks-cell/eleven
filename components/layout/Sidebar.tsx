@@ -57,6 +57,7 @@ const investorNav: NavItem[] = [
   { label: "Meus Projetos", href: "/investidor/projetos",  icon: <FolderKanban size={18} /> },
   { label: "Extrato",       href: "/investidor/extrato",   icon: <CreditCard size={18} /> },
   { label: "Documentos",    href: "/investidor/documentos", icon: <FileText size={18} /> },
+  { label: "Meus Dados",    href: "/investidor/perfil",     icon: <User size={18} /> },
 ];
 
 interface SidebarProps {

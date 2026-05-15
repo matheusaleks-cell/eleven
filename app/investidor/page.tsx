@@ -84,16 +84,23 @@ export default function InvestorDashboard() {
         {/* Welcome Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight mb-2 font-rajdhani uppercase">OLÁ, FRANCISCO</h1>
+            <h1 className="text-3xl font-bold tracking-tight mb-2 font-rajdhani uppercase">OLÁ, {session.name.split(' ')[0]}</h1>
             <p className="text-brand-text-secondary text-sm font-medium uppercase tracking-[0.2em] flex items-center gap-2">
                <ShieldCheck size={14} className="text-brand-accent" /> INVESTIDOR CERTIFICADO · NÍVEL ELITE
             </p>
           </div>
           <div className="flex gap-3">
-             <Button variant="secondary" className="gap-2">
+             <Button 
+               variant="secondary" 
+               className="gap-2"
+               onClick={() => router.push("/investidor/extrato")}
+             >
                <History size={18} /> EXTRATO COMPLETO
              </Button>
-             <Button className="gap-2 shadow-[0_0_15px_rgba(245,196,0,0.2)]">
+             <Button 
+               className="gap-2 shadow-[0_0_15px_rgba(245,196,0,0.2)]"
+               onClick={() => router.push("/investidor/extrato")}
+             >
                <Download size={18} /> RELATÓRIO ANUAL
              </Button>
           </div>
@@ -164,7 +171,11 @@ export default function InvestorDashboard() {
            <div className="flex flex-col gap-4">
               <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-brand-text-muted px-2">Projetos em Execução</h3>
               {(dashboardData?.projects || []).map((project: any) => (
-                <Card key={project.id} className="p-5 border-brand-border hover:border-brand-accent/40 transition-all group cursor-pointer">
+                <Card 
+                  key={project.id} 
+                  className="p-5 border-brand-border hover:border-brand-accent/40 transition-all group cursor-pointer"
+                  onClick={() => router.push(`/investidor/projetos/${project.id}`)}
+                >
                    <div className="flex justify-between items-start mb-4">
                       <div className="w-10 h-10 bg-brand-input rounded flex items-center justify-center text-brand-accent border border-brand-border group-hover:scale-110 transition-transform">
                         <Package size={20} />

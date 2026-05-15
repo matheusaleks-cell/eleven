@@ -23,25 +23,33 @@ export async function getInvestorDashboardData(email: string) {
     let totalYield = 0;
     const activeProjectsCount = investor.investedProjects.filter(p => p.status === "ACTIVE").length;
     
-    // Gráfico de evolução de capital
+    // Gráfico: sempre começa com o aporte inicial de cada projeto
     const chartData: any[] = [];
-    // Mapeando dados formatados para a tela
+
     const formattedProjects = investor.investedProjects.map(project => {
       let projectInvested = project.initialCapital || 0;
       let projectCurrent = projectInvested;
+
+      // Ponto de partida: data de início do projeto (aporte)
+      const startLabel = (project.startDate || project.createdAt).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+      chartData.push({
+        name: startLabel,
+        capital: projectInvested,
+        growth: 0,
+        date: project.startDate || project.createdAt
+      });
       
       project.cycles.forEach(cycle => {
         if (cycle.status === "COMPLETED") {
           projectCurrent += cycle.investorShare || 0;
           totalYield += cycle.investorShare || 0;
           
-          // Add to chart
-          const monthLabel = cycle.createdAt.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+          const monthLabel = cycle.updatedAt.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
           chartData.push({
-            month: monthLabel,
+            name: monthLabel,
             capital: projectCurrent,
             growth: cycle.investorShare || 0,
-            date: cycle.createdAt
+            date: cycle.updatedAt
           });
         }
       });
@@ -60,8 +68,11 @@ export async function getInvestorDashboardData(email: string) {
       };
     });
 
-    // Ordenar gráfico por data cronológica e deduplicar se necessário
+    // Ordenar cronologicamente e remover duplicatas de mesmo label
     chartData.sort((a, b) => a.date.getTime() - b.date.getTime());
+    const uniqueChartData = chartData.filter((item, idx, arr) => 
+      idx === 0 || item.name !== arr[idx - 1].name
+    );
 
     return {
       success: true,
@@ -69,7 +80,7 @@ export async function getInvestorDashboardData(email: string) {
         totalPatrimony,
         totalYield,
         activeProjectsCount,
-        chartData: chartData.length > 0 ? chartData : [{ month: "Hoje", capital: totalPatrimony, growth: 0 }],
+        chartData: uniqueChartData.length > 0 ? uniqueChartData : [{ name: "Aporte Inicial", capital: totalPatrimony, growth: 0 }],
         projects: formattedProjects
       }
     };
@@ -104,7 +115,7 @@ export async function getInvestorStatement(email: string) {
         dataStr: project.startDate ? project.startDate.toLocaleDateString("pt-BR") : project.createdAt.toLocaleDateString("pt-BR"),
         dateObj: project.startDate || project.createdAt,
         descricao: `Aporte de Capital - ${project.name}`,
-        tipo: "ENTRADA", // Para o dashboard, aporte é a base do patrimônio
+        tipo: "APORTE",
         valor: project.initialCapital || 0
       });
     });
@@ -119,7 +130,7 @@ export async function getInvestorStatement(email: string) {
               dataStr: cycle.updatedAt.toLocaleDateString("pt-BR"),
               dateObj: cycle.updatedAt,
               descricao: `Distribuição de Lucro - ${project.name} (${cycle.cycleName})`,
-              tipo: "ENTRADA",
+              tipo: "RENDIMENTO",
               valor: cycle.investorShare
             });
           }
@@ -290,3 +301,55 @@ export async function getCycleSales(cycleId: string) {
     return { success: false, sales: [] };
   }
 }
+
+export async function getInvestorProfile(email: string) {
+  try {
+    const investor = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        cpfCnpj: true,
+        rg: true,
+        profession: true,
+        address: true,
+        bankDetails: true,
+        bankReferences: true,
+        commercialRefs: true,
+        createdAt: true,
+      }
+    });
+
+    if (!investor) throw new Error("Investidor não encontrado");
+
+    return { success: true, data: investor };
+  } catch (error) {
+    console.error("Erro ao buscar perfil do investidor:", error);
+    return { success: false, error: "Falha ao buscar dados" };
+  }
+}
+
+export async function updateMyPassword(email: string, newPassword: string) {
+  try {
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: "A senha deve ter pelo menos 6 caracteres." };
+    }
+    
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return { success: false, error: "Usuário não encontrado." };
+
+    await prisma.user.update({
+      where: { email },
+      data: { password: newPassword },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao atualizar própria senha:", error);
+    return { success: false, error: "Falha ao atualizar senha." };
+  }
+}
+
+
