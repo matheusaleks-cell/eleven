@@ -22,6 +22,9 @@ import {
   Target,
   ShoppingCart,
   Settings2,
+  Calculator,
+  UserPlus,
+  UsersRound,
 } from "lucide-react";
 
 interface NavItem {
@@ -40,7 +43,13 @@ const adminNav: NavItem[] = [
   { label: "Financeiro",   href: "/admin/financeiro", icon: <CreditCard size={18} /> },
   { label: "Loja",         href: "/loja",             icon: <ShoppingCart size={18} /> },
   { label: "Projetos",     href: "/admin/projetos",   icon: <FolderKanban size={18} /> },
+  { label: "Simulador",    href: "/admin/simulador",  icon: <Calculator size={18} /> },
   { label: "Relatórios",   href: "/admin/relatorios", icon: <FileBarChart2 size={18} /> },
+];
+
+const investorSubNav: NavItem[] = [
+  { label: "Lista de Investidores", href: "/admin/investidores",      icon: <UsersRound size={16} /> },
+  { label: "Cadastrar Novo",        href: "/admin/investidores/novo", icon: <UserPlus size={16} /> },
 ];
 
 const investorNav: NavItem[] = [
@@ -58,7 +67,7 @@ interface SidebarProps {
   onMobileClose?: () => void;
 }
 
-function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, settingsOpen, setSettingsOpen, isDesktop }: any) {
+function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, settingsOpen, setSettingsOpen, investorsOpen, setInvestorsOpen, isDesktop }: any) {
   const mainNav = role === "ADMIN" ? adminNav : investorNav;
 
   const handleLogout = () => {
@@ -137,6 +146,26 @@ function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, se
         {role === "ADMIN" && (
           <>
             <div style={{ height: 1, background: "#242424", margin: "12px 8px" }} />
+            {/* Submenu Investidores */}
+            <button
+              onClick={() => setInvestorsOpen(!investorsOpen)}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", width: "100%", background: "transparent", border: "none",
+                borderLeft: "2px solid transparent", color: investorsOpen ? "#F5C400" : "#A0A0A0", cursor: "pointer", fontFamily: "'Rajdhani', sans-serif", fontSize: "15px"
+              }}
+            >
+              <UsersRound size={18} style={{ color: investorsOpen ? "#F5C400" : "#555" }} />
+              <span style={{ flex: 1, textAlign: "left" }}>Investidores</span>
+              <ChevronRight size={14} style={{ transform: investorsOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", color: "#555" }} />
+            </button>
+            {investorsOpen && (
+              <div style={{ paddingLeft: 16 }}>
+                {investorSubNav.map((item) => (
+                  <NavLink key={item.href} item={item} />
+                ))}
+              </div>
+            )}
+            {/* Submenu Configurações */}
             <button
               onClick={() => setSettingsOpen(!settingsOpen)}
               style={{
@@ -181,6 +210,7 @@ function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, se
 export function Sidebar({ role, userName, userEmail, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [investorsOpen, setInvestorsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
 
@@ -190,12 +220,13 @@ export function Sidebar({ role, userName, userEmail, mobileOpen = false, onMobil
     checkScreen();
     window.addEventListener("resize", checkScreen);
     if (pathname.startsWith("/admin/configuracoes")) setSettingsOpen(true);
+    if (pathname.startsWith("/admin/investidores")) setInvestorsOpen(true);
     return () => window.removeEventListener("resize", checkScreen);
   }, [pathname]);
 
   if (!mounted) return null;
 
-  const contentProps = { role, userName, userEmail, onMobileClose, pathname, settingsOpen, setSettingsOpen, isDesktop };
+  const contentProps = { role, userName, userEmail, onMobileClose, pathname, settingsOpen, setSettingsOpen, investorsOpen, setInvestorsOpen, isDesktop };
 
   return (
     <>

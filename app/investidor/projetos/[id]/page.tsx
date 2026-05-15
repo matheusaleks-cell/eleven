@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
@@ -13,7 +13,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
-export default function InvestorProjectDetailPage({ params }: { params: { id: string } }) {
+export default function InvestorProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [project, setProject] = useState<any>(null);
@@ -29,7 +30,7 @@ export default function InvestorProjectDetailPage({ params }: { params: { id: st
     const parsed = JSON.parse(s);
     setSession(parsed);
 
-    getInvestorProjectDetails(params.id, parsed.email).then(res => {
+    getInvestorProjectDetails(id, parsed.email).then(res => {
       if (res.success && res.project) {
         setProject(res.project);
         // Expand current cycle if available

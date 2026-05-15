@@ -6,13 +6,38 @@ import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { TrendingUp, Wallet, ArrowUpRight, History, Package, ShieldCheck, Download, CreditCard, ChevronRight } from "lucide-react";
+import {
+  TrendingUp,
+  Wallet,
+  ArrowUpRight,
+  History,
+  Package,
+  ShieldCheck,
+  Download,
+  CreditCard,
+  ChevronRight,
+  Layers,
+  Zap,
+  ArrowRight,
+} from "lucide-react";
 import { CapitalGrowthChart } from "@/components/charts/CapitalGrowthChart";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { cn } from "@/lib/utils";
+import { projectFutureBatches, RIFLE_22_PRESET } from "@/lib/calculations";
 
 import { getInvestorDashboardData } from "./actions";
 
+// Projeção calculada uma vez com as premissas padrão do Rifle .22
+const BATCH_PROJECTION = projectFutureBatches(RIFLE_22_PRESET);
+
+function fmtBRL(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+}
 
 export default function InvestorDashboard() {
   const router = useRouter();
@@ -25,12 +50,8 @@ export default function InvestorDashboard() {
     if (s) {
       const parsed = JSON.parse(s);
       setSession(parsed);
-      
-      // Fetch real data
       getInvestorDashboardData(parsed.email).then(res => {
-        if (res.success) {
-          setDashboardData(res.data);
-        }
+        if (res.success) setDashboardData(res.data);
         setLoading(false);
       });
     } else {
@@ -51,9 +72,15 @@ export default function InvestorDashboard() {
 
   if (!session) return null;
 
+  const lastBatch = BATCH_PROJECTION[BATCH_PROJECTION.length - 1];
+  const totalInvestorEarnings = lastBatch?.cumulativeInvestorEarnings ?? 0;
+  const initialAporte = BATCH_PROJECTION[0]?.totalImportCostBRL ?? 1;
+  const globalROI = (totalInvestorEarnings / initialAporte) * 100;
+
   return (
     <DashboardLayout role="INVESTOR" userName={session.name} userEmail={session.email}>
       <div className="flex flex-col gap-10 animate-fade-in pb-10 px-4 md:px-0">
+
         {/* Welcome Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
@@ -80,10 +107,14 @@ export default function InvestorDashboard() {
                 <Wallet className="text-brand-accent" size={20} />
              </div>
              <div className="flex flex-col">
-                <span className="text-3xl font-bold font-mono text-white tracking-tighter">R$ {dashboardData?.totalPatrimony?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}</span>
+                <span className="text-3xl font-bold font-mono text-white tracking-tighter">
+                  R$ {dashboardData?.totalPatrimony?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}
+                </span>
                 <div className="flex items-center gap-1.5 mt-2 text-brand-success">
                    <ArrowUpRight size={16} strokeWidth={3} />
-                   <span className="text-xs font-bold uppercase tracking-wider">+{dashboardData?.totalYield?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}</span>
+                   <span className="text-xs font-bold uppercase tracking-wider">
+                     +{dashboardData?.totalYield?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}
+                   </span>
                 </div>
              </div>
           </Card>
@@ -94,8 +125,12 @@ export default function InvestorDashboard() {
                 <TrendingUp className="text-brand-success" size={20} />
              </div>
              <div className="flex flex-col">
-                <span className="text-3xl font-bold font-mono text-white tracking-tighter">R$ {dashboardData?.totalYield?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}</span>
-                <p className="text-[10px] text-brand-text-muted mt-2 uppercase font-bold tracking-widest">Baseado em {dashboardData?.activeProjectsCount || 0} projetos ativos</p>
+                <span className="text-3xl font-bold font-mono text-white tracking-tighter">
+                  R$ {dashboardData?.totalYield?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || "0,00"}
+                </span>
+                <p className="text-[10px] text-brand-text-muted mt-2 uppercase font-bold tracking-widest">
+                  Baseado em {dashboardData?.activeProjectsCount || 0} projetos ativos
+                </p>
              </div>
           </Card>
 
@@ -113,7 +148,6 @@ export default function InvestorDashboard() {
 
         {/* Chart & Projects */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-           {/* Chart */}
            <Card className="lg:col-span-2 p-0 overflow-hidden bg-brand-surface/20">
               <div className="p-6 border-b border-brand-border flex items-center justify-between">
                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white">Evolução do Capital</h3>
@@ -127,7 +161,6 @@ export default function InvestorDashboard() {
               </div>
            </Card>
 
-           {/* Active Projects List */}
            <div className="flex flex-col gap-4">
               <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-brand-text-muted px-2">Projetos em Execução</h3>
               {(dashboardData?.projects || []).map((project: any) => (
@@ -157,12 +190,133 @@ export default function InvestorDashboard() {
                    </div>
                 </Card>
               ))}
-              
               <Button variant="secondary" className="w-full mt-2 text-[10px] py-3 border-dashed opacity-60 hover:opacity-100 uppercase tracking-[0.2em]">
                 NOVA OPORTUNIDADE DE INVESTIMENTO
               </Button>
            </div>
         </div>
+
+        {/* ── PROJEÇÃO DE CRESCIMENTO — ESCALADA DE LOTES ── */}
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-white flex items-center gap-2">
+                <Zap size={16} className="text-brand-accent" />
+                Projeção de Crescimento — Escalada de Lotes
+              </h2>
+              <p className="text-[10px] text-brand-text-muted mt-1 uppercase tracking-wider">
+                Rifle .22LR · Reinvestimento automático: Capital + Lucro do Investidor
+              </p>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded border border-brand-accent/20 bg-brand-accent/5 w-fit">
+              <Layers size={12} className="text-brand-accent" />
+              <span className="text-[10px] font-bold text-brand-accent uppercase tracking-wider">
+                ≈ {lastBatch?.investorROI.toFixed(1)}% ROI / lote
+              </span>
+            </div>
+          </div>
+
+          {/* Cards de lote */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {BATCH_PROJECTION.map((b, idx) => {
+              const maxQty = Math.max(...BATCH_PROJECTION.map((x) => x.quantity));
+              const heightPct = maxQty > 0 ? (b.quantity / maxQty) * 100 : 0;
+              const isFirst = b.batchNumber === 1;
+
+              return (
+                <Card
+                  key={b.batchNumber}
+                  className={cn(
+                    "p-4 flex flex-col gap-3 transition-all group cursor-default",
+                    isFirst
+                      ? "border-brand-accent/50 bg-brand-accent/5"
+                      : "border-brand-border hover:border-brand-accent/20"
+                  )}
+                >
+                  {/* Badge */}
+                  <div className="flex items-center justify-between">
+                    <span className={cn(
+                      "text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded",
+                      isFirst
+                        ? "bg-brand-accent text-brand-bg"
+                        : "bg-brand-input text-brand-text-muted border border-brand-border"
+                    )}>
+                      LOTE {b.batchNumber}
+                    </span>
+                    {isFirst && (
+                      <span className="text-[8px] font-bold text-brand-accent uppercase tracking-wider animate-pulse">ATUAL</span>
+                    )}
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-1 rounded-full bg-brand-border overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${heightPct}%`,
+                        background: "linear-gradient(90deg, #F5C400, #FFD740)",
+                      }}
+                    />
+                  </div>
+
+                  {/* Métricas */}
+                  <div className="flex flex-col gap-2">
+                    <div>
+                      <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest mb-0.5">Unidades</p>
+                      <p className="text-xl font-bold font-mono text-white">{b.quantity}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest mb-0.5">Faturamento</p>
+                      <p className="text-sm font-bold font-mono text-brand-success">{fmtBRL(b.grossRevenue)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest mb-0.5">Seu Lucro</p>
+                      <p className="text-sm font-bold font-mono text-brand-accent">{fmtBRL(b.investorShare)}</p>
+                    </div>
+                  </div>
+
+                  {idx < BATCH_PROJECTION.length - 1 && (
+                    <div className="hidden md:flex justify-end">
+                      <ArrowRight size={12} className="text-brand-text-muted group-hover:text-brand-accent transition-colors" />
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Resumo da projeção */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-brand-border bg-brand-surface/30">
+              <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/30 flex items-center justify-center shrink-0">
+                <Package size={14} className="text-brand-accent" />
+              </div>
+              <div>
+                <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest">Lote {BATCH_PROJECTION.length} (final)</p>
+                <p className="text-base font-bold text-white">{lastBatch?.quantity ?? "–"} rifles</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-brand-success/20 bg-brand-success/5">
+              <div className="w-8 h-8 rounded-full bg-brand-success/10 border border-brand-success/30 flex items-center justify-center shrink-0">
+                <TrendingUp size={14} className="text-brand-success" />
+              </div>
+              <div>
+                <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest">Ganho Acumulado</p>
+                <p className="text-base font-bold text-brand-success">{fmtBRL(totalInvestorEarnings)}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-4 rounded-lg border border-brand-accent/20 bg-brand-accent/5">
+              <div className="w-8 h-8 rounded-full bg-brand-accent/10 border border-brand-accent/30 flex items-center justify-center shrink-0">
+                <Zap size={14} className="text-brand-accent" />
+              </div>
+              <div>
+                <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest">ROI Total Projetado</p>
+                <p className="text-base font-bold text-brand-accent">{globalROI.toFixed(1)}%</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </DashboardLayout>
   );

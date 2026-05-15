@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -19,7 +19,8 @@ import { getTaxConfigs } from "../../configuracoes/actions";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 
-export default function ProjectDetailPage({ params }: { params: { id: string } }) {
+export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
   const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
@@ -66,7 +67,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
   async function fetchProject() {
     setLoading(true);
     try {
-      const data = await getProjectById(params.id);
+      const data = await getProjectById(id);
       if (data) {
         setProject(data);
         fetchDocs(data.id);
@@ -187,7 +188,7 @@ export default function ProjectDetailPage({ params }: { params: { id: string } }
     }
   };
 
-  if (!session || !project) return null;
+  if (!session || !project || loading) return null;
 
   const isAdmin = session.role === "ADMIN";
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Plus, ArrowLeft, Shield, Landmark, FileText, Calendar } from "lucide-react";
 import Link from "next/link";
@@ -12,6 +12,8 @@ import { maskCurrency } from "@/lib/masks";
 
 export default function AdminNewProjectPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const preselectedInvestorId = searchParams.get("investorId");
   const [investors, setInvestors] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [session, setSession] = useState<any>(null);
@@ -58,13 +60,32 @@ export default function AdminNewProjectPage() {
     const parsed = JSON.parse(s);
     if (parsed.role !== "ADMIN") { router.push("/investor"); return; }
     setSession(parsed);
-    
     fetchInvestors();
   }, []);
 
   async function fetchInvestors() {
     const data = await getInvestors();
     setInvestors(data);
+    // Auto-selecionar investidor se vier da URL
+    if (preselectedInvestorId) {
+      const inv = data.find((i: any) => i.id === preselectedInvestorId);
+      if (inv) {
+        setForm(prev => ({
+          ...prev,
+          investorId: inv.id,
+          investorName: inv.name,
+          email: inv.email || "",
+          phone: inv.phone || "",
+          cpfCnpj: inv.cpfCnpj || "",
+          rg: inv.rg || "",
+          profession: inv.profession || "",
+          address: inv.address || "",
+          bankDetails: inv.bankDetails || "",
+          bankReferences: inv.bankReferences || "",
+          commercialRefs: inv.commercialRefs || "",
+        }));
+      }
+    }
   }
 
   // Preencher dados ao selecionar investidor

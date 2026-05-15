@@ -8,7 +8,7 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -35,6 +35,7 @@ model User {
   salesOrders      SalesOrder[]        @relation("OrderSeller")
   weaponsMapped    WeaponMap[]         @relation("CheckerUser")
   weaponsSold      WeaponMap[]         @relation("SellerUser")
+  documents        Document[]          @relation("UserDocuments")
 
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -454,6 +455,9 @@ model Document {
 
   lotId           String?            @map("lot_id")
   importLot       ImportLot?         @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  userId          String?            @map("user_id")
+  user            User?              @relation("UserDocuments", fields: [userId], references: [id], onDelete: Cascade)
   
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
