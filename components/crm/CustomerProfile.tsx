@@ -5,20 +5,227 @@ import { useRouter } from "next/navigation";
 import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { 
-  User, Building2, Mail, Phone, MapPin, ShoppingBag, 
+import {
+  User, Building2, Mail, Phone, MapPin, ShoppingBag,
   Clock, FileText, Download, ExternalLink, ShieldCheck,
   TrendingUp, CreditCard, Calendar, Plus, Printer,
-  FileText as FileIcon
+  FileText as FileIcon, Trash2, Upload
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { uploadCustomerDocument, getDocumentContent } from "@/app/admin/crm/clientes/actions";
+import { uploadCustomerDocument, getDocumentContent, deleteCustomerDocument } from "@/app/admin/crm/clientes/actions";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { generateAnexoP } from "./AnexoPGenerator";
 import { SaleModal } from "./SaleModal";
 
 
+
+const REQUIRED_DOC_TYPES = [
+  { key: "CR", label: "Certificado de Registro (CR)" },
+  { key: "CNPJ", label: "Comprovante CNPJ" },
+  { key: "COMPROVANTE_ENDERECO", label: "Comprovante de Endereço" },
+  { key: "CNH_RESPONSAVEL", label: "CNH do Responsável" },
+];
+
+function DocsTab({ customer, onRefresh, handleDownload }: {
+  customer: any;
+  onRefresh?: () => void;
+  handleDownload: (id: string, name: string) => void;
+}) {
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const triggerUpload = (docKey: string) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf,.jpg,.jpeg,.png,.webp";
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      setUploadingKey(docKey);
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target?.result as string;
+        const res = await uploadCustomerDocument(customer.id, {
+          name: file.name,
+          type: file.type.split("/")[1]?.toUpperCase() || "PDF",
+          category: docKey,
+          size: (file.size / 1024 / 1024).toFixed(2) + " MB",
+          base64Data: base64,
+        });
+        setUploadingKey(null);
+        if (res.success) {
+          toast.success("Documento enviado com sucesso!");
+          if (onRefresh) onRefresh();
+        } else {
+          toast.error("Erro ao enviar documento.");
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleDelete = async (docId: string, docName: string) => {
+    setDeletingId(docId);
+    const res = await deleteCustomerDocument(docId);
+    setDeletingId(null);
+    if (res.success) {
+      toast.success(`"${docName}" excluído.`);
+      if (onRefresh) onRefresh();
+    } else {
+      toast.error("Erro ao excluir documento.");
+    }
+  };
+
+  const getDocsByKey = (key: string) =>
+    (customer.documents || []).filter((d: any) => d.category === key);
+
+  const otherDocs = (customer.documents || []).filter(
+    (d: any) => !REQUIRED_DOC_TYPES.some((t) => t.key === d.category)
+  );
+
+  return (
+    <div className="space-y-4 animate-fade-in">
+      {/* Required document slots */}
+      <div className="space-y-3">
+        <h3 className="text-xs font-black text-white uppercase tracking-widest">Documentos Obrigatórios</h3>
+        {REQUIRED_DOC_TYPES.map((docType) => {
+          const docs = getDocsByKey(docType.key);
+          const uploaded = docs.length > 0;
+          return (
+            <div key={docType.key} className={cn(
+              "p-4 rounded-lg border transition-all",
+              uploaded ? "bg-brand-success/5 border-brand-success/30" : "bg-brand-surface/30 border-brand-border"
+            )}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    "w-6 h-6 rounded flex items-center justify-center border",
+                    uploaded ? "bg-brand-success border-brand-success text-black" : "border-brand-border"
+                  )}>
+                    {uploaded && <ShieldCheck size={12} />}
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-black text-white uppercase tracking-tight">{docType.label}</p>
+                    {docs.map((d: any) => (
+                      <p key={d.id} className="text-[10px] text-brand-text-muted font-bold">{d.name} • {d.size}</p>
+                    ))}
+                    {!uploaded && (
+                      <p className="text-[10px] text-brand-text-muted font-bold">Não enviado</p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+                    disabled={uploadingKey === docType.key}
+                    onClick={() => triggerUpload(docType.key)}
+                  >
+                    <Upload size={12} />
+                    {uploadingKey === docType.key ? "Enviando..." : uploaded ? "Substituir" : "Enviar"}
+                  </Button>
+                  {docs.map((d: any) => (
+                    <div key={d.id} className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => handleDownload(d.id, d.name)}
+                      >
+                        <Download size={14} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-brand-danger hover:bg-brand-danger/10"
+                        disabled={deletingId === d.id}
+                        onClick={() => handleDelete(d.id, d.name)}
+                      >
+                        <Trash2 size={14} />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Other documents */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black text-white uppercase tracking-widest">Outros Documentos</h3>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-2 text-[10px] font-bold uppercase tracking-wider"
+            disabled={uploadingKey === "OUTROS"}
+            onClick={() => triggerUpload("OUTROS")}
+          >
+            <Plus size={14} /> Adicionar
+          </Button>
+        </div>
+        {otherDocs.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {otherDocs.map((doc: any) => (
+              <div key={doc.id} className="p-4 bg-brand-surface/30 border border-brand-border rounded-lg flex items-center justify-between group hover:border-brand-accent/50 transition-all">
+                <div>
+                  <p className="text-[11px] font-black text-white uppercase tracking-tight">{doc.category}</p>
+                  <p className="text-[10px] text-brand-text-muted font-bold">{doc.name} • {doc.size}</p>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleDownload(doc.id, doc.name)}>
+                    <Download size={14} />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-brand-danger hover:bg-brand-danger/10"
+                    disabled={deletingId === doc.id}
+                    onClick={() => handleDelete(doc.id, doc.name)}
+                  >
+                    <Trash2 size={14} />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 bg-brand-input/30 border border-dashed border-brand-border rounded-xl text-center">
+            <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
+              Nenhum documento adicional.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Compliance Checklist */}
+      <Card className="bg-brand-accent/5 border-brand-accent/20 p-4">
+        <h4 className="text-[10px] font-black text-brand-accent uppercase tracking-widest mb-3">Checklist de Conformidade</h4>
+        <div className="grid grid-cols-2 gap-3">
+          {REQUIRED_DOC_TYPES.map((item) => {
+            const isUploaded = (customer.documents || []).some((d: any) => d.category === item.key);
+            return (
+              <div key={item.key} className="flex items-center gap-2 text-[10px] font-bold text-white/80">
+                <div className={cn(
+                  "w-4 h-4 rounded flex items-center justify-center border flex-shrink-0",
+                  isUploaded ? "bg-brand-success border-brand-success text-black" : "border-brand-border"
+                )}>
+                  {isUploaded && <ShieldCheck size={10} />}
+                </div>
+                {item.label}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
 
 interface CustomerProfileProps {
   customer: any;
@@ -257,129 +464,11 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
           )}
 
           {activeTab === "docs" && (
-             <div className="space-y-4 animate-fade-in">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-xs font-black text-white uppercase tracking-widest">Documentos e Certidões B2B</h3>
-                  <div className="flex gap-2">
-                    <select 
-                      id="doc-category"
-                      className="bg-brand-input border border-brand-border rounded px-3 py-1 text-[10px] font-bold text-white uppercase outline-none focus:border-brand-accent"
-                    >
-                      <option value="CARTÃO CNPJ">CARTÃO CNPJ</option>
-                      <option value="CONTRATO SOCIAL">CONTRATO SOCIAL</option>
-                      <option value="INSCRIÇÃO ESTADUAL">INSCRIÇÃO ESTADUAL</option>
-                      <option value="ID RESPONSÁVEL">IDENTIDADE RESPONSÁVEL</option>
-                      <option value="OUTROS">OUTROS</option>
-                    </select>
-                    
-                    <input 
-                      type="file" 
-                      id="doc-upload" 
-                      className="hidden" 
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        
-                        const categorySelect = document.getElementById('doc-category') as HTMLSelectElement;
-                        const category = categorySelect.value;
-                        
-                        const reader = new FileReader();
-                        reader.onload = async (event) => {
-                          const base64 = event.target?.result as string;
-                          const loadingToast = toast.loading(`Enviando ${category}...`);
-                          
-                          const res = await uploadCustomerDocument(customer.id, {
-                            name: file.name,
-                            type: file.type.split('/')[1].toUpperCase(),
-                            category: category,
-                            size: (file.size / 1024 / 1024).toFixed(2) + " MB",
-                            base64Data: base64
-                          });
-                          
-                          toast.dismiss(loadingToast);
-                          
-                          if (res.success) {
-                            toast.success(`${category} enviado com sucesso!`);
-                            if (onRefresh) onRefresh();
-                          } else {
-                            toast.error("Erro ao enviar documento.");
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }}
-                    />
-                    <Button 
-                      variant="secondary" 
-                      size="sm" 
-                      className="gap-2 text-[10px] font-bold uppercase tracking-wider"
-                      onClick={() => document.getElementById('doc-upload')?.click()}
-                    >
-                      <Plus size={14} /> ENVIAR
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[250px] overflow-y-auto pr-2 custom-scrollbar">
-                  {customer.documents && customer.documents.length > 0 ? (
-                    customer.documents.map((doc: any) => (
-                      <div key={doc.id} className="p-4 bg-brand-surface/30 border border-brand-border rounded-lg flex items-center justify-between group hover:border-brand-accent transition-all">
-                         <div>
-                            <p className="text-[11px] font-black text-white uppercase tracking-tight">{doc.category}</p>
-                            <p className="text-[10px] text-brand-text-muted font-bold">{doc.name} • {doc.size}</p>
-                         </div>
-                         <div className="flex items-center gap-2">
-                            <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-brand-success/20 text-brand-success">
-                              OK
-                            </span>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-8 w-8 p-0"
-                              onClick={() => handleDownload(doc.id, doc.name)}
-                            >
-                               <Download size={14} />
-                            </Button>
-                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="col-span-2 p-12 bg-brand-input/30 border border-dashed border-brand-border rounded-xl text-center">
-                       <ShieldCheck size={48} className="mx-auto text-brand-text-muted mb-4 opacity-20" />
-                       <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
-                         Nenhum documento anexado para este cliente B2B.
-                       </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Checklist B2B Dinâmico */}
-                <Card className="bg-brand-accent/5 border-brand-accent/20 p-4 mt-6">
-                   <h4 className="text-[10px] font-black text-brand-accent uppercase tracking-widest mb-3">Checklist de Conformidade B2B</h4>
-                   <div className="grid grid-cols-2 gap-3">
-                      {[
-                        { name: "Cartão CNPJ", key: "CARTÃO CNPJ" },
-                        { name: "Contrato Social", key: "CONTRATO SOCIAL" },
-                        { name: "Inscrição Estadual", key: "INSCRIÇÃO ESTADUAL" },
-                        { name: "Identidade do Responsável", key: "ID RESPONSÁVEL" },
-                      ].map((item, i) => {
-                        const isUploaded = customer.documents?.some((d: any) => d.category === item.key);
-                        return (
-                          <div key={i} className="flex items-center gap-2 text-[10px] font-bold text-white/80">
-                             <div className={cn(
-                               "w-4 h-4 rounded flex items-center justify-center border",
-                               isUploaded ? "bg-brand-success border-brand-success text-black" : "border-brand-border"
-                             )}>
-                                {isUploaded && <ShieldCheck size={10} />}
-                             </div>
-                             {item.name}
-                          </div>
-                        );
-                      })}
-                   </div>
-                </Card>
-             </div>
-
-
+            <DocsTab
+              customer={customer}
+              onRefresh={onRefresh}
+              handleDownload={handleDownload}
+            />
           )}
         </div>
 

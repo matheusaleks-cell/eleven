@@ -78,6 +78,7 @@ export async function createDirectSale(data: {
         sellerId,
         totalValue: data.totalValue,
         status: data.status || "PAGO",
+        paymentMethod: data.paymentMethod || null,
         products: JSON.stringify(data.items),
         notes: data.notes,
         proposedDate: new Date(),

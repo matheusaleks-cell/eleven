@@ -16,6 +16,8 @@ async function main() {
   await prisma.customer.deleteMany();
   await prisma.supplier.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.taxConfig.deleteMany();
+  await prisma.financialDistributionRule.deleteMany();
 
   console.log("🌱 Semeando Lógica Financeira Exata (VEZIR ARMS VR12 PUMP)...");
 
@@ -188,6 +190,39 @@ async function main() {
       status: "PAGO",
       paymentMethod: "PIX",
       proposedDate: new Date("2024-02-15"),
+    }
+  });
+
+  // 7. Default TaxConfig (Espingarda Importada - Turquia)
+  await prisma.taxConfig.create({
+    data: {
+      name: "Espingarda Importada (Padrão)",
+      description: "Alíquotas padrão para espingardas importadas da Turquia — NCM 9303.20.00",
+      ii: 20,             // Imposto de Importação 20%
+      ipi: 0,             // IPI isento (arma esportiva)
+      pisPasep: 2.1,
+      cofins: 9.65,
+      icmsImport: 12,     // ICMS na importação
+      icmsSale: 12,       // ICMS na venda
+      simplesNacional: 0, // Regime Simples Nacional (separado)
+      siscomexFixed: 0,
+      isDefault: true,
+    }
+  });
+
+  // 8. Default FinancialDistributionRule
+  await prisma.financialDistributionRule.create({
+    data: {
+      name: "Regra Padrão Eleven Firearms",
+      reinvestmentPct: 50,
+      investorPct: 50,
+      companyPct: 35,
+      reservePct: 5,
+      operationalCost: 15,
+      salesCommission: 3,
+      minBalanceNewPurchase: 50000,
+      newBatchCriteria: "MANUAL",
+      isActive: true,
     }
   });
 

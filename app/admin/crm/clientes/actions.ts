@@ -69,7 +69,8 @@ export async function getCustomers(page = 1, limit = 20, search = "", searchFiel
         id: d.id,
         name: d.name,
         category: d.category,
-        type: d.type
+        type: d.type,
+        size: d.size || 0,
       }))
     }));
 
@@ -296,5 +297,16 @@ export async function getDocumentContent(documentId: string) {
   } catch (error) {
     console.error("Erro ao buscar conteúdo do documento:", error);
     return null;
+  }
+}
+
+export async function deleteCustomerDocument(documentId: string) {
+  try {
+    await prisma.document.delete({ where: { id: documentId } });
+    revalidatePath("/admin/crm/clientes");
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao deletar documento:", error);
+    return { success: false, error: "Falha ao excluir documento." };
   }
 }

@@ -95,6 +95,29 @@ export async function createImportLot(data: any) {
       return { success: false, error: "Nenhum fornecedor cadastrado no sistema." };
     }
 
+    // Read tax rate from TaxConfig (sum of individual rates); fall back to 35%
+    let taxRate = 0.35;
+    try {
+      const taxConfig = await prisma.taxConfig.findFirst({
+        where: { isDefault: true },
+      });
+      if (taxConfig) {
+        taxRate = (
+          Number(taxConfig.ii) +
+          Number(taxConfig.ipi) +
+          Number(taxConfig.pisPasep) +
+          Number(taxConfig.cofins) +
+          Number(taxConfig.icmsImport) +
+          Number(taxConfig.simplesNacional)
+        ) / 100;
+      }
+    } catch {
+      // TaxConfig table may not be seeded yet
+    }
+
+    const fob = Number(data.fobTotal) || 0;
+    const exchangeRate = Number(data.exchangeRate) || 5.25;
+
     const lot = await prisma.importLot.create({
       data: {
         batchCode: `LOT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -102,16 +125,16 @@ export async function createImportLot(data: any) {
         countryOrigin: data.originCountry || "Turquia",
         purchaseDate: new Date(),
         currency: data.currency || "USD",
-        exchangeRate: Number(data.exchangeRate) || 5.25,
-        fobValue: Number(data.fobTotal) || 0,
+        exchangeRate,
+        fobValue: fob,
         freight: Number(data.freightTotal) || 0,
         insurance: Number(data.insuranceTotal) || 0,
-        customsTaxes: (Number(data.fobTotal) || 0) * 0.35, // Estimativa inicial
+        customsTaxes: fob * taxRate,
         customsFees: 2500,
-        totalCostNationalized: (Number(data.fobTotal) || 0) * (Number(data.exchangeRate) || 5.25) * 1.48,
+        totalCostNationalized: fob * exchangeRate * (1 + taxRate),
         quantityItems: data.items?.reduce((acc: number, i: any) => acc + i.quantity, 0) || 0,
         status: "PEDIDO_FEITO",
-        expectedMarginPct: 0.35,
+        expectedMarginPct: taxRate,
         investmentProjectId: data.projectId || null,
         products: {
           connect: data.items?.map((i: any) => ({ id: i.productId })) || []
