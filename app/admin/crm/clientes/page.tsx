@@ -244,13 +244,19 @@ export default function ClientesPage() {
                    className="pl-10 h-11" 
                    placeholder="Buscar por nome, CPF/CNPJ ou e-mail..." 
                    value={search}
-                   onChange={(e) => setSearch(e.target.value)}
+                   onChange={(e) => {
+                     setSearch(e.target.value);
+                     setCurrentPage(1);
+                   }}
                  />
                </div>
                <select 
                  className="h-11 bg-brand-surface border border-brand-border rounded-military px-4 text-xs font-bold text-white uppercase outline-none focus:border-brand-accent"
                  value={filterState}
-                 onChange={(e) => setFilterState(e.target.value)}
+                 onChange={(e) => {
+                   setFilterState(e.target.value);
+                   setCurrentPage(1);
+                 }}
                >
                  <option value="ALL">TODOS OS ESTADOS</option>
                  {states.map(s => <option key={s} value={s}>{s}</option>)}
@@ -258,9 +264,48 @@ export default function ClientesPage() {
             </div>
 
             <div className="flex gap-2">
-               <div className="px-4 py-2 rounded border text-[10px] font-black uppercase tracking-widest bg-brand-accent text-black border-brand-accent shadow-[0_0_15px_rgba(245,196,0,0.3)]">
+               <button
+                 onClick={() => {
+                   setFilterType("ALL");
+                   setCurrentPage(1);
+                 }}
+                 className={cn(
+                   "px-4 py-2 rounded border text-[10px] font-black uppercase tracking-widest transition-all",
+                   filterType === "ALL"
+                     ? "bg-brand-accent text-black border-brand-accent shadow-[0_0_15px_rgba(245,196,0,0.3)] font-black"
+                     : "bg-brand-surface/30 text-brand-text-muted border-brand-border hover:border-brand-accent hover:text-white"
+                 )}
+               >
+                 TODOS OS CLIENTES
+               </button>
+               <button
+                 onClick={() => {
+                   setFilterType("B2B");
+                   setCurrentPage(1);
+                 }}
+                 className={cn(
+                   "px-4 py-2 rounded border text-[10px] font-black uppercase tracking-widest transition-all",
+                   filterType === "B2B"
+                     ? "bg-brand-accent text-black border-brand-accent shadow-[0_0_15px_rgba(245,196,0,0.3)] font-black"
+                     : "bg-brand-surface/30 text-brand-text-muted border-brand-border hover:border-brand-accent hover:text-white"
+                 )}
+               >
                  PESSOA JURÍDICA (B2B)
-               </div>
+               </button>
+               <button
+                 onClick={() => {
+                   setFilterType("B2C");
+                   setCurrentPage(1);
+                 }}
+                 className={cn(
+                   "px-4 py-2 rounded border text-[10px] font-black uppercase tracking-widest transition-all",
+                   filterType === "B2C"
+                     ? "bg-brand-accent text-black border-brand-accent shadow-[0_0_15px_rgba(245,196,0,0.3)] font-black"
+                     : "bg-brand-surface/30 text-brand-text-muted border-brand-border hover:border-brand-accent hover:text-white"
+                 )}
+               >
+                 PESSOA FÍSICA (B2C)
+               </button>
             </div>
         </div>
 
