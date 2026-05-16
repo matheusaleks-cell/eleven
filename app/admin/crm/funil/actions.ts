@@ -3,21 +3,45 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
-export async function getLeads() {
+export async function getLeads(page = 1, limit = 20, search = "", priority = "ALL", source = "ALL", showArchived = false) {
   try {
-    const leads = await prisma.lead.findMany({
-      include: {
-        logs: {
-          orderBy: { createdAt: "desc" }
-        }
-      },
-      orderBy: { createdAt: "desc" },
-    });
-    console.log(`[getLeads] Encontrados ${leads.length} leads.`);
-    return leads;
+    const skip = (page - 1) * limit;
+    const where: any = {
+      isArchived: showArchived,
+    };
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { email: { contains: search } },
+        { phone: { contains: search } },
+        { taxId: { contains: search } },
+      ];
+    }
+
+    if (priority !== "ALL") where.priority = priority;
+    if (source !== "ALL") where.source = source;
+
+    const [leads, total] = await Promise.all([
+      prisma.lead.findMany({
+        where,
+        include: {
+          logs: {
+            orderBy: { createdAt: "desc" }
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.lead.count({ where })
+    ]);
+
+    console.log(`[getLeads] Encontrados ${leads.length} de ${total} leads.`);
+    return { leads, total };
   } catch (error) {
     console.error("Erro crítico ao buscar leads:", error);
-    return [];
+    return { leads: [], total: 0 };
   }
 }
 

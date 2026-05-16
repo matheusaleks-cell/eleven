@@ -181,6 +181,10 @@ export default function CRMFunnelPage() {
   const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [sourceFilter, setSourceFilter] = useState("ALL");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 20;
+
   const [editingLead, setEditingLead] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [showArchived, setShowArchived] = useState(false);
@@ -191,25 +195,30 @@ export default function CRMFunnelPage() {
   const refreshLeads = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getLeads();
-      if (data.length === 0) {
+      const data = await getLeads(currentPage, itemsPerPage, search, priorityFilter, sourceFilter, showArchived);
+      if (data.leads.length === 0 && search === "" && priorityFilter === "ALL" && sourceFilter === "ALL" && !showArchived && currentPage === 1) {
+        // Se estiver vazio no banco, popular com iniciais
         for (const initialLead of INITIAL_LEADS) {
           await createLead({
             ...initialLead,
             interests: initialLead.interest
           });
         }
-        const seededData = await getLeads();
-        setLeads(seededData);
+        const seededData = await getLeads(1, itemsPerPage, "", "ALL", "ALL", false);
+        setLeads(seededData.leads);
+        setTotalItems(seededData.total);
       } else {
-        setLeads(data);
+        setLeads(data.leads);
+        setTotalItems(data.total);
       }
     } catch (error) {
       toast.error("Erro ao carregar leads do banco.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, search, priorityFilter, sourceFilter, showArchived]);
+
+
 
   useEffect(() => {
     refreshLeads();
@@ -221,22 +230,9 @@ export default function CRMFunnelPage() {
   }, [refreshLeads]);
 
 
-  const filteredLeads = useMemo(() => {
-    return leads.filter(lead => {
-      const name = lead.name || "";
-      const interest = Array.isArray(lead.interests) ? lead.interests.join(" ") : (lead.interests || "");
-      
-      const matchesSearch = name.toLowerCase().includes(search.toLowerCase()) ||
-                           interest.toLowerCase().includes(search.toLowerCase());
-      
-      const matchesPriority = priorityFilter === "ALL" || lead.priority === priorityFilter;
-      const matchesSource = sourceFilter === "ALL" || lead.source === sourceFilter;
-      
-      const matchesArchive = (lead.isArchived || false) === showArchived;
-      
-      return matchesSearch && matchesPriority && matchesSource && matchesArchive;
-    });
-  }, [leads, search, priorityFilter, sourceFilter, showArchived]);
+  const filteredLeads = useMemo(() => leads, [leads]);
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
 
   const leadsByStage = useMemo(() => {
     const grouped: Record<string, any[]> = {};
@@ -743,7 +739,41 @@ export default function CRMFunnelPage() {
             </div>
           )}
         </div>
+
+        {/* Global Pagination Controls */}
+        <div className="shrink-0 bg-brand-surface/40 p-4 border-t border-brand-border flex flex-col sm:flex-row justify-between items-center gap-4 rounded-b-xl">
+           <div className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">
+              Mostrando <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="text-white">{Math.min(currentPage * itemsPerPage, totalItems)}</span> de <span className="text-white">{totalItems}</span> leads
+           </div>
+           <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 mr-4">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase">Página</span>
+                <span className="text-xs font-bold text-brand-accent font-mono">{currentPage}</span>
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase">de</span>
+                <span className="text-xs font-bold text-white font-mono">{totalPages || 1}</span>
+              </div>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="h-8 px-4 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                disabled={currentPage === 1 || loading}
+                onClick={() => setCurrentPage(prev => prev - 1)}
+              >
+                ANTERIOR
+              </Button>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="h-8 px-4 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                disabled={currentPage >= totalPages || loading}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+              >
+                PRÓXIMO
+              </Button>
+           </div>
+        </div>
       </div>
+
 
       {/* Modals */}
       <Dialog 

@@ -79,9 +79,10 @@ export interface SimulatorInputs {
   exchangeRate: number;
   /** Preço de venda unitário em BRL */
   salePricePerUnit: number;
-  /** Custos detalhados de importação em BRL */
-  importCosts: ImportCosts;
+  /** Custo total de importação (Adicionais) em BRL */
+  totalImportCostsBRL: number;
   /** Alíquota de impostos sobre vendas (ex: 0.08 = 8%) */
+
   salesTaxRate: number;
   /** Alíquota de despesas operacionais sobre vendas (ex: 0.15 = 15%) */
   opExRate: number;
@@ -142,18 +143,19 @@ export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[]
     fobUnitUSD,
     exchangeRate,
     salePricePerUnit,
-    importCosts,
     salesTaxRate,
     opExRate,
     investorSplitPct,
     numBatches,
   } = inputs;
 
-  const importAdditionalCostBRL = Object.values(importCosts).reduce((acc, v) => acc + v, 0);
+  const totalImportCostsBRL = inputs.totalImportCostsBRL;
+
   const fobBRL = fobUnitUSD * exchangeRate;
   const firstLotFobTotal = fobBRL * initialQuantity;
-  const firstLotTotalCost = firstLotFobTotal + importAdditionalCostBRL;
+  const firstLotTotalCost = firstLotFobTotal + totalImportCostsBRL;
   const costPerUnitBase = firstLotTotalCost / initialQuantity;
+
 
   const projections: BatchProjection[] = [];
   let availableCapital = firstLotTotalCost;
@@ -165,18 +167,31 @@ export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[]
         ? initialQuantity
         : Math.floor(availableCapital / costPerUnitBase);
 
+    // Aporte total do lote (FOB + adicionais proporcionais)
     const totalImportCostBRL = quantity * costPerUnitBase;
+
+    // Faturamento bruto
     const grossRevenue = quantity * salePricePerUnit;
+
+    // Deduções sobre faturamento
     const salesTax = grossRevenue * salesTaxRate;
     const opExCost = grossRevenue * opExRate;
-    const netBalance = availableCapital + grossRevenue - totalImportCostBRL - salesTax - opExCost;
-    const netLiquidProfit = netBalance - totalImportCostBRL;
+
+    // Lucro líquido = Faturamento - Impostos Venda - OpEx - Custo do Lote
+    // (sem contar o capital disponível no cálculo do lucro)
+    const netLiquidProfit = grossRevenue - salesTax - opExCost - totalImportCostBRL;
+
+    // Divisão do lucro entre investidor e empresa
     const investorShare = netLiquidProfit * investorSplitPct;
     const companyShare = netLiquidProfit * (1 - investorSplitPct);
+
+    // ROI = lucro do investidor / aporte
     const investorROI =
       totalImportCostBRL > 0
         ? (investorShare / totalImportCostBRL) * 100
         : 0;
+
+    // Capital do próximo lote = Aporte atual + Ganho do investidor (reinvestimento)
     const nextBatchCapital = totalImportCostBRL + investorShare;
     const nextBatchQuantity = Math.floor(nextBatchCapital / costPerUnitBase);
 
@@ -210,17 +225,9 @@ export const RIFLE_22_PRESET: SimulatorInputs = {
   fobUnitUSD: 80,
   exchangeRate: 4.92,
   salePricePerUnit: 3600,
-  importCosts: {
-    freight: 12000,
-    ii: 4500,
-    ipi: 3200,
-    pisCofins: 1800,
-    icms: 12500,
-    siscomex: 1500,
-    despacho: 2500,
-    armazenagem: 1320,
-  },
+  totalImportCostsBRL: 59000,
   salesTaxRate: 0.08,
+
   opExRate: 0.15,
   investorSplitPct: 0.50,
   numBatches: 5,

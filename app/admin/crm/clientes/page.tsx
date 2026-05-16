@@ -21,9 +21,14 @@ export default function ClientesPage() {
   const [stats, setStats] = useState({ totalCustomers: 0, totalSales: 0, retentionRate: 0 });
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState({ userName: "Administrador", userEmail: "", userId: "" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 20;
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("ALL");
   const [filterState, setFilterState] = useState("ALL");
+
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingCustomer, setViewingCustomer] = useState<any>(null);
   const [newCliente, setNewCliente] = useState<any>({ 
@@ -57,6 +62,7 @@ export default function ClientesPage() {
 
 
   const states = useMemo(() => {
+    if (!Array.isArray(clientes)) return [];
     const s = new Set(clientes.map(c => c.state).filter(Boolean));
     return Array.from(s).sort();
   }, [clientes]);
@@ -65,17 +71,21 @@ export default function ClientesPage() {
     setLoading(true);
     try {
       const [cData, sData] = await Promise.all([
-        getCustomers(),
+        getCustomers(currentPage, itemsPerPage, search, filterType, filterState),
         getCustomerStats()
       ]);
-      setClientes(cData);
-      setStats(sData);
+      setClientes(cData?.customers || []);
+      setTotalItems(cData?.total || 0);
+      setStats(sData || { totalCustomers: 0, totalSales: 0, retentionRate: 0 });
+      console.log("[Clientes] Dados carregados:", cData?.customers?.length, "de", cData?.total);
     } catch (error) {
+      console.error("[Clientes] Erro ao carregar:", error);
       toast.error("Erro ao carregar dados dos clientes.");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, search, filterType, filterState]);
+
 
   useEffect(() => {
     try {
@@ -85,19 +95,8 @@ export default function ClientesPage() {
     loadData();
   }, [loadData]);
 
-  const filteredClientes = useMemo(() => {
-    return clientes.filter(c => {
-      const matchesSearch = !search || 
-        c.name?.toLowerCase().includes(search.toLowerCase()) ||
-        c.document?.includes(search) ||
-        c.email?.toLowerCase().includes(search.toLowerCase());
-      
-      const matchesType = filterType === "ALL" || c.type === filterType;
-      const matchesState = filterState === "ALL" || c.state === filterState;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
-      return matchesSearch && matchesType && matchesState;
-    });
-  }, [clientes, search, filterType, filterState]);
 
   const handleCNPJLookup = async (cnpj: string) => {
     const cleanCNPJ = cnpj.replace(/\D/g, "");
@@ -306,8 +305,8 @@ export default function ClientesPage() {
                           </div>
                       </td>
                     </tr>
-                  ) : filteredClientes.length > 0 ? (
-                    filteredClientes.map((cliente) => (
+                  ) : clientes.length > 0 ? (
+                    clientes.map((cliente) => (
                       <tr 
                         key={cliente.id} 
                         className="hover:bg-brand-accent/5 border-b border-brand-border/10 transition-all cursor-pointer group"
@@ -407,11 +406,41 @@ export default function ClientesPage() {
                   )}
                </tbody>
             </table>
-            <div className="p-4 border-t border-brand-border bg-brand-bg/40 flex justify-between items-center">
-               <span className="text-[10px] font-bold text-brand-text-muted uppercase">Mostrando {filteredClientes.length} registros</span>
-               <div className="flex gap-1">
-                  <Button variant="secondary" size="sm" className="h-8 px-3 text-[10px] opacity-50">ANTERIOR</Button>
-                  <Button variant="secondary" size="sm" className="h-8 px-3 text-[10px]">PRÓXIMO</Button>
+            <div className="p-4 border-t border-brand-border bg-brand-bg/40 flex flex-col sm:flex-row justify-between items-center gap-4">
+               <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">
+                  Mostrando <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="text-white">{Math.min(currentPage * itemsPerPage, totalItems)}</span> de <span className="text-white">{totalItems}</span> registros
+               </span>
+               <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 mr-4">
+                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">Página</span>
+                    <span className="text-xs font-bold text-brand-accent font-mono">{currentPage}</span>
+                    <span className="text-[10px] font-bold text-brand-text-muted uppercase">de</span>
+                    <span className="text-xs font-bold text-white font-mono">{totalPages || 1}</span>
+                  </div>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="h-8 px-4 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                    disabled={currentPage === 1 || loading}
+                    onClick={() => {
+                      setCurrentPage(prev => prev - 1);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  >
+                    ANTERIOR
+                  </Button>
+                  <Button 
+                    variant="secondary" 
+                    size="sm" 
+                    className="h-8 px-4 text-[10px] font-bold uppercase tracking-widest disabled:opacity-30"
+                    disabled={currentPage >= totalPages || loading}
+                    onClick={() => {
+                      setCurrentPage(prev => prev + 1);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                  >
+                    PRÓXIMO
+                  </Button>
                </div>
             </div>
         </Card>

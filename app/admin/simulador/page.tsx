@@ -7,12 +7,11 @@ import { Button } from "@/components/ui/Button";
 import { toast } from "sonner";
 import {
   projectFutureBatches,
-
   RIFLE_22_PRESET,
   type SimulatorInputs,
   type BatchProjection,
-  type ImportCosts,
 } from "@/lib/calculations";
+
 
 
 import {
@@ -233,16 +232,8 @@ export default function SimuladorPage() {
     []
   );
 
-  const setCost = useCallback(
-    (key: keyof ImportCosts) => (v: number) =>
-      setInputs((prev) => ({
-        ...prev,
-        importCosts: { ...prev.importCosts, [key]: v },
-      })),
-    []
-  );
-
   const batches = useMemo(() => projectFutureBatches(inputs), [inputs]);
+
 
   const reportRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -355,70 +346,21 @@ export default function SimuladorPage() {
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-brand-accent border-b border-brand-border pb-2">
                   Custos de Importação (BRL)
                 </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <Field
-                    id="freight"
-                    label="Frete Int."
-                    value={inputs.importCosts.freight}
-                    onChange={setCost("freight")}
-                    prefix="R$"
-                  />
-                  <Field
-                    id="ii"
-                    label="II (Imp. Imp.)"
-                    value={inputs.importCosts.ii}
-                    onChange={setCost("ii")}
-                    prefix="R$"
-                  />
-                  <Field
-                    id="ipi"
-                    label="IPI"
-                    value={inputs.importCosts.ipi}
-                    onChange={setCost("ipi")}
-                    prefix="R$"
-                  />
-                  <Field
-                    id="pisCofins"
-                    label="PIS/COFINS"
-                    value={inputs.importCosts.pisCofins}
-                    onChange={setCost("pisCofins")}
-                    prefix="R$"
-                  />
-                  <Field
-                    id="icms"
-                    label="ICMS"
-                    value={inputs.importCosts.icms}
-                    onChange={setCost("icms")}
-                    prefix="R$"
-                  />
-                  <Field
-                    id="siscomex"
-                    label="SISCOMEX"
-                    value={inputs.importCosts.siscomex}
-                    onChange={setCost("siscomex")}
-                    prefix="R$"
-                  />
-                  <Field
-                    id="despacho"
-                    label="Despacho"
-                    value={inputs.importCosts.despacho}
-                    onChange={setCost("despacho")}
-                    prefix="R$"
-                  />
-                  <Field
-                    id="armazenagem"
-                    label="Armazenagem"
-                    value={inputs.importCosts.armazenagem}
-                    onChange={setCost("armazenagem")}
-                    prefix="R$"
-                  />
-                </div>
+                <Field
+                  id="totalCosts"
+                  label="Custos Adicionais (Total)"
+                  value={inputs.totalImportCostsBRL}
+                  onChange={set("totalImportCostsBRL")}
+                  prefix="R$"
+                  hint="Soma de todos os impostos e taxas logísticas"
+                />
+
                 <div className="p-3 bg-[rgba(245,196,0,0.05)] border border-[rgba(245,196,0,0.2)] rounded-lg">
 
                    <div className="flex justify-between items-center">
                       <span className="text-[10px] font-bold uppercase text-brand-text-muted tracking-widest">Total Adicionais</span>
                       <span className="text-sm font-mono font-black text-brand-accent">
-                        {fmtBRL(Object.values(inputs.importCosts).reduce((a, b) => a + b, 0))}
+                        {fmtBRL(inputs.totalImportCostsBRL + (inputs.fobUnitUSD * inputs.exchangeRate * inputs.initialQuantity))}
                       </span>
                    </div>
                 </div>

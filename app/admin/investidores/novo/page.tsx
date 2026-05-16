@@ -162,10 +162,30 @@ export default function NovoInvestidorPage() {
   // ── Step 2: Pessoal ────────────────────────────────────────────────────────
   const [pessoal, setPessoal] = useState({ cpfCnpj: "", rg: "", profession: "" });
 
-  // ── Step 3: Endereço ───────────────────────────────────────────────────────
   const [endereco, setEndereco] = useState({ cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", estado: "" });
 
-  // ── Step 4: Bancário ───────────────────────────────────────────────────────
+  const handleCepLookup = async (cep: string) => {
+    const cleanCep = cep.replace(/\D/g, "");
+    if (cleanCep.length === 8) {
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          setEndereco(prev => ({
+            ...prev,
+            logradouro: data.logradouro || "",
+            bairro: data.bairro || "",
+            cidade: data.localidade || "",
+            estado: data.uf || "",
+          }));
+          toast.success("Endereço localizado!");
+        }
+      } catch (error) {
+        console.error("Erro ao buscar CEP:", error);
+      }
+    }
+  };
+
   const [banco, setBanco] = useState({ banco: "", agencia: "", conta: "", tipoConta: "Corrente", pix: "" });
 
   // ── Step 5: Documentos ────────────────────────────────────────────────────
@@ -366,7 +386,19 @@ export default function NovoInvestidorPage() {
               <MapPin size={14} /> Endereço Residencial
             </CardTitle>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field id="cep" label="CEP" value={endereco.cep} onChange={(v) => setEndereco({ ...endereco, cep: v })} placeholder="00000-000" icon={<MapPin size={14} />} />
+              <Field 
+                id="cep" 
+                label="CEP" 
+                value={endereco.cep} 
+                onChange={(v) => {
+                  const masked = v.replace(/\D/g, "").replace(/^(\d{5})(\d)/, "$1-$2").slice(0, 9);
+                  setEndereco({ ...endereco, cep: masked });
+                  handleCepLookup(masked);
+                }} 
+                placeholder="00000-000" 
+                icon={<MapPin size={14} />} 
+              />
+
               <div className="md:col-span-2">
                 <Field id="logradouro" label="Logradouro" value={endereco.logradouro} onChange={(v) => setEndereco({ ...endereco, logradouro: v })} placeholder="Rua, Avenida, etc." icon={<MapPin size={14} />} />
               </div>

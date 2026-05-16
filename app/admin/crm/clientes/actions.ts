@@ -4,19 +4,39 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
-export async function getCustomers() {
+export async function getCustomers(page = 1, limit = 20, search = "", filterType = "ALL", filterState = "ALL") {
   try {
-    const customers = await prisma.customer.findMany({
-      include: {
-        salesOrders: true,
-        documents: true,
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const skip = (page - 1) * limit;
 
-    console.log(`[getCustomers] Encontrados ${customers.length} clientes.`);
+    const where: any = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { cpfCnpj: { contains: search } },
+        { email: { contains: search } },
+      ];
+    }
+    if (filterType !== "ALL") where.type = filterType;
+    if (filterState !== "ALL") where.state = filterState;
 
-    return customers.map(c => ({
+    const [customers, total] = await Promise.all([
+      prisma.customer.findMany({
+        where,
+        include: {
+          salesOrders: true,
+          documents: true,
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.customer.count({ where })
+    ]);
+
+    console.log(`[getCustomers] Encontrados ${customers.length} de ${total} clientes.`);
+
+    const formatted = customers.map(c => ({
+
       id: c.id,
       name: c.name || "Sem Nome",
       type: c.type || "B2C",
@@ -44,15 +64,23 @@ export async function getCustomers() {
         type: d.type
       }))
     }));
+
+    return { customers: formatted, total };
   } catch (error) {
     console.error("Erro crítico ao buscar clientes:", error);
     
-    // Fallback: tentar buscar sem include para ver se o problema são as relações
+    // Fallback: tentar buscar o básico para não travar a UI
     try {
-      const basicCustomers = await prisma.customer.findMany({
-        orderBy: { createdAt: "desc" },
-      });
-      return basicCustomers.map(c => ({
+      const [basicCustomers, total] = await Promise.all([
+        prisma.customer.findMany({
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        prisma.customer.count()
+      ]);
+
+      const formatted = basicCustomers.map(c => ({
         id: c.id,
         name: c.name || "Sem Nome",
         type: c.type || "B2C",
@@ -67,8 +95,10 @@ export async function getCustomers() {
         salesOrders: [],
         documents: []
       }));
+      return { customers: formatted, total };
     } catch (fallbackError) {
-      return [];
+      console.error("Erro no fallback de clientes:", fallbackError);
+      return { customers: [], total: 0 };
     }
   }
 }

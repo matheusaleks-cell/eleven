@@ -30,8 +30,11 @@ export default function NewBatchPage() {
   const [freight, setFreight] = useState("R$ 0,00");
   const [insurance, setInsurance] = useState("R$ 0,00");
   const [selectedProduct, setSelectedProduct] = useState("");
+  const [addQty, setAddQty] = useState(1);
+  const [addUnitPrice, setAddUnitPrice] = useState(0);
   const [items, setItems] = useState<any[]>([]);
   const [catalog, setCatalog] = useState<any[]>([]);
+
 
   useEffect(() => {
     Promise.all([
@@ -67,18 +70,34 @@ export default function NewBatchPage() {
       toast.error("Selecione um produto no catálogo.");
       return;
     }
-    const product = catalog.find(p => p.id === selectedProduct);
-    if (!product) return;
+    
+    let itemName = "";
+    let productId = "";
+    
+    if (selectedProduct === "GENERIC") {
+      itemName = "ITEM GENÉRICO / OUTROS";
+      productId = "generic-id";
+    } else {
+      const product = catalog.find(p => p.id === selectedProduct);
+      if (!product) return;
+      itemName = product.commercialName;
+      productId = product.id;
+    }
 
     setItems([...items, { 
       id: Math.random().toString(), 
-      productId: product.id,
-      name: product.commercialName, 
-      qty: 1, 
-      unitFob: product.priceB2B || (product.priceB2C * 0.6) 
+      productId: productId,
+      name: itemName, 
+      qty: addQty, 
+      unitFob: addUnitPrice > 0 ? addUnitPrice : 0 
     }]);
-    toast.success(`${product.commercialName} adicionado ao lote.`);
+    
+    toast.success(`${itemName} adicionado ao lote.`);
+    // Reset inputs
+    setAddQty(1);
+    setAddUnitPrice(0);
   };
+
 
   const handleSave = async () => {
     if (items.length === 0) {
@@ -261,16 +280,39 @@ export default function NewBatchPage() {
                        <select 
                         className="bg-brand-bg border border-brand-border rounded px-3 py-1 text-[10px] text-white outline-none focus:border-brand-accent h-8"
                         value={selectedProduct}
-                        onChange={(e) => setSelectedProduct(e.target.value)}
+                        onChange={(e) => {
+                          setSelectedProduct(e.target.value);
+                          const p = catalog.find(item => item.id === e.target.value);
+                          if (p) setAddUnitPrice(p.priceB2B || (p.priceB2C * 0.6));
+                          else if (e.target.value === "GENERIC") setAddUnitPrice(0);
+                        }}
                        >
                           <option value="">SELECIONAR PRODUTO...</option>
+                          <option value="GENERIC">+ ITEM AVULSO / FORA DO CATÁLOGO</option>
                           {catalog.map(p => (
                             <option key={p.id} value={p.id}>{p.sku} - {p.commercialName}</option>
                           ))}
                        </select>
+                       <div className="flex items-center gap-2">
+                          <input 
+                            type="number" 
+                            placeholder="Qtd"
+                            value={addQty}
+                            onChange={(e) => setAddQty(Number(e.target.value))}
+                            className="w-12 bg-brand-bg border border-brand-border rounded px-2 py-1 text-[10px] text-white h-8"
+                          />
+                          <input 
+                            type="number" 
+                            placeholder="Valor FOB"
+                            value={addUnitPrice}
+                            onChange={(e) => setAddUnitPrice(Number(e.target.value))}
+                            className="w-20 bg-brand-bg border border-brand-border rounded px-2 py-1 text-[10px] text-white h-8"
+                          />
+                       </div>
                        <Button variant="ghost" size="sm" className="text-[10px] gap-2 h-8 text-brand-accent border border-brand-accent/20 hover:bg-brand-accent/10" onClick={handleAddItem}>
-                          <Plus size={14} /> ADICIONAR AO LOTE
+                          <Plus size={14} /> ADICIONAR
                        </Button>
+
                     </div>
                  </div>
                  <div className="p-0">
@@ -296,8 +338,19 @@ export default function NewBatchPage() {
                                   className="w-16 bg-brand-bg border border-brand-border rounded px-2 py-1 text-xs text-white"
                                 />
                               </td>
-                              <td className="font-mono text-xs">USD {item.unitFob.toLocaleString()}</td>
-                              <td className="font-mono text-xs font-bold">USD {(item.qty * item.unitFob).toLocaleString()}</td>
+                               <td className="font-mono text-xs">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-brand-text-muted">USD</span>
+                                  <input 
+                                    type="number" 
+                                    value={item.unitFob}
+                                    onChange={(e) => setItems(items.map(i => i.id === item.id ? { ...i, unitFob: Number(e.target.value) } : i))}
+                                    className="w-20 bg-brand-bg border border-brand-border rounded px-2 py-1 text-xs text-white font-mono"
+                                  />
+                                </div>
+                              </td>
+                              <td className="font-mono text-xs font-bold text-brand-accent">USD {(item.qty * item.unitFob).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+
                               <td className="text-right">
                                  <button 
                                   className="text-brand-text-muted hover:text-brand-danger p-2"
