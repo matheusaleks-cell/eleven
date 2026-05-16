@@ -4,10 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, ShieldCheck, ShieldAlert } from "lucide-react";
-
-const USERS = [
-  { email: "admin@elevenfirearms.com.br", password: "password123", role: "ADMIN", name: "Administrador Master" },
-];
+import { loginUser } from "@/app/actions/auth";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -23,22 +20,29 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const user = USERS.find(u => u.email === email && u.password === password);
-      
-      if (!user) {
+      const result = await loginUser(email, password);
+
+      if (!result.success) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+
+      if (result.user.role !== "ADMIN") {
         setError("Credenciais administrativas inválidas.");
         setLoading(false);
         return;
       }
 
       localStorage.setItem("eleven_session", JSON.stringify({
-        email: user.email,
-        name: user.name,
-        role: user.role
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        role: result.user.role,
       }));
 
       window.location.href = "/admin";
-    } catch (err) {
+    } catch {
       setError("Erro ao tentar entrar no painel administrativo.");
       setLoading(false);
     }

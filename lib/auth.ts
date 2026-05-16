@@ -13,22 +13,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Mock users for UI verification without DB
-        const MOCK_USERS = [
-          { id: "1", email: "admin@elevenfirearms.com.br", password: "Admin@123", role: "ADMIN", name: "Admin Eleven" },
-          { id: "2", email: "francisco@email.com", password: "Invest@123", role: "INVESTOR", name: "Francisco Investidor" },
-        ];
-
-        const user = MOCK_USERS.find(u => u.email === credentials.email && u.password === credentials.password);
+        const user = await prisma.user.findUnique({
+          where: { email: credentials.email as string },
+          select: { id: true, name: true, email: true, role: true, password: true },
+        });
 
         if (!user) return null;
 
-        return {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        };
+        const valid = await bcrypt.compare(credentials.password as string, user.password);
+        if (!valid) return null;
+
+        return { id: user.id, name: user.name, email: user.email, role: user.role };
       },
     }),
   ],

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -17,6 +18,7 @@ import { getProjects } from "../../../projetos/actions";
 import { maskDecimal } from "@/lib/masks";
 
 export default function NewBatchPage() {
+  const session = useAdminSession();
   const router = useRouter();
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -110,7 +112,7 @@ export default function NewBatchPage() {
   };
 
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in pb-12">
         {/* Header */}
         <div className="flex items-center justify-between">

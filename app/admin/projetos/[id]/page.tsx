@@ -473,6 +473,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             icms_rate: 0.25, icms_factor: 0.75, siscomex_fixed: 154.23, operational_fixed: 1740,
             sales_tax_rate: 0.11, sales_op_rate: 0.08
           }}
+          plannedCapital={
+            project.cycles.length === 0
+              ? project.initialCapital
+              : project.cycles[project.cycles.length - 1].reinvestmentShare
+          }
           onClose={() => setShowCycleModal(false)}
           onSave={handleSaveCycle}
         />

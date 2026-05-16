@@ -1,12 +1,24 @@
 "use client";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { BarChart3, Download, FileText, PieChart, Shield, History, Users, ShoppingBag, Package, Ship, Target, UserCheck, TrendingUp, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { getInventoryReportData, getFinancialReportData, getWeaponsMapReportData } from "./actions";
+import {
+  getInventoryReportData,
+  getFinancialReportData,
+  getWeaponsMapReportData,
+  getLotTraceabilityData,
+  getInventoryConferenceData,
+  getSellerPerformanceData,
+  getDefaultersData,
+  getReinvestmentProjectionData,
+  getMovementHistoryData,
+  getAccessLogsData,
+} from "./actions";
 
 const REPORT_CATEGORIES = [
   { 
@@ -15,10 +27,10 @@ const REPORT_CATEGORIES = [
     icon: <Package size={24} />,
     color: "text-blue-500",
     reports: [
-      { name: "Posição de Estoque (SKU)", icon: <Package size={16} />, format: ["PDF", "EXCEL"] },
+      { name: "Posição de Estoque (SKU)", icon: <Package size={16} />, format: ["PDF", "CSV"] },
       { name: "Mapa de Armas Completo", icon: <Target size={16} />, format: ["PDF", "CSV"] },
       { name: "Rastreabilidade por Lote", icon: <Ship size={16} />, format: ["PDF"] },
-      { name: "Inventário de Conferência", icon: <FileText size={16} />, format: ["EXCEL"] },
+      { name: "Inventário de Conferência", icon: <FileText size={16} />, format: ["CSV"] },
     ]
   },
   { 
@@ -28,8 +40,8 @@ const REPORT_CATEGORIES = [
     color: "text-brand-accent",
     reports: [
       { name: "DRE por Período", icon: <BarChart3 size={16} />, format: ["PDF"] },
-      { name: "Distribuição de Lucros", icon: <CreditCard size={16} />, format: ["PDF", "EXCEL"] },
-      { name: "Performance por Vendedor", icon: <Users size={16} />, format: ["EXCEL"] },
+      { name: "Distribuição de Lucros", icon: <CreditCard size={16} />, format: ["PDF", "CSV"] },
+      { name: "Performance por Vendedor", icon: <Users size={16} />, format: ["CSV"] },
       { name: "Inadimplência & Cobrança", icon: <FileText size={16} />, format: ["PDF"] },
     ]
   },
@@ -40,7 +52,7 @@ const REPORT_CATEGORIES = [
     color: "text-brand-success",
     reports: [
       { name: "Extrato de Cotas", icon: <FileText size={16} />, format: ["PDF"] },
-      { name: "Projeção de Reinvestimento", icon: <TrendingUp size={16} />, format: ["EXCEL"] },
+      { name: "Projeção de Reinvestimento", icon: <TrendingUp size={16} />, format: ["CSV"] },
       { name: "Documentos de Propriedade", icon: <Shield size={16} />, format: ["PDF"] },
     ]
   },
@@ -51,7 +63,7 @@ const REPORT_CATEGORIES = [
     color: "text-brand-danger",
     reports: [
       { name: "Logs de Acesso", icon: <History size={16} />, format: ["CSV"] },
-      { name: "Histórico de Movimentações", icon: <History size={16} />, format: ["PDF", "EXCEL"] },
+      { name: "Histórico de Movimentações", icon: <History size={16} />, format: ["PDF", "CSV"] },
       { name: "Alterações de Preço/Impostos", icon: <UserCheck size={16} />, format: ["PDF"] },
     ]
   }
@@ -81,17 +93,19 @@ function downloadCSV(data: any[], filename: string) {
 }
 
 export default function ReportsPage() {
+  const session = useAdminSession();
   const handleExport = async (reportName: string, format: string) => {
     if (format === "PDF") {
-      toast.success(`Preparando impressão otimizada de ${reportName}...`);
-      setTimeout(() => window.print(), 1000);
+      toast.success(`Preparando impressão de "${reportName}"...`);
+      setTimeout(() => window.print(), 800);
       return;
     }
 
-    toast.loading(`Gerando arquivo ${format} de "${reportName}"...`, { id: "export" });
+    toast.loading(`Gerando CSV de "${reportName}"...`, { id: "export" });
 
     try {
       let data: any[] = [];
+
       if (reportName.includes("Posição de Estoque")) {
         const res = await getInventoryReportData();
         if (res.success) data = res.data;
@@ -101,8 +115,32 @@ export default function ReportsPage() {
       } else if (reportName.includes("DRE por Período") || reportName.includes("Distribuição de Lucros")) {
         const res = await getFinancialReportData();
         if (res.success) data = res.data;
+      } else if (reportName.includes("Rastreabilidade por Lote")) {
+        const res = await getLotTraceabilityData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Inventário de Conferência")) {
+        const res = await getInventoryConferenceData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Performance por Vendedor")) {
+        const res = await getSellerPerformanceData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Inadimplência")) {
+        const res = await getDefaultersData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Extrato de Cotas")) {
+        const res = await getFinancialReportData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Projeção de Reinvestimento")) {
+        const res = await getReinvestmentProjectionData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Histórico de Movimentações")) {
+        const res = await getMovementHistoryData();
+        if (res.success) data = res.data;
+      } else if (reportName.includes("Logs de Acesso")) {
+        const res = await getAccessLogsData();
+        if (res.success) data = res.data;
       } else {
-        toast.error("Este relatório específico será implementado em breve.", { id: "export" });
+        toast.error("Este relatório será implementado em breve.", { id: "export" });
         return;
       }
 
@@ -112,12 +150,12 @@ export default function ReportsPage() {
       } else {
         toast.error("Não há dados para gerar este relatório.", { id: "export" });
       }
-    } catch (err) {
+    } catch {
       toast.error("Erro ao gerar relatório.", { id: "export" });
     }
   };
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -23,6 +24,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function WeaponsMapPage() {
+  const session = useAdminSession();
   const [weapons, setWeapons] = useState<any[]>([]);
   const [stats, setStats] = useState({ total: 0, available: 0, reserved: 0, sold: 0, divergence: 0 });
   const [loading, setLoading] = useState(true);
@@ -131,7 +133,7 @@ export default function WeaponsMapPage() {
   };
 
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in pb-12">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

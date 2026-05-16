@@ -1,15 +1,17 @@
 "use client";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Percent, Wallet, ArrowRight, Settings2, ShieldCheck, DollarSign, RefreshCw, Info, CheckCircle2 } from "lucide-react";
+import { Percent, Wallet, ArrowRight, Settings2, ShieldCheck, DollarSign, RefreshCw, Info, CheckCircle2, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function FinancialSettingsPage() {
+  const session = useAdminSession();
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in pb-12">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -148,4 +150,3 @@ export default function FinancialSettingsPage() {
   );
 }
 
-import { History } from "lucide-react";

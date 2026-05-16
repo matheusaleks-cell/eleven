@@ -16,6 +16,8 @@ import { uploadCustomerDocument, getDocumentContent } from "@/app/admin/crm/clie
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { generateAnexoP } from "./AnexoPGenerator";
+import { SaleModal } from "./SaleModal";
+
 
 
 interface CustomerProfileProps {
@@ -28,6 +30,8 @@ interface CustomerProfileProps {
 export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: CustomerProfileProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"overview" | "orders" | "docs">("overview");
+  const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
+
 
   if (!customer) return null;
 
@@ -382,6 +386,12 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
         {/* Footer Actions */}
         <div className="flex justify-end gap-3 pt-6 border-t border-brand-border">
           <Button 
+            className="gap-2 text-[10px] font-bold tracking-widest uppercase bg-brand-accent text-black"
+            onClick={() => setIsSaleModalOpen(true)}
+          >
+            <Plus size={16} /> LANÇAR VENDA
+          </Button>
+          <Button 
             variant="secondary" 
             className="gap-2 text-[10px] font-bold tracking-widest uppercase"
             onClick={() => router.push("/admin/erp/produtos")}
@@ -393,6 +403,17 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
           </Button>
         </div>
       </div>
+
+      <SaleModal 
+        isOpen={isSaleModalOpen}
+        onClose={() => setIsSaleModalOpen(false)}
+        customer={customer}
+        onSuccess={() => {
+          if (onRefresh) onRefresh();
+          setActiveTab("orders");
+        }}
+      />
     </Dialog>
+
   );
 }

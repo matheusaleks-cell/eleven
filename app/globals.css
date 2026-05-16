@@ -273,3 +273,85 @@ p, span, label, input, textarea, select, td {
   }
 }
 
+/* Print Styles */
+@media print {
+  aside, nav, header, button, .no-print {
+    display: none !important;
+  }
+  
+  body, html, #__next, [data-nextjs-scroll-focus-boundary] {
+    background: white !important;
+    color: black !important;
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+  }
+
+  /* Override fixed height layouts */
+  div[style*="height: 100vh"], 
+  div[style*="height:100vh"],
+  div[style*="overflow: hidden"],
+  div[style*="overflow:hidden"] {
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    margin-left: 0 !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 20px !important;
+    width: 100% !important;
+    display: block !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .content-offset {
+    margin-left: 0 !important;
+  }
+
+  .grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 20px !important;
+  }
+
+  /* Force scrollable areas to be fully visible */
+  .overflow-y-auto, 
+  [style*="overflow-y: auto"],
+  [style*="overflowY: auto"],
+  #report-container-inner {
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .card {
+    border: 1px solid #ddd !important;
+    background: white !important;
+    color: black !important;
+    margin-bottom: 20px !important;
+    break-inside: avoid !important;
+    box-shadow: none !important;
+    width: 100% !important;
+  }
+
+  .text-brand-accent {
+    color: #b38f00 !important; 
+  }
+
+  .bg-brand-surface, .bg-brand-input {
+    background: #f5f5f5 !important;
+    border: 1px solid #eee !important;
+  }
+
+  /* Recharts/SVG Fixes */
+  svg {
+    max-width: 100% !important;
+  }
+}
+
+
+

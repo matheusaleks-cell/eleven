@@ -59,15 +59,17 @@ export function DashboardLayout({ children, role, userName, userEmail, pageTitle
         />
 
         <main
+          className="custom-scrollbar"
           style={{
             flex: 1,
             padding: isDesktop ? "32px" : "16px",
             width: "100%",
-            overflow: "hidden",
+            overflowY: "auto",
             display: "flex",
             flexDirection: "column"
           }}
         >
+
           {children}
         </main>
       </div>

@@ -50,16 +50,16 @@ export const mockTaxConfigs = [
 ];
 
 // =============================================
-// Calcular os 8 ciclos do Francisco
+// Calcular os 8 ciclos do Francisco (encadeados com plannedCapital correto)
 // =============================================
-const c1 = calculateCycle({ quantity: 20,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 4200,  freightUSD: 1200, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
-const c2 = calculateCycle({ quantity: 24,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 5040,  freightUSD: 1440, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
-const c3 = calculateCycle({ quantity: 30,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 6300,  freightUSD: 1800, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
-const c4 = calculateCycle({ quantity: 38,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 7980,  freightUSD: 2280, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
-const c5 = calculateCycle({ quantity: 48,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 10080, freightUSD: 2880, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
-const c6 = calculateCycle({ quantity: 60,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 12600, freightUSD: 3600, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
-const c7 = calculateCycle({ quantity: 74,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 15540, freightUSD: 4440, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
-const c8 = calculateCycle({ quantity: 94,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 19740, freightUSD: 5640, insuranceUSD: 0 }, defaultTaxConfig, 0.5);
+const c1 = calculateCycle({ quantity: 20,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 4200,  freightUSD: 1200, insuranceUSD: 0, plannedCapital: 63000 }, defaultTaxConfig, 0.5);
+const c2 = calculateCycle({ quantity: 24,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 5040,  freightUSD: 1440, insuranceUSD: 0, plannedCapital: c1.nextCycleCapital }, defaultTaxConfig, 0.5);
+const c3 = calculateCycle({ quantity: 30,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 6300,  freightUSD: 1800, insuranceUSD: 0, plannedCapital: c2.nextCycleCapital }, defaultTaxConfig, 0.5);
+const c4 = calculateCycle({ quantity: 38,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 7980,  freightUSD: 2280, insuranceUSD: 0, plannedCapital: c3.nextCycleCapital }, defaultTaxConfig, 0.5);
+const c5 = calculateCycle({ quantity: 48,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 10080, freightUSD: 2880, insuranceUSD: 0, plannedCapital: c4.nextCycleCapital }, defaultTaxConfig, 0.5);
+const c6 = calculateCycle({ quantity: 60,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 12600, freightUSD: 3600, insuranceUSD: 0, plannedCapital: c5.nextCycleCapital }, defaultTaxConfig, 0.5);
+const c7 = calculateCycle({ quantity: 74,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 15540, freightUSD: 4440, insuranceUSD: 0, plannedCapital: c6.nextCycleCapital }, defaultTaxConfig, 0.5);
+const c8 = calculateCycle({ quantity: 94,  salePricePerUnit: 8000, exchangeRate: 5.8, fobUSD: 19740, freightUSD: 5640, insuranceUSD: 0, plannedCapital: c7.nextCycleCapital }, defaultTaxConfig, 0.5);
 
 // Exportar ciclos já calculados com nomes corretos (camelCase conforme CycleResult)
 export const computedCycles = [

@@ -6,17 +6,21 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Dialog } from "@/components/ui/Dialog";
-import { Users, Search, Filter, Plus, Mail, Phone, MapPin, ChevronRight, ShoppingBag, DollarSign, Save, Pencil, Trash2, ShieldCheck } from "lucide-react";
+import { Users, Search, Filter, Plus, Mail, Phone, MapPin, ChevronRight, ShoppingBag, DollarSign, Save, Pencil, Edit2, Trash2, ShieldCheck } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getCustomers, createCustomer, getCustomerStats, updateCustomer, deleteCustomer } from "./actions";
 import { CustomerProfile } from "@/components/crm/CustomerProfile";
 import { maskCPF, maskCNPJ, maskPhone } from "@/lib/masks";
+import { SaleModal } from "@/components/crm/SaleModal";
+
 
 export default function ClientesPage() {
   const [clientes, setClientes] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalCustomers: 0, totalSales: 0, retentionRate: 0 });
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState({ userName: "Administrador", userEmail: "", userId: "" });
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("ALL");
   const [filterState, setFilterState] = useState("ALL");
@@ -49,6 +53,8 @@ export default function ClientesPage() {
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [customerToSell, setCustomerToSell] = useState<any>(null);
+
 
   const states = useMemo(() => {
     const s = new Set(clientes.map(c => c.state).filter(Boolean));
@@ -72,6 +78,10 @@ export default function ClientesPage() {
   }, []);
 
   useEffect(() => {
+    try {
+      const s = localStorage.getItem("eleven_session");
+      if (s) { const p = JSON.parse(s); setSession({ userName: p.name || "Administrador", userEmail: p.email || "", userId: p.id || "" }); }
+    } catch {}
     loadData();
   }, [loadData]);
 
@@ -207,7 +217,7 @@ export default function ClientesPage() {
   };
 
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in pb-12">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -275,107 +285,135 @@ export default function ClientesPage() {
 
         {/* Table */}
         <Card className="p-0 border-brand-border bg-brand-surface/20 overflow-hidden">
-           <table className="table-base">
-              <thead>
-                 <tr>
-                    <th>Cliente / Tipo</th>
-                    <th>Documento</th>
-                    <th>Estado</th>
-                    <th>Total Gasto</th>
-                    <th>Último Pedido</th>
-                    <th className="text-right">Ação</th>
-                 </tr>
-              </thead>
-              <tbody>
-                 {loading ? (
+            <table className="w-full text-left border-collapse">
+               <thead>
+                  <tr className="bg-brand-surface/50 border-b border-brand-border">
+                     <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Cliente / Tipo</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Documento</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Estado</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Total Gasto</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Último Pedido</th>
+                     <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest text-right">Ações</th>
+                  </tr>
+               </thead>
+               <tbody className="divide-y divide-brand-border/30">
+                  {loading ? (
                     <tr>
-                       <td colSpan={6} className="py-20 text-center">
+                      <td colSpan={6} className="py-20 text-center">
                           <div className="flex flex-col items-center gap-3">
-                             <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
-                             <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Sincronizando com o Banco...</span>
+                            <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                            <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Sincronizando com o Banco...</span>
                           </div>
-                       </td>
+                      </td>
                     </tr>
-                 ) : filteredClientes.length === 0 ? (
-                    <tr>
-                       <td colSpan={6} className="py-20 text-center">
-                          <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Nenhum cliente encontrado.</span>
-                       </td>
-                    </tr>
-                 ) : (
+                  ) : filteredClientes.length > 0 ? (
                     filteredClientes.map((cliente) => (
-                       <tr 
-                         key={cliente.id} 
-                         className="group cursor-pointer hover:bg-brand-accent/5 transition-colors"
-                         onClick={() => setViewingCustomer(cliente)}
-                       >
-                          <td>
-                             <div className="flex flex-col">
-                                <span className="text-sm font-bold text-white group-hover:text-brand-accent transition-colors">{cliente.name}</span>
-                                <div className="flex items-center gap-2 mt-1">
-                                   <span className={cn(
-                                      "text-[9px] font-bold px-1.5 py-0.5 rounded border tracking-tighter",
-                                      cliente.type === "B2B" ? "bg-blue-500/10 text-blue-500 border-blue-500/20" : "bg-brand-success/10 text-brand-success border-brand-success/20"
-                                   )}>
-                                      {cliente.type}
-                                   </span>
-                                   {cliente.badge && cliente.badge !== "STANDARD" && (
-                                     <span className={cn(
-                                       "text-[9px] font-black px-1.5 py-0.5 rounded border tracking-widest",
-                                       cliente.badge === "VIP" ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20" : "bg-slate-300/10 text-slate-300 border-slate-300/20"
-                                     )}>
-                                       {cliente.badge}
-                                     </span>
-                                   )}
-                                   <span className="text-[10px] text-brand-text-muted">{cliente.email}</span>
-                                </div>
-                             </div>
-                          </td>
-                          <td className="text-xs font-mono text-brand-text-secondary">{cliente.document}</td>
-                          <td>
-                             <div className="flex items-center gap-1.5 text-xs text-brand-text-secondary uppercase font-bold">
-                                <MapPin size={12} className="text-brand-accent" /> {cliente.state}
-                             </div>
-                          </td>
-                          <td className="font-mono text-sm font-bold text-white">
-                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.totalSpent)}
-                          </td>
-                          <td className="text-xs text-brand-text-muted font-bold">{cliente.lastOrder}</td>
-                          <td className="pr-6 text-right">
-                             <div className="flex justify-end gap-1">
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="p-2 h-auto hover:bg-brand-accent/10 hover:text-brand-accent transition-all text-brand-text-muted"
-                                  onClick={(e) => handleEditClick(cliente, e)}
-                                >
-                                   <Pencil size={16} />
-                                </Button>
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
-                                  className="p-2 h-auto hover:bg-brand-danger/10 hover:text-brand-danger transition-all text-brand-text-muted"
-                                  onClick={(e) => handleDeleteClick(cliente.id, cliente.name, e)}
-                                >
-                                   <Trash2 size={16} />
-                                </Button>
-                                <Button variant="ghost" size="sm" className="p-2 h-auto hover:bg-brand-accent/10 hover:text-brand-accent transition-all">
-                                   <ChevronRight size={18} />
-                                </Button>
-                             </div>
-                          </td>
-                       </tr>
+                      <tr 
+                        key={cliente.id} 
+                        className="hover:bg-brand-accent/5 border-b border-brand-border/10 transition-all cursor-pointer group"
+                        onClick={() => setViewingCustomer(cliente)}
+                      >
+                        <td className="px-6 py-6">
+                           <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-lg bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent font-black text-lg shadow-[0_0_15px_rgba(245,196,0,0.05)] group-hover:shadow-[0_0_20px_rgba(245,196,0,0.15)] transition-all">
+                                 {cliente.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                 <p className="text-[13px] font-black text-white uppercase tracking-tight group-hover:text-brand-accent transition-colors">
+                                    {cliente.name}
+                                 </p>
+                                 <p className="text-[10px] text-brand-text-muted font-bold uppercase tracking-wider flex items-center gap-2">
+                                    <span className={cn(
+                                       "w-1.5 h-1.5 rounded-full",
+                                       cliente.type === "B2B" ? "bg-blue-500" : "bg-brand-success"
+                                    )} />
+                                    {cliente.type === "B2B" ? "Pessoa Jurídica (B2B)" : "Pessoa Física (B2C)"}
+                                 </p>
+                              </div>
+                           </div>
+                        </td>
+                        <td className="px-6 py-6">
+                           <div className="flex flex-col gap-1">
+                              <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Documento</p>
+                              <p className="text-[11px] font-mono font-bold text-white/80">{cliente.document}</p>
+                           </div>
+                        </td>
+                        <td className="px-6 py-6">
+                           <div className="flex flex-col gap-1">
+                              <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">UF</p>
+                              <p className="text-[11px] font-black text-white/80 uppercase">{cliente.state || "—"}</p>
+                           </div>
+                        </td>
+                        <td className="px-6 py-6 text-right">
+                           <div className="flex flex-col gap-1 items-end">
+                              <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest text-right">Total Investido</p>
+                              <p className="text-[14px] font-mono font-black text-brand-accent leading-none">
+                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cliente.totalSpent)}
+                              </p>
+                           </div>
+                        </td>
+                        <td className="px-6 py-6 text-right pr-12">
+                           <div className="flex justify-end gap-2">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="w-10 h-10 rounded-lg p-0 hover:bg-brand-accent/10 text-brand-accent border border-transparent hover:border-brand-accent/20 transition-all"
+                                onClick={(e) => { e.stopPropagation(); setCustomerToSell(cliente); }}
+                                title="Lançar Venda Direta"
+                              >
+                                <DollarSign size={20} />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="w-10 h-10 rounded-lg p-0 hover:bg-brand-accent/10 text-brand-text-muted border border-transparent hover:border-brand-accent/20 transition-all"
+                                onClick={(e) => handleEditClick(cliente, e)}
+                                title="Editar Cliente"
+                              >
+                                <Edit2 size={18} />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="w-10 h-10 rounded-lg p-0 hover:bg-brand-danger/10 text-brand-text-muted border border-transparent hover:border-brand-danger/20 transition-all hover:text-brand-danger"
+                                onClick={(e) => handleDeleteClick(cliente.id, cliente.name, e)}
+                                title="Remover"
+                              >
+                                <Trash2 size={18} />
+                              </Button>
+                           </div>
+                        </td>
+                      </tr>
                     ))
-                 )}
-              </tbody>
-           </table>
-           <div className="p-4 border-t border-brand-border bg-brand-bg/40 flex justify-between items-center">
-              <span className="text-[10px] font-bold text-brand-text-muted uppercase">Mostrando {filteredClientes.length} registros</span>
-              <div className="flex gap-1">
-                 <Button variant="secondary" size="sm" className="h-8 px-3 text-[10px] opacity-50">ANTERIOR</Button>
-                 <Button variant="secondary" size="sm" className="h-8 px-3 text-[10px]">PRÓXIMO</Button>
-              </div>
-           </div>
+
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="py-20 text-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
+                              {clientes.length > 0 ? "Filtros ativos ocultaram os resultados." : "Nenhum cliente encontrado no sistema."}
+                            </span>
+                            <Button 
+                              variant="secondary"
+                              size="sm"
+                              onClick={loadData}
+                              className="text-[9px] font-black uppercase"
+                            >
+                              ATUALIZAR DADOS
+                            </Button>
+                          </div>
+                      </td>
+                    </tr>
+                  )}
+               </tbody>
+            </table>
+            <div className="p-4 border-t border-brand-border bg-brand-bg/40 flex justify-between items-center">
+               <span className="text-[10px] font-bold text-brand-text-muted uppercase">Mostrando {filteredClientes.length} registros</span>
+               <div className="flex gap-1">
+                  <Button variant="secondary" size="sm" className="h-8 px-3 text-[10px] opacity-50">ANTERIOR</Button>
+                  <Button variant="secondary" size="sm" className="h-8 px-3 text-[10px]">PRÓXIMO</Button>
+               </div>
+            </div>
         </Card>
       </div>
 
@@ -746,7 +784,16 @@ export default function ClientesPage() {
         onClose={() => setViewingCustomer(null)}
         onRefresh={loadData}
       />
+
+      <SaleModal
+        isOpen={!!customerToSell}
+        onClose={() => setCustomerToSell(null)}
+        customer={customerToSell}
+        sellerId={session.userId}
+        onSuccess={loadData}
+      />
     </DashboardLayout>
+
   );
 }
 

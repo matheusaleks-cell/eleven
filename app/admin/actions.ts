@@ -63,7 +63,7 @@ export async function getRecentProjects() {
       id: p.id,
       name: p.name,
       product_name: p.productName,
-      investorName: p.investor.name,
+      investorName: p.investor?.name ?? "Investidor",
       currentCycle: p.cycles.length,
       max_cycles: p.maxCycles,
       currentCapital: p.initialCapital,

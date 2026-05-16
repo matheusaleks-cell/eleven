@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
@@ -18,13 +19,15 @@ async function main() {
 
   console.log("🌱 Semeando Lógica Financeira Exata (VEZIR ARMS VR12 PUMP)...");
 
+  const hashedPassword = await bcrypt.hash("password123", 12);
+
   // 1. Usuários
   const admin = await prisma.user.create({
-    data: { name: "Administrador Master", email: "admin@elevenfirearms.com.br", password: "password123", role: "ADMIN" },
+    data: { name: "Administrador Master", email: "admin@elevenfirearms.com.br", password: hashedPassword, role: "ADMIN" },
   });
 
   const inv1 = await prisma.user.create({
-    data: { name: "Francisco Investidor", email: "francisco@email.com", password: "password123", role: "INVESTOR", phone: "(11) 98888-1111" },
+    data: { name: "Francisco Investidor", email: "francisco@email.com", password: hashedPassword, role: "INVESTOR", phone: "(11) 98888-1111" },
   });
 
   const sup1 = await prisma.supplier.create({

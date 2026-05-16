@@ -18,7 +18,7 @@ export async function getProjects() {
       id: p.id,
       name: p.name,
       product_name: p.productName,
-      investorName: p.investor.name,
+      investorName: p.investor?.name ?? "Investidor",
       investor_id: p.investorId,
       currentCycle: p.cycles.length,
       max_cycles: p.maxCycles,
@@ -100,7 +100,7 @@ export async function getProjectById(id: string) {
     return {
       ...project,
       product_name: project.productName,
-      investorName: project.investor.name,
+      investorName: project.investor?.name ?? "Investidor",
       currentCycle: project.cycles.length,
       totalRevenue: project.cycles.reduce((acc, c) => acc + c.grossRevenue, 0),
       totalInvestorShare: project.cycles.reduce((acc, c) => acc + c.investorShare, 0)

@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -22,6 +23,7 @@ const INITIAL_TRANSACTIONS = [
 ];
 
 export default function FinancialPage() {
+  const session = useAdminSession();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [stats, setStats] = useState({ custody: 0, distributed: 0, reinvestment: 0, taxes: 0, transitCapital: 0 });
   const [loading, setLoading] = useState(true);
@@ -93,7 +95,7 @@ export default function FinancialPage() {
   };
 
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in pb-10">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

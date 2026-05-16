@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -36,6 +37,8 @@ import {
   deleteLead,
   archiveLead
 } from "./actions";
+import { getProducts } from "@/app/admin/mapa-de-armas/actions";
+
 
 const STAGES = [
   { id: "NOVOS LEADS", label: "Novos Leads", color: "border-t-blue-500" },
@@ -171,6 +174,7 @@ const INITIAL_LEADS = [
 
 
 export default function CRMFunnelPage() {
+  const session = useAdminSession();
   const [leads, setLeads] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -181,6 +185,8 @@ export default function CRMFunnelPage() {
   const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban");
   const [showArchived, setShowArchived] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{type: "delete" | "archive", id: string, isArchived?: boolean} | null>(null);
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+
   
   const refreshLeads = useCallback(async () => {
     setLoading(true);
@@ -207,7 +213,13 @@ export default function CRMFunnelPage() {
 
   useEffect(() => {
     refreshLeads();
+    
+    // Buscar produtos cadastrados
+    getProducts().then(data => {
+      setAvailableProducts(data);
+    });
   }, [refreshLeads]);
+
 
   const filteredLeads = useMemo(() => {
     return leads.filter(lead => {
@@ -229,15 +241,27 @@ export default function CRMFunnelPage() {
   const leadsByStage = useMemo(() => {
     const grouped: Record<string, any[]> = {};
     STAGES.forEach(stage => grouped[stage.id] = []);
+    
     filteredLeads.forEach(lead => {
-      if (grouped[lead.status]) {
-        grouped[lead.status].push(lead);
+      const status = (lead.status || "").toUpperCase();
+      
+      // Mapeamento direto ou normalização
+      if (grouped[status]) {
+        grouped[status].push(lead);
+      } else if (status === "NOVO" || status === "NEW" || status === "PROSPECÇÃO") {
+        grouped["NOVOS LEADS"]?.push(lead);
+      } else if (status === "PROPOSTA") {
+        grouped["PROPOSTA ENVIADA"]?.push(lead);
+      } else if (status === "PAGO") {
+        grouped["PAGAMENTO EFETUADO"]?.push(lead);
       } else {
+        // Se não encontrar nada, joga na primeira coluna para não sumir
         grouped["NOVOS LEADS"]?.push(lead);
       }
     });
     return grouped;
   }, [filteredLeads]);
+
 
   const handleAddLead = async (data: LeadFormData) => {
     try {
@@ -344,7 +368,7 @@ export default function CRMFunnelPage() {
   const conversionEst = filteredLeads.length > 0 ? (advancedLeads / filteredLeads.length) * 100 : 0;
 
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-6 h-[calc(100vh-220px)] animate-fade-in overflow-hidden">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
@@ -728,9 +752,11 @@ export default function CRMFunnelPage() {
         title="Cadastrar Novo Lead"
       >
         <LeadForm 
+          products={availableProducts}
           onSubmit={handleAddLead} 
           onCancel={() => setIsAddModalOpen(false)} 
         />
+
       </Dialog>
 
       <Dialog 

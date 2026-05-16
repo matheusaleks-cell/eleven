@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -44,6 +44,20 @@ export default function ExtratoPage() {
   const totalReinvest = statement.filter(s => s.tipo === "REINVEST").reduce((acc, curr) => acc + curr.valor, 0);
   const saldoAtual = statement.length > 0 ? statement[0].saldo : 0;
 
+  function getBadgeClass(tipo: string) {
+    if (tipo === "RENDIMENTO") return "bg-brand-success/10 text-brand-success border-brand-success/20";
+    if (tipo === "REINVEST") return "bg-brand-warning/10 text-brand-warning border-brand-warning/20";
+    if (tipo === "SAIDA") return "bg-brand-danger/10 text-brand-danger border-brand-danger/20";
+    return "bg-brand-accent/10 text-brand-accent border-brand-accent/20"; // APORTE
+  }
+
+  function getBadgeIcon(tipo: string) {
+    if (tipo === "RENDIMENTO") return <ArrowUpRight size={10} />;
+    if (tipo === "SAIDA") return <ArrowDownRight size={10} />;
+    if (tipo === "REINVEST") return <RefreshCw size={10} />;
+    return <ArrowUpRight size={10} />;
+  }
+
   return (
     <DashboardLayout role="INVESTOR" userName={session.name} userEmail={session.email}>
       <div className="flex flex-col gap-8 animate-fade-in pb-12">
@@ -54,15 +68,15 @@ export default function ExtratoPage() {
               <CreditCard size={32} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold tracking-tight mb-1 font-rajdhani uppercase text-white">EXTRATO DE MOVIMENTAÃ‡Ã•ES</h1>
-              <p className="text-brand-text-secondary text-sm font-medium uppercase tracking-wider text-[10px]">HistÃ³rico financeiro detalhado de aportes, lucros e reinvestimentos.</p>
+              <h1 className="text-2xl font-bold tracking-tight mb-1 font-rajdhani uppercase text-white">EXTRATO DE MOVIMENTAÇÕES</h1>
+              <p className="text-brand-text-secondary text-sm font-medium uppercase tracking-wider text-[10px]">Histórico financeiro detalhado de aportes, lucros e reinvestimentos.</p>
             </div>
           </div>
           <div className="flex gap-3">
-             <Button variant="secondary" className="gap-2 text-[10px] font-black uppercase">
+             <Button variant="secondary" className="gap-2 text-[10px] font-black uppercase" onClick={() => window.print()}>
                 <Printer size={16} /> IMPRIMIR
              </Button>
-             <Button className="gap-2 text-[10px] font-black uppercase shadow-[0_0_15px_rgba(245,196,0,0.1)]">
+             <Button className="gap-2 text-[10px] font-black uppercase shadow-[0_0_15px_rgba(245,196,0,0.1)]" onClick={() => window.print()}>
                 <Download size={16} /> EXPORTAR PDF
              </Button>
           </div>
@@ -75,7 +89,7 @@ export default function ExtratoPage() {
               <p className="text-2xl font-bold font-mono mt-1 text-white">{formatMoney(totalAportes)}</p>
            </Card>
            <Card className="bg-brand-surface/40 border-l-2 border-l-brand-success">
-              <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Lucros DistribuÃ­dos</span>
+              <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Lucros Distribuídos</span>
               <p className="text-2xl font-bold font-mono mt-1 text-brand-success">{formatMoney(totalRendimentos)}</p>
            </Card>
            <Card className="bg-brand-surface/40 border-l-2 border-l-brand-warning">
@@ -93,14 +107,14 @@ export default function ExtratoPage() {
            <div className="flex items-center gap-4 flex-1">
               <div className="relative flex-1 max-w-md">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" size={16} />
-                 <input className="w-full bg-brand-input border border-brand-border rounded-lg pl-10 pr-4 py-2 text-xs text-white outline-none focus:border-brand-accent transition-all" placeholder="Filtrar por descriÃ§Ã£o..." />
+                 <input className="w-full bg-brand-input border border-brand-border rounded-lg pl-10 pr-4 py-2 text-xs text-white outline-none focus:border-brand-accent transition-all" placeholder="Filtrar por descrição..." />
               </div>
               <Button variant="secondary" size="sm" className="text-[10px] font-bold gap-2 h-9">
-                 <Calendar size={14} /> ÃšLTIMOS 30 DIAS
+                 <Calendar size={14} /> ÚLTIMOS 30 DIAS
               </Button>
            </div>
            <Button variant="ghost" className="text-[10px] font-black uppercase text-brand-text-muted hover:text-white">
-             <Filter size={14} className="mr-2" /> Filtros AvanÃ§ados
+             <Filter size={14} className="mr-2" /> Filtros Avançados
            </Button>
         </div>
 
@@ -110,7 +124,7 @@ export default function ExtratoPage() {
               <thead>
                  <tr className="bg-brand-bg/60">
                     <th className="w-32 uppercase text-[10px] tracking-widest">Data</th>
-                    <th className="uppercase text-[10px] tracking-widest">DescriÃ§Ã£o da OperaÃ§Ã£o</th>
+                    <th className="uppercase text-[10px] tracking-widest">Descrição da Operação</th>
                     <th className="uppercase text-[10px] tracking-widest text-center">Tipo</th>
                     <th className="text-right uppercase text-[10px] tracking-widest">Valor</th>
                     <th className="text-right uppercase text-[10px] tracking-widest">Saldo Acumulado</th>
@@ -129,17 +143,18 @@ export default function ExtratoPage() {
                        <td className="text-center">
                           <div className={cn(
                              "inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-tighter",
-                             mov.tipo === "ENTRADA" ? "bg-brand-success/10 text-brand-success border-brand-success/20" : 
-                             mov.tipo === "REINVEST" ? "bg-brand-warning/10 text-brand-warning border-brand-warning/20" :
-                             "bg-brand-danger/10 text-brand-danger border-brand-danger/20"
+                             getBadgeClass(mov.tipo)
                           )}>
-                             {mov.tipo === "RENDIMENTO" ? <ArrowUpRight size={10} /> : mov.tipo === "SAIDA" ? <ArrowDownRight size={10} /> : mov.tipo === "REINVEST" ? <RefreshCw size={10} /> : <ArrowUpRight size={10} />}
+                             {getBadgeIcon(mov.tipo)}
                              {mov.tipo}
                           </div>
                        </td>
                        <td className={cn(
                           "text-right font-mono font-bold text-sm",
-                          mov.tipo === "RENDIMENTO" ? "text-brand-success" : mov.tipo === "APORTE" ? "text-brand-accent" : mov.tipo === "REINVEST" ? "text-brand-warning" : "text-brand-danger"
+                          mov.tipo === "RENDIMENTO" ? "text-brand-success" :
+                          mov.tipo === "APORTE" ? "text-brand-accent" :
+                          mov.tipo === "REINVEST" ? "text-brand-warning" :
+                          "text-brand-danger"
                        )}>
                           {mov.tipo === "SAIDA" ? "-" : "+"} {formatMoney(mov.valor)}
                        </td>
@@ -153,7 +168,7 @@ export default function ExtratoPage() {
                        <td colSpan={5} className="text-center py-20">
                           <div className="flex flex-col items-center gap-4">
                              <Wallet size={48} className="text-brand-text-muted opacity-20" />
-                             <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-[0.3em]">Nenhuma movimentaÃ§Ã£o registrada no perÃ­odo.</span>
+                             <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-[0.3em]">Nenhuma movimentação registrada no período.</span>
                           </div>
                        </td>
                     </tr>
@@ -162,7 +177,7 @@ export default function ExtratoPage() {
            </table>
            <div className="p-4 border-t border-brand-border bg-brand-bg/40 flex justify-center">
               <Button variant="ghost" size="sm" className="text-[10px] uppercase font-black tracking-widest text-brand-text-muted hover:text-white">
-                 Ver histÃ³rico completo de transaÃ§Ãµes
+                 Ver histórico completo de transações
               </Button>
            </div>
         </Card>
@@ -170,6 +185,3 @@ export default function ExtratoPage() {
     </DashboardLayout>
   );
 }
-
-
-

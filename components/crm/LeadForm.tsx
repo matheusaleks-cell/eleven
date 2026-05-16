@@ -50,12 +50,15 @@ export type LeadFormData = {
 
 interface LeadFormProps {
   initialData?: Partial<LeadFormData>;
+  products?: { id: string; commercialName: string }[];
   onSubmit: (data: LeadFormData) => void;
   onCancel: () => void;
   submitLabel?: string;
 }
 
-export function LeadForm({ initialData, onSubmit, onCancel, submitLabel = "Salvar Lead" }: LeadFormProps) {
+
+export function LeadForm({ initialData, products = [], onSubmit, onCancel, submitLabel = "Salvar Lead" }: LeadFormProps) {
+
   const {
     register,
     handleSubmit,
@@ -226,9 +229,24 @@ export function LeadForm({ initialData, onSubmit, onCancel, submitLabel = "Salva
             </div>
             <div>
               <label className="text-[12px] font-bold text-brand-text-muted uppercase mb-2 block tracking-widest">Produto / Projeto Específico</label>
-              <Input {...register("interest")} className="h-12 text-base px-4" placeholder="Ex: VR-12P Carrera ou Lote 22" />
+              <select 
+                {...register("interest")}
+                className="w-full bg-brand-input border border-brand-border rounded h-12 px-4 text-base text-white focus:outline-none focus:border-brand-accent appearance-none"
+                style={{ background: "#0F0F0F" }}
+              >
+                <option value="">Selecione o produto...</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.commercialName}>
+                    {p.commercialName}
+                  </option>
+                ))}
+                <option value="OUTRO">OUTRO PRODUTO</option>
+              </select>
+
+
               {errors.interest && <p className="text-brand-danger text-[11px] mt-1.5 uppercase font-bold">{errors.interest.message}</p>}
             </div>
+
             <div>
               <label className="text-[12px] font-bold text-brand-text-muted uppercase mb-2 block tracking-widest">Valor Estimado (R$)</label>
               <Input 

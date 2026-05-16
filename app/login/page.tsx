@@ -4,10 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
-
-const USERS = [
-  { email: "ricardo@investor.com", password: "password123", role: "INVESTOR", name: "Ricardo Fonseca" },
-];
+import { loginUser } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,22 +20,29 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const user = USERS.find(u => u.email === email && u.password === password);
-      
-      if (!user) {
-        setError("E-mail ou senha de investidor inválidos.");
+      const result = await loginUser(email, password);
+
+      if (!result.success) {
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
+
+      if (result.user.role !== "INVESTOR") {
+        setError("Esta área é exclusiva para investidores.");
         setLoading(false);
         return;
       }
 
       localStorage.setItem("eleven_session", JSON.stringify({
-        email: user.email,
-        name: user.name,
-        role: user.role
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        role: result.user.role,
       }));
 
       window.location.href = "/investidor";
-    } catch (err) {
+    } catch {
       setError("Ocorreu um erro ao tentar entrar na área do investidor.");
       setLoading(false);
     }
@@ -280,13 +284,13 @@ export default function LoginPage() {
               <div 
                 className="p-3 rounded bg-white/[0.02] border border-white/5 cursor-pointer hover:bg-white/[0.05] transition-colors group"
                 onClick={() => {
-                  setEmail("ricardo@investor.com");
+                  setEmail("francisco@email.com");
                   setPassword("password123");
                 }}
               >
                 <div className="flex justify-between items-center">
                   <span className="text-[11px] text-[#888] font-rajdhani uppercase font-bold group-hover:text-[#F5C400]">Investidor Demo</span>
-                  <span className="text-[9px] text-[#444] font-mono">ricardo@investor.com</span>
+                  <span className="text-[9px] text-[#444] font-mono">francisco@email.com</span>
                 </div>
               </div>
             </div>

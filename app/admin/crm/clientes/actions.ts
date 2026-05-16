@@ -14,59 +14,65 @@ export async function getCustomers() {
       orderBy: { createdAt: "desc" },
     });
 
-    return customers.map(c => {
-      const totalSpent = c.salesOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
-      const lastOrderDate = c.salesOrders.length > 0 
-        ? c.salesOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].createdAt
-        : null;
+    console.log(`[getCustomers] Encontrados ${customers.length} clientes.`);
 
-      // Cálculo de Badge de Engajamento
-      let badge = "STANDARD";
-      if (totalSpent > 100000) badge = "VIP";
-      else if (totalSpent > 30000) badge = "PLATINUM";
-
-      return {
-        id: c.id,
-        name: c.name,
-        type: c.type,
-        document: c.cpfCnpj,
-        email: c.email,
-        phone: c.phone,
-        state: c.state,
-        city: c.city,
-        address: c.address,
-        cep: c.cep,
-        addressNumber: c.addressNumber,
-        addressComplement: c.addressComplement,
-        neighborhood: c.neighborhood,
-        storeEmail: c.storeEmail,
-        crValidityDate: c.crValidityDate ? c.crValidityDate.toISOString() : null,
-        totalSpent,
-        lastOrder: lastOrderDate ? lastOrderDate.toLocaleDateString('pt-BR') : "-",
-        ordersCount: c.salesOrders.length,
-        badge,
-        salesOrders: c.salesOrders.map(o => ({
-          id: o.id,
-          orderNumber: o.orderNumber,
-          totalValue: o.totalValue,
-          status: o.status,
-          createdAt: o.createdAt.toISOString()
-        })),
-        documents: c.documents.map(d => ({
-          id: d.id,
-          name: d.name,
-          category: d.category,
-          type: d.type,
-          size: d.size,
-          createdAt: d.createdAt.toISOString()
-        }))
-      };
-    });
+    return customers.map(c => ({
+      id: c.id,
+      name: c.name || "Sem Nome",
+      type: c.type || "B2C",
+      document: c.cpfCnpj || "S/D",
+      email: c.email || "",
+      phone: c.phone || "",
+      state: c.state || "",
+      city: c.city || "",
+      address: c.address || "",
+      cep: c.cep || "",
+      totalSpent: (c.salesOrders || []).reduce((acc, o) => acc + (Number(o.totalValue) || 0), 0),
+      ordersCount: (c.salesOrders || []).length,
+      badge: "STANDARD",
+      salesOrders: (c.salesOrders || []).map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        totalValue: Number(o.totalValue) || 0,
+        status: o.status || "PAGO",
+        createdAt: o.createdAt.toISOString()
+      })),
+      documents: (c.documents || []).map(d => ({
+        id: d.id,
+        name: d.name,
+        category: d.category,
+        type: d.type
+      }))
+    }));
   } catch (error) {
-    console.error("Erro ao buscar clientes:", error);
-    return [];
+    console.error("Erro crítico ao buscar clientes:", error);
+    
+    // Fallback: tentar buscar sem include para ver se o problema são as relações
+    try {
+      const basicCustomers = await prisma.customer.findMany({
+        orderBy: { createdAt: "desc" },
+      });
+      return basicCustomers.map(c => ({
+        id: c.id,
+        name: c.name || "Sem Nome",
+        type: c.type || "B2C",
+        document: c.cpfCnpj || "S/D",
+        email: c.email || "",
+        phone: c.phone || "",
+        state: c.state || "",
+        city: c.city || "",
+        totalSpent: 0,
+        ordersCount: 0,
+        badge: "STANDARD",
+        salesOrders: [],
+        documents: []
+      }));
+    } catch (fallbackError) {
+      return [];
+    }
   }
 }
+
 
 export async function getCustomerStats() {
   try {

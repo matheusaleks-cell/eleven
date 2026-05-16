@@ -26,6 +26,8 @@ export interface CycleInputs {
   fobUSD: number;
   freightUSD: number;
   insuranceUSD: number;
+  /** Capital planejado para este ciclo (initialCapital do projeto no ciclo 0, ou reinvestmentShare do ciclo anterior) */
+  plannedCapital: number;
 }
 
 export interface CycleResult {
@@ -57,6 +59,17 @@ export interface CycleResult {
 // TIPOS DO SIMULADOR DE LOTES
 // =============================================
 
+export interface ImportCosts {
+  freight: number;
+  ii: number;
+  ipi: number;
+  pisCofins: number;
+  icms: number;
+  siscomex: number;
+  despacho: number;
+  armazenagem: number;
+}
+
 export interface SimulatorInputs {
   /** Quantidade de unidades no primeiro lote */
   initialQuantity: number;
@@ -66,11 +79,8 @@ export interface SimulatorInputs {
   exchangeRate: number;
   /** Preço de venda unitário em BRL */
   salePricePerUnit: number;
-  /**
-   * Custo adicional fixo de importação em BRL:
-   * frete + II + IPI + PIS/COFINS + ICMS + SISCOMEX + desembaraço + armazenagem
-   */
-  importAdditionalCostBRL: number;
+  /** Custos detalhados de importação em BRL */
+  importCosts: ImportCosts;
   /** Alíquota de impostos sobre vendas (ex: 0.08 = 8%) */
   salesTaxRate: number;
   /** Alíquota de despesas operacionais sobre vendas (ex: 0.15 = 15%) */
@@ -80,6 +90,7 @@ export interface SimulatorInputs {
   /** Número de lotes a projetar */
   numBatches: number;
 }
+
 
 export interface BatchProjection {
   batchNumber: number;
@@ -131,13 +142,14 @@ export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[]
     fobUnitUSD,
     exchangeRate,
     salePricePerUnit,
-    importAdditionalCostBRL,
+    importCosts,
     salesTaxRate,
     opExRate,
     investorSplitPct,
     numBatches,
   } = inputs;
 
+  const importAdditionalCostBRL = Object.values(importCosts).reduce((acc, v) => acc + v, 0);
   const fobBRL = fobUnitUSD * exchangeRate;
   const firstLotFobTotal = fobBRL * initialQuantity;
   const firstLotTotalCost = firstLotFobTotal + importAdditionalCostBRL;
@@ -157,8 +169,8 @@ export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[]
     const grossRevenue = quantity * salePricePerUnit;
     const salesTax = grossRevenue * salesTaxRate;
     const opExCost = grossRevenue * opExRate;
-    const netLiquidProfit =
-      grossRevenue - salesTax - opExCost - totalImportCostBRL;
+    const netBalance = availableCapital + grossRevenue - totalImportCostBRL - salesTax - opExCost;
+    const netLiquidProfit = netBalance - totalImportCostBRL;
     const investorShare = netLiquidProfit * investorSplitPct;
     const companyShare = netLiquidProfit * (1 - investorSplitPct);
     const investorROI =
@@ -193,21 +205,27 @@ export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[]
   return projections;
 }
 
-/**
- * Preset para o cenário Rifle .22 conforme premissas acordadas.
- * importAdditionalCostBRL = 39.320 (R$ 59.000 total − R$ 19.680 FOB)
- */
 export const RIFLE_22_PRESET: SimulatorInputs = {
   initialQuantity: 50,
   fobUnitUSD: 80,
   exchangeRate: 4.92,
   salePricePerUnit: 3600,
-  importAdditionalCostBRL: 39320,
+  importCosts: {
+    freight: 12000,
+    ii: 4500,
+    ipi: 3200,
+    pisCofins: 1800,
+    icms: 12500,
+    siscomex: 1500,
+    despacho: 2500,
+    armazenagem: 1320,
+  },
   salesTaxRate: 0.08,
   opExRate: 0.15,
   investorSplitPct: 0.50,
   numBatches: 5,
 };
+
 
 // =============================================
 // CÁLCULO PRINCIPAL (CICLO — ERP)
@@ -225,33 +243,42 @@ export function calculateCycle(
   const ii = customsValueBRL * taxConfig.ii_rate;
   const ipi = (customsValueBRL + ii) * taxConfig.ipi_rate;
 
-  // Base PIS/COFINS Importação (CIF + II + IPI)
-  const basePisCofins = customsValueBRL + ii + ipi;
+  // BUG FIX: PIS/COFINS incidem sobre Valor Aduaneiro (CIF) apenas, não sobre +II+IPI
+  // Planilha: =F15*2.1% e =F15*9.65% onde F15 = Valor Aduaneiro
+  const basePisCofins = customsValueBRL;
   const pisPasep = basePisCofins * taxConfig.pis_rate;
   const cofins = basePisCofins * taxConfig.cofins_rate;
 
   const siscomex = taxConfig.siscomex_fixed;
   const opCost = taxConfig.operational_fixed;
 
-  // Base ICMS "por dentro"
+  // BUG FIX: Base de Cálculo Normal NÃO inclui Custo Operacional
+  // Planilha: =SUM(F18:F30) — custo op está na linha 32, fora do range
   const calcBaseNormal =
-    customsValueBRL + ii + ipi + pisPasep + cofins + siscomex + opCost;
+    customsValueBRL + ii + ipi + pisPasep + cofins + siscomex;
 
-  // Gross-up do ICMS (Base = Valor / (1 − Alíquota))
+  // Gross-up do ICMS "por dentro" (Base = Valor / Fator)
   const icmsBaseAltered = calcBaseNormal / taxConfig.icms_factor;
   const icmsImport = icmsBaseAltered * taxConfig.icms_rate;
 
-  const totalInvestment = icmsBaseAltered;
+  // BUG FIX: totalInvestment = Base Alterada (já inclui II+IPI+PIS+COFINS+Siscomex+ICMS) + Custo Op
+  // Planilha: =F33+F39+F31+F32 → BASE_NORMAL + ICMS + Simples + CustoOp = icmsBaseAltered + opCost
+  const totalInvestment = icmsBaseAltered + opCost;
 
   // 2. VENDAS
   const grossRevenue = inputs.quantity * inputs.salePricePerUnit;
   const salesTax = grossRevenue * taxConfig.sales_tax_rate;
   const salesOpCost = grossRevenue * taxConfig.sales_op_rate;
-  const netBalance = grossRevenue - salesTax - salesOpCost;
+
+  // BUG FIX: Saldo Apurado usa capital planejado, conforme fórmula do Dashboard:
+  // =B5+B7-B6-B8-B9 → VALOR_INVESTIDO + Faturamento - Investimento - Tributação - CustoOp
+  const netBalance =
+    inputs.plannedCapital + grossRevenue - totalInvestment - salesTax - salesOpCost;
   const profitToSplit = netBalance - totalInvestment;
   const investorShare = profitToSplit * splitPct;
   const companyShare = profitToSplit * (1 - splitPct);
   const investorCashRes = investorShare;
+  // Saldo para novo investimento = totalInvestment + fatia do investidor
   const nextCycleCapital = totalInvestment + investorShare;
 
   // 3. POR UNIDADE

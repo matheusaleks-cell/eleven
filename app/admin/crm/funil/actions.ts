@@ -13,12 +13,14 @@ export async function getLeads() {
       },
       orderBy: { createdAt: "desc" },
     });
+    console.log(`[getLeads] Encontrados ${leads.length} leads.`);
     return leads;
   } catch (error) {
-    console.error("Erro ao buscar leads:", error);
+    console.error("Erro crítico ao buscar leads:", error);
     return [];
   }
 }
+
 
 export async function createLead(data: any) {
   try {
@@ -133,11 +135,18 @@ export async function convertToOrder(leadId: string, data: any) {
     });
 
     // 2. Criar o Pedido de Venda (SalesOrder)
+    let sellerId = data.assignedSellerId;
+    if (!sellerId || sellerId === "system-admin") {
+      const admin = await prisma.user.findFirst({ where: { role: "ADMIN" }, select: { id: true } });
+      sellerId = admin?.id;
+    }
+    if (!sellerId) throw new Error("Nenhum usuário administrador encontrado.");
+
     const order = await prisma.salesOrder.create({
       data: {
         orderNumber: `ORD-${Date.now()}`,
         customerId: customer.id,
-        sellerId: data.assignedSellerId || "system-admin", 
+        sellerId,
         totalValue: Number(data.value) || 0,
         status: "PAGO", 
         products: JSON.stringify(data.items || []),

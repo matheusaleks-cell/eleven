@@ -207,7 +207,7 @@ export default function InvestorDetailPage({ params }: { params: Promise<{ id: s
 
   if (!session || loading || !investor) {
     return (
-      <DashboardLayout role="ADMIN" userName="Admin" userEmail="admin@eleven.com" pageTitle="Carregando...">
+      <DashboardLayout role="ADMIN" userName={session?.name ?? "Admin"} userEmail={session?.email ?? ""} pageTitle="Carregando...">
         <div className="flex items-center justify-center h-[60vh]">
           <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
         </div>

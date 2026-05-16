@@ -1,6 +1,7 @@
 "use client";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { 
@@ -26,6 +27,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function LeadDetailPage() {
+  const session = useAdminSession();
   const lead = {
     name: "Ricardo Oliveira",
     status: "PROPOSTA",
@@ -42,7 +44,7 @@ export default function LeadDetailPage() {
   };
 
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in pb-12">
         
         {/* Header / Breadcrumb */}

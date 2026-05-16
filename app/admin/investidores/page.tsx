@@ -37,7 +37,7 @@ export default function AdminInvestorsPage() {
     const s = localStorage.getItem("eleven_session");
     if (!s) { router.push("/admin/login"); return; }
     const parsed = JSON.parse(s);
-    if (parsed.role !== "ADMIN") { router.push("/investor"); return; }
+    if (parsed.role !== "ADMIN") { router.push("/investidor"); return; }
     setSession(parsed);
     refreshData();
   }, []);

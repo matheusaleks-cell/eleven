@@ -21,14 +21,10 @@ export default function InvestorLayout({
 
     try {
       const session = JSON.parse(sessionStr);
-      // Se for ADMIN, permite ver (opcional, mas geralmente admin pode tudo)
-      // Ou redireciona se quiser separação rígida:
-      /*
       if (session.role !== "INVESTOR") {
-        window.location.href = "/admin/login";
+        window.location.href = "/login";
         return;
       }
-      */
       setAuthorized(true);
     } catch (e) {
       window.location.href = "/login";

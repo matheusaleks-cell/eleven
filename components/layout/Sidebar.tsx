@@ -25,7 +25,9 @@ import {
   Calculator,
   UserPlus,
   UsersRound,
+  DollarSign,
 } from "lucide-react";
+
 
 interface NavItem {
   label: string;
@@ -35,8 +37,10 @@ interface NavItem {
 
 const adminNav: NavItem[] = [
   { label: "Dashboard",    href: "/admin",            icon: <LayoutDashboard size={18} /> },
-  { label: "CRM Vendas",   href: "/admin/crm/funil",  icon: <Users size={18} /> },
+  { label: "Vendas",        href: "/admin/vendas",       icon: <DollarSign size={18} /> },
+  { label: "CRM / Funil",  href: "/admin/crm/funil",   icon: <Users size={18} /> },
   { label: "Clientes",     href: "/admin/crm/clientes", icon: <User size={18} /> },
+
   { label: "ERP Operacional", href: "/admin/erp/produtos", icon: <Package size={18} /> },
   { label: "Importação",   href: "/admin/importacao/lotes", icon: <Ship size={18} /> },
   { label: "Mapa de Armas", href: "/admin/mapa-de-armas", icon: <Target size={18} /> },
@@ -46,6 +50,7 @@ const adminNav: NavItem[] = [
   { label: "Simulador",    href: "/admin/simulador",  icon: <Calculator size={18} /> },
   { label: "Relatórios",   href: "/admin/relatorios", icon: <FileBarChart2 size={18} /> },
 ];
+
 
 const investorSubNav: NavItem[] = [
   { label: "Lista de Investidores", href: "/admin/investidores",      icon: <UsersRound size={16} /> },
@@ -182,7 +187,7 @@ function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, se
               <div style={{ paddingLeft: 16 }}>
                 <NavLink item={{ label: "Regras Financeiras", href: "/admin/configuracoes/financeiro", icon: <Settings2 size={16} /> }} />
                 <NavLink item={{ label: "Tributos", href: "/admin/configuracoes/tributos", icon: <Receipt size={16} /> }} />
-                <NavLink item={{ label: "Minha Conta", href: "/admin/conta", icon: <User size={16} /> }} />
+                <NavLink item={{ label: "Minha Conta", href: "/admin/account", icon: <User size={16} /> }} />
               </div>
             )}
           </>

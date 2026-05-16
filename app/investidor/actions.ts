@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 export async function getInvestorDashboardData(email: string) {
   try {
@@ -262,10 +263,10 @@ export async function getInvestorProjectDetails(id: string, email: string) {
   }
 }
 
-export async function getCycleSales(cycleId: string) {
+export async function getCycleSales(cycleId: string, email: string) {
   try {
-    const cycle = await prisma.cycle.findUnique({
-      where: { id: cycleId },
+    const cycle = await prisma.cycle.findFirst({
+      where: { id: cycleId, project: { investor: { email } } },
       include: {
         importLot: {
           include: {
@@ -340,9 +341,10 @@ export async function updateMyPassword(email: string, newPassword: string) {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return { success: false, error: "Usuário não encontrado." };
 
+    const hashed = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
       where: { email },
-      data: { password: newPassword },
+      data: { password: hashed },
     });
 
     return { success: true };

@@ -9,6 +9,7 @@ interface CycleModalProps {
   cycleNumber: number;
   splitPct: number;
   taxConfig: TaxConfig;
+  plannedCapital: number;
   onClose: () => void;
   onSave: (data: any) => void;
 }
@@ -54,7 +55,7 @@ function ResultRow({ label, value, accent = false, bold = false }: { label: stri
   );
 }
 
-export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, onClose, onSave }: CycleModalProps) {
+export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plannedCapital, onClose, onSave }: CycleModalProps) {
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
   const [rate, setRate] = useState("");
@@ -82,7 +83,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, onCl
     const ins = clean(insurance) || 0;
 
     if (q > 0 && p > 0 && r > 0 && f > 0 && fr >= 0) {
-      const res = calculateCycle({ quantity: q, salePricePerUnit: p, exchangeRate: r, fobUSD: f, freightUSD: fr, insuranceUSD: ins }, taxConfig, splitPct);
+      const res = calculateCycle({ quantity: q, salePricePerUnit: p, exchangeRate: r, fobUSD: f, freightUSD: fr, insuranceUSD: ins, plannedCapital }, taxConfig, splitPct);
       setResult(res);
     } else {
       setResult(null);

@@ -36,7 +36,7 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
         // Expand current cycle if available
         if (res.project.cycles.length > 0) {
           const latestCycle = res.project.cycles[0];
-          handleExpandCycle(latestCycle.id);
+          handleExpandCycle(latestCycle.id, parsed.email);
         }
       } else {
         router.push("/investidor/projetos");
@@ -45,16 +45,17 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
     });
   }, []);
 
-  const handleExpandCycle = async (cycleId: string) => {
+  const handleExpandCycle = async (cycleId: string, emailOverride?: string) => {
     if (expandedCycle === cycleId) {
       setExpandedCycle(null);
       return;
     }
-    
+
     setExpandedCycle(cycleId);
     setSalesLoading(true);
     try {
-      const res = await getCycleSales(cycleId);
+      const email = emailOverride ?? session?.email ?? "";
+      const res = await getCycleSales(cycleId, email);
       if (res.success) {
         setCycleSales(res.sales);
         setTotalSoldValue(res.totalSoldValue || 0);
@@ -68,7 +69,7 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
 
   if (loading || !session || !project) {
     return (
-      <DashboardLayout role="INVESTOR" userName="Investidor" userEmail="" pageTitle="Carregando...">
+      <DashboardLayout role="INVESTOR" userName={session?.name ?? "Investidor"} userEmail={session?.email ?? ""} pageTitle="Carregando...">
         <div className="flex items-center justify-center h-[60vh]">
           <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
         </div>

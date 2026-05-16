@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { User, Mail, Phone, MapPin, Landmark, Briefcase, Calendar, Shield, CreditCard, ArrowLeft } from "lucide-react";
 import { getInvestorProfile } from "../actions";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export default function PerfilPage() {
   const [session, setSession] = useState<any>(null);
@@ -36,21 +37,21 @@ export default function PerfilPage() {
 
   const handleUpdatePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
-      alert("A senha deve ter pelo menos 6 caracteres.");
+      toast.error("A senha deve ter pelo menos 6 caracteres.");
       return;
     }
     setUpdating(true);
     try {
       const res = await import("../actions").then(m => m.updateMyPassword(session.email, newPassword));
       if (res.success) {
-        alert("Senha atualizada com sucesso!");
+        toast.success("Senha atualizada com sucesso!");
         setShowPassModal(false);
         setNewPassword("");
       } else {
-        alert(res.error || "Erro ao atualizar senha.");
+        toast.error(res.error || "Erro ao atualizar senha.");
       }
-    } catch (err) {
-      alert("Erro de conexão.");
+    } catch {
+      toast.error("Erro de conexão.");
     } finally {
       setUpdating(false);
     }

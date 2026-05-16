@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -16,6 +17,7 @@ import { maskDecimal } from "@/lib/masks";
 
 
 export default function ProductsPage() {
+  const session = useAdminSession();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -168,7 +170,7 @@ export default function ProductsPage() {
   };
 
   return (
-    <DashboardLayout role="ADMIN" userName="Admin Eleven" userEmail="admin@elevenfirearms.com.br">
+    <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
       <div className="flex flex-col gap-8 animate-fade-in">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
