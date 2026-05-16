@@ -4,17 +4,25 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 
-export async function getCustomers(page = 1, limit = 20, search = "", filterType = "ALL", filterState = "ALL") {
+export async function getCustomers(page = 1, limit = 20, search = "", searchField = "ALL", filterType = "ALL", filterState = "ALL") {
   try {
     const skip = (page - 1) * limit;
 
     const where: any = {};
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { cpfCnpj: { contains: search } },
-        { email: { contains: search } },
-      ];
+      if (searchField === "NAME") {
+        where.name = { contains: search };
+      } else if (searchField === "DOCUMENT") {
+        where.cpfCnpj = { contains: search };
+      } else if (searchField === "EMAIL") {
+        where.email = { contains: search };
+      } else {
+        where.OR = [
+          { name: { contains: search } },
+          { cpfCnpj: { contains: search } },
+          { email: { contains: search } },
+        ];
+      }
     }
     if (filterType !== "ALL") where.type = filterType;
     if (filterState !== "ALL") where.state = filterState;

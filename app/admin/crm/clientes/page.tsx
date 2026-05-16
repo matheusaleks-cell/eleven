@@ -25,6 +25,7 @@ export default function ClientesPage() {
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 20;
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("ALL");
   const [filterType, setFilterType] = useState("ALL");
   const [filterState, setFilterState] = useState("ALL");
 
@@ -71,7 +72,7 @@ export default function ClientesPage() {
     setLoading(true);
     try {
       const [cData, sData] = await Promise.all([
-        getCustomers(currentPage, itemsPerPage, search, filterType, filterState),
+        getCustomers(currentPage, itemsPerPage, search, searchField, filterType, filterState),
         getCustomerStats()
       ]);
       setClientes(cData?.customers || []);
@@ -84,7 +85,7 @@ export default function ClientesPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, search, filterType, filterState]);
+  }, [currentPage, search, searchField, filterType, filterState]);
 
 
   useEffect(() => {
@@ -237,12 +238,32 @@ export default function ClientesPage() {
 
         {/* Filters */}
         <div className="flex flex-col gap-4">
-            <div className="flex gap-4">
+            <div className="flex flex-col md:flex-row gap-4">
+               <div className="flex gap-2 min-w-[200px]">
+                 <select 
+                   className="w-full h-11 bg-brand-surface border border-brand-border rounded-military px-4 text-xs font-bold text-white uppercase outline-none focus:border-brand-accent cursor-pointer"
+                   value={searchField}
+                   onChange={(e) => {
+                     setSearchField(e.target.value);
+                     setCurrentPage(1);
+                   }}
+                 >
+                   <option value="ALL">🔍 GERAL (TODOS)</option>
+                   <option value="NAME">👤 NOME / RAZÃO</option>
+                   <option value="DOCUMENT">📄 CPF / CNPJ</option>
+                   <option value="EMAIL">✉️ E-MAIL</option>
+                 </select>
+               </div>
                <div className="relative flex-1">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" size={18} />
                  <Input 
                    className="pl-10 h-11" 
-                   placeholder="Buscar por nome, CPF/CNPJ ou e-mail..." 
+                   placeholder={
+                     searchField === "NAME" ? "Digite o nome ou razão social do cliente..." :
+                     searchField === "DOCUMENT" ? "Digite apenas os números do CPF ou CNPJ..." :
+                     searchField === "EMAIL" ? "Digite o endereço de e-mail..." :
+                     "Buscar por nome, CPF/CNPJ ou e-mail..."
+                   } 
                    value={search}
                    onChange={(e) => {
                      setSearch(e.target.value);
