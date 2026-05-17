@@ -1,5 +1,5 @@
 // =============================================
-// TIPOS
+// TIPOS — ERP/CICLO (mantidos para compatibilidade)
 // =============================================
 
 export interface TaxConfig {
@@ -26,7 +26,6 @@ export interface CycleInputs {
   fobUSD: number;
   freightUSD: number;
   insuranceUSD: number;
-  /** Capital planejado para este ciclo (initialCapital do projeto no ciclo 0, ou reinvestmentShare do ciclo anterior) */
   plannedCapital: number;
 }
 
@@ -59,141 +58,176 @@ export interface CycleResult {
 // TIPOS DO SIMULADOR DE LOTES
 // =============================================
 
-export interface ImportCosts {
-  freight: number;
-  ii: number;
-  ipi: number;
-  pisCofins: number;
-  icms: number;
-  siscomex: number;
-  despacho: number;
-  armazenagem: number;
-}
-
 export interface SimulatorInputs {
   /** Quantidade de unidades no primeiro lote */
   initialQuantity: number;
   /** Preço FOB unitário em USD */
   fobUnitUSD: number;
+  /** Frete internacional por unidade em USD */
+  freightUnitUSD: number;
   /** Taxa de câmbio BRL/USD */
   exchangeRate: number;
   /** Preço de venda unitário em BRL */
   salePricePerUnit: number;
-  /** Custo total de importação (Adicionais) em BRL */
-  totalImportCostsBRL: number;
-  /** Alíquota de impostos sobre vendas (ex: 0.08 = 8%) */
 
+  // ── Alíquotas de importação ──────────────────────────────────────────────
+  /** Imposto de Importação (ex: 0.18 = 18%) */
+  iiRate: number;
+  /** IPI sobre (VA + II) (ex: 0.55 = 55%) */
+  ipiRate: number;
+  /** PIS/PASEP sobre VA (ex: 0.021 = 2,1%) */
+  pisRate: number;
+  /** COFINS sobre VA (ex: 0.0965 = 9,65%) */
+  cofinsRate: number;
+  /** Fator de gross-up do ICMS (ex: 0.75) */
+  icmsFactor: number;
+  /** Alíquota do ICMS importação (ex: 0.25 = 25%) */
+  icmsRate: number;
+  /** Taxa de Siscomex — valor fixo por lote (R$) */
+  siscomexFixed: number;
+  /** Custo operacional aduaneiro — valor fixo por lote (R$) */
+  custoOpFixed: number;
+
+  // ── Deduções sobre vendas ────────────────────────────────────────────────
+  /** Alíquota de impostos sobre vendas (Simples Nacional, ex: 0.08) */
   salesTaxRate: number;
-  /** Alíquota de despesas operacionais sobre vendas (ex: 0.15 = 15%) */
+  /** Despesas operacionais de venda em % do faturamento (ex: 0.15) */
   opExRate: number;
-  /** Percentual do lucro líquido destinado ao investidor (ex: 0.50 = 50%) */
+  /** Percentual do lucro líquido destinado ao investidor (ex: 0.50) */
   investorSplitPct: number;
   /** Número de lotes a projetar */
   numBatches: number;
 }
 
-
 export interface BatchProjection {
   batchNumber: number;
   quantity: number;
-  /** Custo total do lote (APORTE) */
+  /** Custo total do lote — APORTE */
   totalImportCostBRL: number;
   costPerUnit: number;
+  /** Saldo remanescente do capital anterior não utilizado */
+  carryover: number;
   grossRevenue: number;
   salesTax: number;
   opExCost: number;
-  /** Lucro líquido antes da divisão (netLiquidProfit = grossRevenue - salesTax - opEx - custo) */
+  /** Saldo apurado = faturamento - tributação - opex + carryover */
+  netBalance: number;
+  /** Lucro líquido = saldo apurado - custo do lote */
   netLiquidProfit: number;
-  /** Fatia do investidor */
   investorShare: number;
-  /** Fatia da empresa */
   companyShare: number;
   /** ROI do investidor neste lote (%) */
   investorROI: number;
-  /** Capital disponível para o próximo lote (capital + lucro investidor) */
+  /** Capital para o próximo lote = custo + fatia do investidor */
   nextBatchCapital: number;
-  /** Unidades estimadas no próximo lote com o capital disponível */
+  /** Estimativa de unidades para o próximo lote */
   nextBatchQuantity: number;
-  /** Ganhos acumulados do investidor até este lote */
+  /** Ganhos acumulados do investidor */
   cumulativeInvestorEarnings: number;
 }
 
 // =============================================
-// SIMULADOR DE ESCALADA DE LOTES
+// CÁLCULO DO CUSTO REAL DE IMPORTAÇÃO
+// Fórmula idêntica à planilha FRANCISCO:
+//   VA  = (FOB + Frete) × qty × câmbio
+//   II  = VA × ii_rate
+//   IPI = (VA + II) × ipi_rate
+//   PIS = VA × pis_rate
+//   COFINS = VA × cofins_rate
+//   BASE_NORMAL = VA + II + IPI + PIS + COFINS + Siscomex
+//   BASE_ALTERADA = BASE_NORMAL / icms_factor          (gross-up ICMS "por dentro")
+//   ICMS = BASE_ALTERADA × icms_rate
+//   VALOR_TOTAL = BASE_ALTERADA + custo_op_fixo
 // =============================================
 
+export function calcImportCostBRL(qty: number, inp: SimulatorInputs): number {
+  const va = (inp.fobUnitUSD + inp.freightUnitUSD) * qty * inp.exchangeRate;
+  const ii = va * inp.iiRate;
+  const ipi = (va + ii) * inp.ipiRate;
+  const pis = va * inp.pisRate;
+  const cofins = va * inp.cofinsRate;
+  const baseNormal = va + ii + ipi + pis + cofins + inp.siscomexFixed;
+  const baseAlterada = baseNormal / inp.icmsFactor;
+  return baseAlterada + inp.custoOpFixed;
+}
+
+/** Retorna o breakdown detalhado do custo de importação para exibição */
+export function calcImportBreakdown(qty: number, inp: SimulatorInputs) {
+  const va = (inp.fobUnitUSD + inp.freightUnitUSD) * qty * inp.exchangeRate;
+  const ii = va * inp.iiRate;
+  const ipi = (va + ii) * inp.ipiRate;
+  const pis = va * inp.pisRate;
+  const cofins = va * inp.cofinsRate;
+  const siscomex = inp.siscomexFixed;
+  const baseNormal = va + ii + ipi + pis + cofins + siscomex;
+  const baseAlterada = baseNormal / inp.icmsFactor;
+  const icms = baseAlterada * inp.icmsRate;
+  const custoOp = inp.custoOpFixed;
+  const total = baseAlterada + custoOp;
+  return { va, ii, ipi, pis, cofins, siscomex, baseNormal, baseAlterada, icms, custoOp, total };
+}
+
 /**
- * Projeta a escalada de lotes com reinvestimento automático.
- *
- * Regra pactuada:
- *   - Empresa retira apenas sua fatia do lucro a cada lote.
- *   - Recompra usa: capital original + lucro do investidor.
- *   - Capital disponível para o próximo lote = totalImportCostBRL + investorShare
- *
- * Cenário base (Rifle .22 — Lote 1):
- *   Aporte: R$ 59.000 | Faturamento: R$ 180.000
- *   Impostos venda: R$ 14.400 (8%) | OpEx: R$ 27.000 (15%)
- *   Lucro líquido: R$ 79.600
- *   Investidor: R$ 39.800 | Empresa: R$ 39.800
- *   Recompra Lote 2: R$ 59.000 + R$ 39.800 = R$ 98.800 → ≈ 83 rifles
+ * Calcula quantas unidades inteiras cabem no capital disponível,
+ * resolvendo: total(N) = N×variável + fixo ≤ capital
  */
+function maxUnitsForCapital(capital: number, inp: SimulatorInputs): number {
+  const cifPerUnit = (inp.fobUnitUSD + inp.freightUnitUSD) * inp.exchangeRate;
+  const iiPerUnit = cifPerUnit * inp.iiRate;
+  const ipiPerUnit = (cifPerUnit + iiPerUnit) * inp.ipiRate;
+  const pisPerUnit = cifPerUnit * inp.pisRate;
+  const cofinsPerUnit = cifPerUnit * inp.cofinsRate;
+  const baseNormalPerUnit = cifPerUnit + iiPerUnit + ipiPerUnit + pisPerUnit + cofinsPerUnit;
+  const variableCostPerUnit = baseNormalPerUnit / inp.icmsFactor;
+  const fixedCostPerLot = inp.siscomexFixed / inp.icmsFactor + inp.custoOpFixed;
+  if (capital <= fixedCostPerLot) return 0;
+  return Math.floor((capital - fixedCostPerLot) / variableCostPerUnit);
+}
+
+// =============================================
+// SIMULADOR DE ESCALADA DE LOTES
+// Regras da planilha FRANCISCO (VR12 Pump):
+//   1. Custo real calculado com fórmula de importação completa (ICMS gross-up)
+//   2. Saldo apurado inclui carryover (sobra do capital anterior)
+//   3. Capital do próximo lote = custo_real + fatia_investidor
+//      (carryover vai para reserva/operacional, não acumula)
+// =============================================
+
 export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[] {
-  const {
-    initialQuantity,
-    fobUnitUSD,
-    exchangeRate,
-    salePricePerUnit,
-    salesTaxRate,
-    opExRate,
-    investorSplitPct,
-    numBatches,
-  } = inputs;
-
-  const totalImportCostsBRL = inputs.totalImportCostsBRL;
-
-  const fobBRL = fobUnitUSD * exchangeRate;
-  const firstLotFobTotal = fobBRL * initialQuantity;
-  const firstLotTotalCost = firstLotFobTotal + totalImportCostsBRL;
-  const costPerUnitBase = firstLotTotalCost / initialQuantity;
-
+  const firstLotCost = calcImportCostBRL(inputs.initialQuantity, inputs);
 
   const projections: BatchProjection[] = [];
-  let availableCapital = firstLotTotalCost;
+  let availableCapital = firstLotCost; // No lote 1, capital = custo exato
   let cumulativeInvestorEarnings = 0;
 
-  for (let i = 1; i <= numBatches; i++) {
+  for (let i = 1; i <= inputs.numBatches; i++) {
     const quantity =
-      i === 1
-        ? initialQuantity
-        : Math.floor(availableCapital / costPerUnitBase);
+      i === 1 ? inputs.initialQuantity : maxUnitsForCapital(availableCapital, inputs);
 
-    // Aporte total do lote (FOB + adicionais proporcionais)
-    const totalImportCostBRL = quantity * costPerUnitBase;
+    const totalImportCostBRL = calcImportCostBRL(quantity, inputs);
 
-    // Faturamento bruto
-    const grossRevenue = quantity * salePricePerUnit;
+    // Saldo remanescente do capital anterior não gasto no lote
+    const carryover = Math.max(0, availableCapital - totalImportCostBRL);
 
-    // Deduções sobre faturamento
-    const salesTax = grossRevenue * salesTaxRate;
-    const opExCost = grossRevenue * opExRate;
+    const grossRevenue = quantity * inputs.salePricePerUnit;
+    const salesTax = grossRevenue * inputs.salesTaxRate;
+    const opExCost = grossRevenue * inputs.opExRate;
 
-    // Lucro líquido = Faturamento - Impostos Venda - OpEx - Custo do Lote
-    // (sem contar o capital disponível no cálculo do lucro)
-    const netLiquidProfit = grossRevenue - salesTax - opExCost - totalImportCostBRL;
+    // Saldo apurado = faturamento líquido de impostos + carryover (conforme planilha)
+    const netBalance = grossRevenue - salesTax - opExCost + carryover;
 
-    // Divisão do lucro entre investidor e empresa
-    const investorShare = netLiquidProfit * investorSplitPct;
-    const companyShare = netLiquidProfit * (1 - investorSplitPct);
+    // Lucro líquido = saldo apurado - custo do lote
+    const netLiquidProfit = netBalance - totalImportCostBRL;
 
-    // ROI = lucro do investidor / aporte
+    const investorShare = netLiquidProfit * inputs.investorSplitPct;
+    const companyShare = netLiquidProfit * (1 - inputs.investorSplitPct);
+
     const investorROI =
-      totalImportCostBRL > 0
-        ? (investorShare / totalImportCostBRL) * 100
-        : 0;
+      totalImportCostBRL > 0 ? (investorShare / totalImportCostBRL) * 100 : 0;
 
-    // Capital do próximo lote = Aporte atual + Ganho do investidor (reinvestimento)
+    // Próximo capital = custo real + fatia do investidor (carryover vai para reserva)
     const nextBatchCapital = totalImportCostBRL + investorShare;
-    const nextBatchQuantity = Math.floor(nextBatchCapital / costPerUnitBase);
+    const nextBatchQuantity = maxUnitsForCapital(nextBatchCapital, inputs);
 
     cumulativeInvestorEarnings += investorShare;
 
@@ -201,10 +235,12 @@ export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[]
       batchNumber: i,
       quantity,
       totalImportCostBRL,
-      costPerUnit: costPerUnitBase,
+      costPerUnit: quantity > 0 ? totalImportCostBRL / quantity : 0,
+      carryover,
       grossRevenue,
       salesTax,
       opExCost,
+      netBalance,
       netLiquidProfit,
       investorShare,
       companyShare,
@@ -220,22 +256,34 @@ export function projectFutureBatches(inputs: SimulatorInputs): BatchProjection[]
   return projections;
 }
 
-export const RIFLE_22_PRESET: SimulatorInputs = {
-  initialQuantity: 50,
-  fobUnitUSD: 80,
-  exchangeRate: 4.92,
-  salePricePerUnit: 3600,
-  totalImportCostsBRL: 59000,
+// =============================================
+// PRESET VR12 PUMP — exatamente como a planilha FRANCISCO
+// =============================================
+export const VR12_PUMP_PRESET: SimulatorInputs = {
+  initialQuantity: 30,
+  fobUnitUSD: 140,
+  freightUnitUSD: 54,
+  exchangeRate: 5.0,
+  salePricePerUnit: 6000,
+  iiRate: 0.18,
+  ipiRate: 0.55,
+  pisRate: 0.021,
+  cofinsRate: 0.0965,
+  icmsFactor: 0.75,
+  icmsRate: 0.25,
+  siscomexFixed: 154.23,
+  custoOpFixed: 7884,
   salesTaxRate: 0.08,
-
   opExRate: 0.15,
   investorSplitPct: 0.50,
-  numBatches: 5,
+  numBatches: 7,
 };
 
+// Mantido para compatibilidade de chamadas antigas (agora aponta para VR12)
+export const RIFLE_22_PRESET = VR12_PUMP_PRESET;
 
 // =============================================
-// CÁLCULO PRINCIPAL (CICLO — ERP)
+// CÁLCULO PRINCIPAL (CICLO — ERP) — sem alterações
 // =============================================
 
 export function calculateCycle(
@@ -243,15 +291,11 @@ export function calculateCycle(
   taxConfig: TaxConfig,
   splitPct: number
 ): CycleResult {
-  // 1. IMPORTAÇÃO
   const customsValueBRL =
-    (inputs.fobUSD + inputs.freightUSD + inputs.insuranceUSD) *
-    inputs.exchangeRate;
+    (inputs.fobUSD + inputs.freightUSD + inputs.insuranceUSD) * inputs.exchangeRate;
   const ii = customsValueBRL * taxConfig.ii_rate;
   const ipi = (customsValueBRL + ii) * taxConfig.ipi_rate;
 
-  // BUG FIX: PIS/COFINS incidem sobre Valor Aduaneiro (CIF) apenas, não sobre +II+IPI
-  // Planilha: =F15*2.1% e =F15*9.65% onde F15 = Valor Aduaneiro
   const basePisCofins = customsValueBRL;
   const pisPasep = basePisCofins * taxConfig.pis_rate;
   const cofins = basePisCofins * taxConfig.cofins_rate;
@@ -259,36 +303,24 @@ export function calculateCycle(
   const siscomex = taxConfig.siscomex_fixed;
   const opCost = taxConfig.operational_fixed;
 
-  // BUG FIX: Base de Cálculo Normal NÃO inclui Custo Operacional
-  // Planilha: =SUM(F18:F30) — custo op está na linha 32, fora do range
-  const calcBaseNormal =
-    customsValueBRL + ii + ipi + pisPasep + cofins + siscomex;
-
-  // Gross-up do ICMS "por dentro" (Base = Valor / Fator)
+  const calcBaseNormal = customsValueBRL + ii + ipi + pisPasep + cofins + siscomex;
   const icmsBaseAltered = calcBaseNormal / taxConfig.icms_factor;
   const icmsImport = icmsBaseAltered * taxConfig.icms_rate;
 
-  // BUG FIX: totalInvestment = Base Alterada (já inclui II+IPI+PIS+COFINS+Siscomex+ICMS) + Custo Op
-  // Planilha: =F33+F39+F31+F32 → BASE_NORMAL + ICMS + Simples + CustoOp = icmsBaseAltered + opCost
   const totalInvestment = icmsBaseAltered + opCost;
 
-  // 2. VENDAS
   const grossRevenue = inputs.quantity * inputs.salePricePerUnit;
   const salesTax = grossRevenue * taxConfig.sales_tax_rate;
   const salesOpCost = grossRevenue * taxConfig.sales_op_rate;
 
-  // BUG FIX: Saldo Apurado usa capital planejado, conforme fórmula do Dashboard:
-  // =B5+B7-B6-B8-B9 → VALOR_INVESTIDO + Faturamento - Investimento - Tributação - CustoOp
   const netBalance =
     inputs.plannedCapital + grossRevenue - totalInvestment - salesTax - salesOpCost;
   const profitToSplit = netBalance - totalInvestment;
   const investorShare = profitToSplit * splitPct;
   const companyShare = profitToSplit * (1 - splitPct);
   const investorCashRes = investorShare;
-  // Saldo para novo investimento = totalInvestment + fatia do investidor
   const nextCycleCapital = totalInvestment + investorShare;
 
-  // 3. POR UNIDADE
   const costPerUnit = totalInvestment / inputs.quantity;
   const profitPerUnit = grossRevenue / inputs.quantity - costPerUnit;
 
@@ -319,7 +351,7 @@ export function calculateCycle(
 }
 
 // =============================================
-// NOME DO CICLO
+// UTILITÁRIOS
 // =============================================
 
 export function getCycleName(cycleNumber: number): string {
@@ -330,10 +362,6 @@ export function getCycleName(cycleNumber: number): string {
   ];
   return `${ordinals[cycleNumber - 1] ?? cycleNumber + "ª"} Reaplicação`;
 }
-
-// =============================================
-// FORMATAÇÃO
-// =============================================
 
 export function formatMoney(value: number): string {
   return new Intl.NumberFormat("pt-BR", {
