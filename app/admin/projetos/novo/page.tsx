@@ -128,6 +128,13 @@ export default function AdminNewProjectPage() {
       return;
     }
 
+    const capitalValue = parseFloat(rawCapital);
+    if (isNaN(capitalValue) || capitalValue <= 0) {
+      toast.error("Informe o valor do aporte. Preencha a quantidade e o preço de custo (Passo 2) ou edite o valor diretamente no Passo 3.");
+      setStep(3);
+      return;
+    }
+
     setLoading(true);
     try {
       // Nota: Idealmente aqui atualizamos também os dados do investidor via API
@@ -290,6 +297,19 @@ export default function AdminNewProjectPage() {
               </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                <div className="sm:col-span-2">
+                  <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Valor do Aporte (R$) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.capital}
+                    onChange={(e) => setForm({ ...form, capital: e.target.value })}
+                    placeholder="0.00"
+                    style={fieldStyle}
+                  />
+                  <p style={{ color: "#A0A0A0", fontSize: "10px", marginTop: 4 }}>Calculado automaticamente pela quantidade × custo. Pode editar manualmente se necessário.</p>
+                </div>
                 <div>
                   <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Número Máximo de Ciclos *</label>
                   <input type="number" min="1" max="20" value={form.maxCycles} onChange={(e) => setForm({ ...form, maxCycles: e.target.value })} style={fieldStyle} />

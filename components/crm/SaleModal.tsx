@@ -5,7 +5,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { ShoppingBag, Plus, Trash2, DollarSign, Package } from "lucide-react";
+import { ShoppingBag, Plus, Trash2, DollarSign, Building2, User } from "lucide-react";
 import { getProductsForSale, createDirectSale } from "@/app/admin/crm/vendas/actions";
 import { toast } from "sonner";
 
@@ -28,6 +28,27 @@ interface CartItem {
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+function LotBadge({ source, investor, own }: { source?: string; investor?: number; own?: number }) {
+  if (!source || source === "SEM_RASTREIO") return null;
+  if (source === "INVESTIDOR")
+    return (
+      <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded mt-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20">
+        <User size={8} /> LOTE INVESTIDOR ({investor})
+      </span>
+    );
+  if (source === "PROPRIO")
+    return (
+      <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded mt-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20">
+        <Building2 size={8} /> LOTE PRÓPRIO ({own})
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded mt-0.5 bg-brand-text-muted/10 text-brand-text-muted border border-brand-border">
+      <Building2 size={8} /> MISTO · Inv: {investor} / Próprio: {own}
+    </span>
+  );
+}
 
 export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: SaleModalProps) {
   const [products, setProducts] = useState<any[]>([]);
@@ -167,6 +188,7 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
                     <p className="text-[9px] font-bold mt-0.5" style={{ color: p.stockAvailable <= 3 ? "#F59E0B" : "#4CAF50" }}>
                       Estoque: {p.stockAvailable} un.{inCart ? ` · No carrinho: ${inCart.quantity}` : ""}
                     </p>
+                    <LotBadge source={p.lotSource} investor={p.investorLotStock} own={p.ownLotStock} />
                   </div>
                   <div className="text-right shrink-0 ml-3">
                     <p className="text-sm font-mono font-black text-brand-accent">{fmt(price)}</p>
