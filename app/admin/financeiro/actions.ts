@@ -110,6 +110,23 @@ export async function saveSplitRules(data: {
   }
 }
 
+export async function getMonthlyRevenue(year: number) {
+  try {
+    const start = new Date(year, 0, 1);
+    const end = new Date(year + 1, 0, 1);
+    const orders = await prisma.salesOrder.findMany({
+      where: { status: "PAGO", createdAt: { gte: start, lt: end } },
+      select: { createdAt: true, totalValue: true },
+    });
+    const NAMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    const months = NAMES.map((name, i) => ({ month: i + 1, name, value: 0 }));
+    orders.forEach(o => { months[o.createdAt.getMonth()].value += o.totalValue; });
+    return months;
+  } catch {
+    return [];
+  }
+}
+
 export async function getRecentTransactions(filters?: { type?: string; month?: number; year?: number }) {
   try {
     const where: any = {};

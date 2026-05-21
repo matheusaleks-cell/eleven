@@ -11,55 +11,69 @@ import { CreditCard, TrendingUp, ArrowDownRight, ArrowUpRight, DollarSign, Walle
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useEffect, useCallback } from "react";
-import { getFinancialStats, getRecentTransactions, getSplitRules, saveSplitRules } from "./actions";
+import { getFinancialStats, getRecentTransactions, getSplitRules, saveSplitRules, getMonthlyRevenue } from "./actions";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-const INITIAL_TRANSACTIONS = [
-  { id: "TX-99812", type: "DISTRIB", investor: "Francisco I.", value: 12500, date: "Hoje, 14:20", status: "EFETUADO" },
-  { id: "TX-99811", type: "VENDA", investor: "Lote 01", value: 8500, date: "Hoje, 11:05", status: "RECEBIDO" },
-  { id: "TX-99810", type: "REINVEST", investor: "Francisco I.", value: 12500, date: "Ontem, 18:30", status: "EFETUADO" },
-  { id: "TX-99809", type: "IMPOSTO", investor: "DRE Mensal", value: 4200, date: "Ontem, 10:15", status: "AGUARDANDO" },
-];
+const MONTH_NAMES_PT = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+const MONTH_NAMES_LONG = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+function generatePeriods() {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    return {
+      label: `${MONTH_NAMES_PT[d.getMonth()]}/${d.getFullYear()}${i === 0 ? " (ATUAL)" : ""}`,
+      month: d.getMonth() + 1,
+      year: d.getFullYear(),
+      longName: `${MONTH_NAMES_LONG[d.getMonth()].toUpperCase()} / ${d.getFullYear()}`,
+    };
+  });
+}
+const PERIODS = generatePeriods();
 
 export default function FinancialPage() {
   const session = useAdminSession();
   const [transactions, setTransactions] = useState<any[]>([]);
   const [stats, setStats] = useState({ custody: 0, distributed: 0, reinvestment: 0, taxes: 0, transitCapital: 0 });
+  const [monthlyData, setMonthlyData] = useState<Array<{ month: number; name: string; value: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [isSplitModalOpen, setIsSplitModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
-  const [filter, setFilter] = useState({ type: "ALL", period: "JUN/2026" });
+  const [periodIdx, setPeriodIdx] = useState(0);
+  const [typeFilter, setTypeFilter] = useState("ALL");
   const [savingRules, setSavingRules] = useState(false);
-  const [splitRules, setSplitRules] = useState({
-    investor: 50,
-    company: 35,
-    reserve: 10,
-    reinvest: 5
-  });
+  const [splitRules, setSplitRules] = useState({ investor: 50, company: 35, reserve: 10, reinvest: 5 });
 
-  const chartData = [
-    { name: 'Jan', valor: 45000 },
-    { name: 'Fev', valor: 52000 },
-    { name: 'Mar', valor: 48000 },
-    { name: 'Abr', valor: 61000 },
-    { name: 'Mai', valor: 55000 },
-    { name: 'Jun', valor: stats.custody || 0 },
-  ];
+  // Derived values
+  const selectedPeriod = PERIODS[periodIdx];
+  const filteredTransactions = typeFilter === "ALL"
+    ? transactions
+    : transactions.filter(t => t.type === typeFilter);
+  const chartData = monthlyData.map(m => ({ name: m.name, valor: m.value }));
+  const monthsWithData = monthlyData.filter(m => m.value > 0);
+  const avgMonthly = monthsWithData.length > 0
+    ? monthsWithData.reduce((s, m) => s + m.value, 0) / monthsWithData.length
+    : 0;
+  const bestMonth = monthlyData.reduce((best: any, m) => (m.value > (best?.value ?? 0) ? m : best), null as any);
+  const lucroLiquido = stats.custody - stats.distributed - stats.taxes;
+  const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (month: number, year: number) => {
     setLoading(true);
     try {
-      const [sData, tData, rData] = await Promise.all([
+      const [sData, tData, rData, mData] = await Promise.all([
         getFinancialStats(),
-        getRecentTransactions(),
+        getRecentTransactions({ month, year }),
         getSplitRules(),
+        getMonthlyRevenue(year),
       ]);
       setStats(sData);
       setTransactions(tData);
       if (rData) setSplitRules(rData);
-    } catch (error) {
+      setMonthlyData(mData);
+    } catch {
       toast.error("Erro ao carregar dados financeiros.");
     } finally {
       setLoading(false);
@@ -67,8 +81,8 @@ export default function FinancialPage() {
   }, []);
 
   useEffect(() => {
-    refreshData();
-  }, [refreshData]);
+    refreshData(selectedPeriod.month, selectedPeriod.year);
+  }, [periodIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMonthlyClosing = () => {
     toast.promise(
@@ -138,30 +152,30 @@ export default function FinancialPage() {
               <Filter size={14} className="text-brand-accent" />
               <span className="text-[10px] font-bold text-brand-text-muted uppercase">Filtros:</span>
            </div>
-           <select 
+           <select
              className="bg-brand-bg border border-brand-border rounded px-3 py-1.5 text-[10px] font-bold text-white outline-none focus:border-brand-accent transition-colors"
-             value={filter.period}
-             onChange={(e) => setFilter({...filter, period: e.target.value})}
+             value={periodIdx}
+             onChange={(e) => setPeriodIdx(Number(e.target.value))}
            >
-              <option>JUN/2026 (ATUAL)</option>
-              <option>MAI/2026</option>
-              <option>ABR/2026</option>
+             {PERIODS.map((p, i) => (
+               <option key={i} value={i}>{p.label}</option>
+             ))}
            </select>
-           <select 
+           <select
              className="bg-brand-bg border border-brand-border rounded px-3 py-1.5 text-[10px] font-bold text-white outline-none focus:border-brand-accent transition-colors"
-             value={filter.type}
-             onChange={(e) => setFilter({...filter, type: e.target.value})}
+             value={typeFilter}
+             onChange={(e) => setTypeFilter(e.target.value)}
            >
               <option value="ALL">TODAS OPERAÇÕES</option>
               <option value="VENDA">VENDAS</option>
               <option value="DISTRIB">DISTRIBUIÇÕES</option>
               <option value="CUSTO">CUSTOS OPERACIONAIS</option>
            </select>
-           
+
            <div className="ml-auto flex items-center gap-4">
               <div className="flex flex-col items-end">
                  <span className="text-[8px] font-bold text-brand-text-muted uppercase">Lucro Líquido no Período</span>
-                 <MoneyDisplay value={stats.custody * 0.15} size="sm" colored />
+                 <MoneyDisplay value={lucroLiquido} size="sm" colored />
               </div>
               <Button variant="ghost" className="h-8 text-[9px] font-bold gap-2" onClick={handleGenerateDRE}>
                  <FileText size={14} /> EXPORTAR PERÍODO
@@ -196,7 +210,7 @@ export default function FinancialPage() {
                 <TrendingUp size={16} className="text-brand-success opacity-50" />
              </div>
              <MoneyDisplay value={stats.distributed} size="lg" />
-             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Cálculo de Split (50%)</p>
+             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Split Investidor ({splitRules.investor}%)</p>
           </Card>
           <Card className="border-l-2 border-l-brand-warning bg-brand-surface/30">
              <div className="flex justify-between items-start mb-2">
@@ -204,7 +218,7 @@ export default function FinancialPage() {
                 <History size={16} className="text-brand-warning opacity-50" />
              </div>
              <MoneyDisplay value={stats.reinvestment} size="lg" />
-             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Custo Operacional (35%)</p>
+             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Operacional Eleven ({splitRules.company}%)</p>
           </Card>
           <Card className="border-l-2 border-l-brand-danger bg-brand-surface/30">
              <div className="flex justify-between items-start mb-2">
@@ -275,11 +289,11 @@ export default function FinancialPage() {
                 <div className="flex gap-4">
                    <div className="flex flex-col">
                       <span className="text-[8px] text-brand-text-muted font-bold uppercase">Média Mensal</span>
-                      <span className="text-xs font-bold text-white font-mono">R$ 52.600</span>
+                      <span className="text-xs font-bold text-white font-mono">{fmtBRL(avgMonthly)}</span>
                    </div>
                    <div className="flex flex-col border-l border-brand-border pl-4">
                       <span className="text-[8px] text-brand-text-muted font-bold uppercase">Melhor Mês</span>
-                      <span className="text-xs font-bold text-brand-success font-mono">Abril</span>
+                      <span className="text-xs font-bold text-brand-success font-mono">{bestMonth?.name || "—"}</span>
                    </div>
                 </div>
                 <Button variant="ghost" className="text-[10px] gap-2 tracking-widest font-bold uppercase hover:bg-brand-accent/10 hover:text-brand-accent" onClick={() => setIsSplitModalOpen(true)}>
@@ -302,7 +316,7 @@ export default function FinancialPage() {
                 </Button>
              </div>
              <div className="p-2 space-y-1">
-                {transactions.map((tx) => (
+                {filteredTransactions.map((tx) => (
                   <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-brand-surface/40 transition-colors border border-transparent hover:border-brand-border group cursor-pointer">
                      <div className="flex items-center gap-3">
                         <div className={cn(
@@ -444,7 +458,7 @@ export default function FinancialPage() {
                  </tr>
                </thead>
                <tbody>
-                 {transactions.map((tx) => (
+                 {filteredTransactions.map((tx) => (
                    <tr key={tx.id} className="border-b border-brand-border/30 hover:bg-white/5 transition-colors">
                      <td className="p-4">
                         <div className="flex flex-col">
@@ -499,7 +513,7 @@ export default function FinancialPage() {
            <div className="space-y-4">
               <div className="flex justify-between items-center py-3 border-b border-brand-border">
                  <span className="text-[10px] font-bold text-brand-text-muted uppercase">Período de Referência</span>
-                 <span className="text-xs font-bold text-white">JUNHO / 2026</span>
+                 <span className="text-xs font-bold text-white">{selectedPeriod.longName}</span>
               </div>
               <div className="flex justify-between items-center py-3 border-b border-brand-border">
                  <span className="text-[10px] font-bold text-brand-text-muted uppercase">Volume de Vendas (Total)</span>

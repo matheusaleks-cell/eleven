@@ -105,10 +105,11 @@ export async function getProjectById(id: string) {
     return {
       ...project,
       product_name: project.productName,
+      max_cycles: project.maxCycles,
       investorName: project.investor?.name ?? "Investidor",
       currentCycle: project.cycles.length,
-      totalRevenue: project.cycles.reduce((acc, c) => acc + c.grossRevenue, 0),
-      totalInvestorShare: project.cycles.reduce((acc, c) => acc + c.investorShare, 0)
+      totalRevenue: project.cycles.reduce((acc, c) => acc + Number(c.grossRevenue || 0), 0),
+      totalInvestorShare: project.cycles.reduce((acc, c) => acc + Number(c.investorShare || 0), 0),
     };
   } catch (error) {
     console.error("Erro ao buscar detalhes do projeto:", error);

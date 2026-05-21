@@ -194,7 +194,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  if (!session || !project || loading) return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#111111]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-[#F5C400] border-t-transparent rounded-full animate-spin" />
+          <p className="text-[#F5C400] font-bold uppercase tracking-widest text-[10px] animate-pulse">Carregando Projeto...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session || !project) return null;
 
   const isAdmin = session.role === "ADMIN";
   return (
@@ -283,7 +294,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       ★ {cycle.cycleName.toUpperCase()}
                     </p>
                     <p style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}>
-                      {cycle.quantity} un · Câmbio: R$ {cycle.exchangeRateUsd?.toFixed(2)} · {cycle.startDate}
+                      {cycle.quantity} un · Câmbio: R$ {cycle.exchangeRateUsd?.toFixed(2)} · {new Date(cycle.createdAt).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
                 </div>
