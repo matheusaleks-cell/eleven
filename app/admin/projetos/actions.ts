@@ -14,19 +14,24 @@ export async function getProjects() {
       orderBy: { createdAt: "desc" }
     });
 
-    return projects.map(p => ({
-      id: p.id,
-      name: p.name,
-      product_name: p.productName,
-      investorName: p.investor?.name ?? "Investidor",
-      investor_id: p.investorId,
-      currentCycle: p.cycles.length,
-      max_cycles: p.maxCycles,
-      currentCapital: p.initialCapital, // Simplificação inicial
-      totalRevenue: p.cycles.reduce((acc, c) => acc + c.grossRevenue, 0),
-      status: p.status,
-      created_at: p.createdAt.toISOString()
-    }));
+    return projects.map(p => {
+      const totalInvestorShare = p.cycles
+        .filter(c => c.status === "COMPLETED")
+        .reduce((acc, c) => acc + (c.investorShare || 0), 0);
+      return {
+        id: p.id,
+        name: p.name,
+        product_name: p.productName,
+        investorName: p.investor?.name ?? "Investidor",
+        investor_id: p.investorId,
+        currentCycle: p.cycles.length,
+        max_cycles: p.maxCycles,
+        currentCapital: (p.initialCapital || 0) + totalInvestorShare,
+        totalRevenue: p.cycles.reduce((acc, c) => acc + (c.grossRevenue || 0), 0),
+        status: p.status,
+        created_at: p.createdAt.toISOString()
+      };
+    });
   } catch (error) {
     console.error("Erro ao buscar projetos:", error);
     return [];

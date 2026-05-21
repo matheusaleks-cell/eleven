@@ -5,8 +5,9 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { ShoppingBag, Plus, Trash2, DollarSign, Building2, User } from "lucide-react";
-import { getProductsForSale, createDirectSale } from "@/app/admin/crm/vendas/actions";
+import { ShoppingBag, Plus, Trash2, DollarSign, Building2, User, Layers } from "lucide-react";
+import { getProductsForSale, createDirectSale, getLotOptionsForCart } from "@/app/admin/crm/vendas/actions";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 interface SaleModalProps {
@@ -50,6 +51,8 @@ function LotBadge({ source, investor, own }: { source?: string; investor?: numbe
   );
 }
 
+type LotPreference = "AUTO" | "PROPRIO" | "INVESTIDOR";
+
 export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: SaleModalProps) {
   const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -59,6 +62,10 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [search, setSearch] = useState("");
+  const [lotPreference, setLotPreference] = useState<LotPreference>("AUTO");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [lotProjects, setLotProjects] = useState<{ id: string; name: string; investorName: string }[]>([]);
+  const [loadingLots, setLoadingLots] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -67,9 +74,23 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
       setSearch("");
       setPaymentMethod("PIX");
       setStatus("PAGO");
+      setLotPreference("AUTO");
+      setSelectedProjectId("");
+      setLotProjects([]);
       loadProducts();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (lotPreference === "INVESTIDOR" && cart.length > 0) {
+      setLoadingLots(true);
+      getLotOptionsForCart(cart.map(i => i.id)).then(opts => {
+        setLotProjects(opts);
+        setLoadingLots(false);
+        if (opts.length > 0 && !selectedProjectId) setSelectedProjectId(opts[0].id);
+      });
+    }
+  }, [lotPreference, cart]);
 
   const loadProducts = async () => {
     setLoadingProducts(true);
@@ -114,6 +135,10 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
 
   const handleSave = async () => {
     if (cart.length === 0) { toast.error("Adicione pelo menos um produto."); return; }
+    if (lotPreference === "INVESTIDOR" && !selectedProjectId) {
+      toast.error("Selecione o projeto do investidor para direcionar a venda.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await createDirectSale({
@@ -124,6 +149,8 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
         status,
         notes,
         sellerId,
+        lotPreference,
+        investmentProjectId: lotPreference === "INVESTIDOR" ? selectedProjectId : undefined,
       });
       if (res.success) {
         toast.success(`Pedido ${res.orderNumber} registrado!`);
@@ -242,6 +269,61 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Total</span>
                 <span className="text-xl font-mono font-black text-brand-accent">{fmt(totalValue)}</span>
+              </div>
+
+              {/* Seletor de Origem do Lote */}
+              <div className="space-y-1.5 pt-1 border-t border-brand-border/40">
+                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest flex items-center gap-1">
+                  <Layers size={10} /> Origem do Lote
+                </label>
+                <div className="flex gap-1 p-0.5 bg-brand-bg rounded border border-brand-border">
+                  {(["AUTO", "PROPRIO", "INVESTIDOR"] as LotPreference[]).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => { setLotPreference(opt); setSelectedProjectId(""); }}
+                      className={cn(
+                        "flex-1 py-1.5 rounded text-[8px] font-black uppercase tracking-wider transition-all",
+                        lotPreference === opt
+                          ? opt === "INVESTIDOR"
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                            : opt === "PROPRIO"
+                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                            : "bg-brand-surface text-white border border-brand-border"
+                          : "text-brand-text-muted hover:text-white"
+                      )}
+                    >
+                      {opt === "AUTO" ? "Auto (FIFO)" : opt === "PROPRIO" ? "Lote Próprio" : "Investidor"}
+                    </button>
+                  ))}
+                </div>
+
+                {lotPreference === "INVESTIDOR" && (
+                  <div>
+                    {loadingLots ? (
+                      <div className="flex items-center gap-2 px-2 py-1.5 text-[9px] text-brand-text-muted">
+                        <div className="w-3 h-3 border border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        Buscando projetos...
+                      </div>
+                    ) : lotProjects.length === 0 ? (
+                      <p className="text-[9px] text-amber-400/70 font-bold px-1">
+                        Nenhum projeto com estoque dos produtos no carrinho.
+                      </p>
+                    ) : (
+                      <select
+                        className="w-full bg-brand-input border border-amber-500/40 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-amber-500"
+                        value={selectedProjectId}
+                        onChange={e => setSelectedProjectId(e.target.value)}
+                      >
+                        <option value="">Selecionar investidor...</option>
+                        {lotProjects.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.investorName} — {p.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

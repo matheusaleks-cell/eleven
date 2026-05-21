@@ -46,19 +46,24 @@ function DocsTab({ customer, onRefresh, handleDownload }: {
       const reader = new FileReader();
       reader.onload = async (ev) => {
         const base64 = ev.target?.result as string;
-        const res = await uploadCustomerDocument(customer.id, {
-          name: file.name,
-          type: file.type.split("/")[1]?.toUpperCase() || "PDF",
-          category: docKey,
-          size: (file.size / 1024 / 1024).toFixed(2) + " MB",
-          base64Data: base64,
-        });
-        setUploadingKey(null);
-        if (res.success) {
-          toast.success("Documento enviado com sucesso!");
-          if (onRefresh) onRefresh();
-        } else {
-          toast.error("Erro ao enviar documento.");
+        try {
+          const res = await uploadCustomerDocument(customer.id, {
+            name: file.name,
+            type: file.type.split("/")[1]?.toUpperCase() || "PDF",
+            category: docKey,
+            size: (file.size / 1024 / 1024).toFixed(2) + " MB",
+            base64Data: base64,
+          });
+          if (res.success) {
+            toast.success("Documento enviado com sucesso!");
+            if (onRefresh) onRefresh();
+          } else {
+            toast.error("Erro ao enviar documento.");
+          }
+        } catch {
+          toast.error("Falha no envio. Verifique o tamanho do arquivo (máx. 15 MB).");
+        } finally {
+          setUploadingKey(null);
         }
       };
       reader.readAsDataURL(file);

@@ -90,6 +90,42 @@ export async function getSalesOrders() {
   }
 }
 
+export async function getLotOptionsForCart(productIds: string[]) {
+  try {
+    if (productIds.length === 0) return [];
+
+    const weapons = await prisma.weaponMap.findMany({
+      where: {
+        productId: { in: productIds },
+        currentStatus: "ESTOQUE",
+        importLot: { investmentProjectId: { not: null } },
+      },
+      select: { importLot: { select: { investmentProjectId: true } } },
+    });
+
+    const projectIds = [...new Set(
+      weapons.map(w => w.importLot.investmentProjectId).filter(Boolean) as string[]
+    )];
+
+    if (projectIds.length === 0) return [];
+
+    const projects = await prisma.investmentProject.findMany({
+      where: { id: { in: projectIds } },
+      select: { id: true, name: true, investor: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return projects.map(p => ({
+      id: p.id,
+      name: p.name,
+      investorName: p.investor.name,
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar opções de lote:", error);
+    return [];
+  }
+}
+
 export async function createDirectSale(data: {
   customerId: string;
   items: { id: string; name: string; sku: string; price: number; quantity: number }[];
@@ -98,6 +134,8 @@ export async function createDirectSale(data: {
   notes?: string;
   status?: string;
   sellerId?: string;
+  lotPreference?: "AUTO" | "PROPRIO" | "INVESTIDOR";
+  investmentProjectId?: string;
 }) {
   try {
     const orderNumber = `ORD-${Date.now()}`;
@@ -124,21 +162,45 @@ export async function createDirectSale(data: {
     });
 
     const saleDate = new Date();
+    const { lotPreference = "AUTO", investmentProjectId } = data;
 
     for (const item of data.items) {
-      // Decrementa estoque do produto
       await prisma.product.updateMany({
         where: { id: item.id, stockAvailable: { gte: item.quantity } },
         data: { stockAvailable: { decrement: item.quantity } },
       });
 
-      // Marca as armas individuais como VENDIDA (FIFO por data de entrada)
-      const weaponsToSell = await prisma.weaponMap.findMany({
-        where: { productId: item.id, currentStatus: "ESTOQUE" },
+      // Monta filtro de lote conforme preferência
+      let lotFilter: any = {};
+      if (lotPreference === "PROPRIO") {
+        lotFilter = { importLot: { investmentProjectId: null } };
+      } else if (lotPreference === "INVESTIDOR" && investmentProjectId) {
+        lotFilter = { importLot: { investmentProjectId } };
+      }
+
+      // Busca armas do lote preferido primeiro (FIFO por data de entrada)
+      let weaponsToSell = await prisma.weaponMap.findMany({
+        where: { productId: item.id, currentStatus: "ESTOQUE", ...lotFilter },
         take: item.quantity,
         orderBy: { entryDate: "asc" },
         select: { id: true },
       });
+
+      // Se faltaram armas no lote preferido, complementa com FIFO geral
+      if (weaponsToSell.length < item.quantity && Object.keys(lotFilter).length > 0) {
+        const alreadyIds = weaponsToSell.map(w => w.id);
+        const extras = await prisma.weaponMap.findMany({
+          where: {
+            productId: item.id,
+            currentStatus: "ESTOQUE",
+            id: alreadyIds.length > 0 ? { notIn: alreadyIds } : undefined,
+          },
+          take: item.quantity - weaponsToSell.length,
+          orderBy: { entryDate: "asc" },
+          select: { id: true },
+        });
+        weaponsToSell = [...weaponsToSell, ...extras];
+      }
 
       if (weaponsToSell.length > 0) {
         await prisma.weaponMap.updateMany({

@@ -73,7 +73,7 @@ export async function getInvestorDetails(id: string) {
     let totalCicles = 0;
 
     const mappedProjects = investor.investedProjects.map((p) => {
-      totalInvested += p.initialCapital;
+      totalInvested += p.initialCapital || 0;
       let projectReceived = 0;
       p.cycles.forEach((c) => {
         if (c.status === "COMPLETED") {

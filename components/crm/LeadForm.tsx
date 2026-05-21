@@ -1,10 +1,13 @@
 "use client";
 
+import React, { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { searchCustomersForLead } from "@/app/admin/crm/funil/actions";
+import { Search, X, CheckCircle2, Building2, User } from "lucide-react";
 
 const leadSchema = z.object({
   name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
@@ -62,6 +65,7 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema) as any,
@@ -87,6 +91,47 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
     },
   });
 
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [linkedCustomer, setLinkedCustomer] = useState<any>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (customerSearch.length < 2) { setSearchResults([]); setShowDropdown(false); return; }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      const results = await searchCustomersForLead(customerSearch);
+      setSearchResults(results);
+      setShowDropdown(true);
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [customerSearch]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowDropdown(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const selectCustomer = (c: any) => {
+    setLinkedCustomer(c);
+    setCustomerSearch("");
+    setShowDropdown(false);
+    setValue("name", c.name);
+    setValue("email", c.email || "");
+    setValue("phone", c.phone || "");
+    setValue("taxId", c.document || "");
+    setValue("state", c.state || "");
+    setValue("city", c.city || "");
+    setValue("customerType", c.type === "B2B" ? "PJ" : "PF");
+    if (c.crNumber) setValue("crNumber", c.crNumber);
+  };
+
   return (
     <form onSubmit={handleSubmit((data) => {
       const cleanValue = typeof data.value === "string" 
@@ -95,6 +140,88 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
       onSubmit({ ...data, value: cleanValue });
     })} className="space-y-8 max-h-[70vh] overflow-y-auto px-2 custom-scrollbar">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+        {/* Seção: Busca na Base de Clientes */}
+        <div className="space-y-3 md:col-span-2">
+          <h4 className="text-[14px] font-bold text-brand-accent uppercase tracking-[0.2em] border-b border-brand-accent/20 pb-3">
+            Vincular a Cliente da Base (Opcional)
+          </h4>
+          {linkedCustomer ? (
+            <div className="flex items-center justify-between p-4 bg-brand-success/10 border border-brand-success/30 rounded-lg">
+              <div className="flex items-center gap-3">
+                <CheckCircle2 size={18} className="text-brand-success shrink-0" />
+                <div>
+                  <p className="text-[12px] font-black text-white uppercase tracking-tight">{linkedCustomer.name}</p>
+                  <p className="text-[10px] text-brand-text-muted font-bold">
+                    {linkedCustomer.document} · {linkedCustomer.city && `${linkedCustomer.city} - `}{linkedCustomer.state}
+                    {linkedCustomer.type === "B2B" ? " · LOJA / B2B" : " · PESSOA FÍSICA"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinkedCustomer(null)}
+                className="p-1 text-brand-text-muted hover:text-white transition-colors"
+                title="Desvincular"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <div ref={searchRef} className="relative">
+              <div className="relative">
+                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-muted pointer-events-none" />
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={e => setCustomerSearch(e.target.value)}
+                  onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+                  className="w-full bg-brand-input border border-brand-border rounded h-12 pl-11 pr-10 text-base text-white focus:outline-none focus:border-brand-accent placeholder:text-brand-text-muted/50"
+                  style={{ background: "#0F0F0F" }}
+                  placeholder="Buscar por nome ou CNPJ na base de clientes..."
+                />
+                {searching && (
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
+                )}
+              </div>
+
+              {showDropdown && searchResults.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-brand-surface border border-brand-border rounded-lg shadow-2xl overflow-hidden max-h-52 overflow-y-auto">
+                  {searchResults.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => selectCustomer(c)}
+                      className="w-full px-4 py-3 flex items-center gap-3 hover:bg-brand-accent/10 transition-colors text-left border-b border-brand-border/30 last:border-0"
+                    >
+                      <div className={`p-1.5 rounded ${c.type === "B2B" ? "bg-blue-500/20 text-blue-400" : "bg-brand-success/20 text-brand-success"}`}>
+                        {c.type === "B2B" ? <Building2 size={13} /> : <User size={13} />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-black text-white uppercase tracking-tight truncate">{c.name}</p>
+                        <p className="text-[10px] text-brand-text-muted font-bold truncate">
+                          {c.document} · {c.city && `${c.city} - `}{c.state}
+                        </p>
+                      </div>
+                      <span className={`ml-auto text-[9px] font-black px-2 py-0.5 rounded border shrink-0 ${c.type === "B2B" ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-brand-success/10 text-brand-success border-brand-success/20"}`}>
+                        {c.type === "B2B" ? "LOJA" : "PF"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {showDropdown && searchResults.length === 0 && customerSearch.length >= 2 && !searching && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-brand-surface border border-brand-border rounded-lg px-4 py-3 shadow-xl">
+                  <p className="text-[11px] text-brand-text-muted font-bold uppercase text-center">
+                    Nenhum cliente encontrado — preencha os dados manualmente abaixo.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Seção: Informações Básicas */}
         <div className="space-y-5 md:col-span-2">
           <h4 className="text-[14px] font-bold text-brand-accent uppercase tracking-[0.2em] border-b border-brand-accent/20 pb-3">Informações Básicas</h4>
@@ -149,12 +276,33 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
                 style={{ background: "#0F0F0F" }}
               >
                 <option value="">Selecione...</option>
-                <option value="SP">São Paulo</option>
-                <option value="RJ">Rio de Janeiro</option>
+                <option value="AC">Acre</option>
+                <option value="AL">Alagoas</option>
+                <option value="AP">Amapá</option>
+                <option value="AM">Amazonas</option>
+                <option value="BA">Bahia</option>
+                <option value="CE">Ceará</option>
+                <option value="DF">Distrito Federal</option>
+                <option value="ES">Espírito Santo</option>
+                <option value="GO">Goiás</option>
+                <option value="MA">Maranhão</option>
+                <option value="MT">Mato Grosso</option>
+                <option value="MS">Mato Grosso do Sul</option>
                 <option value="MG">Minas Gerais</option>
+                <option value="PA">Pará</option>
+                <option value="PB">Paraíba</option>
                 <option value="PR">Paraná</option>
-                <option value="SC">Santa Catarina</option>
+                <option value="PE">Pernambuco</option>
+                <option value="PI">Piauí</option>
+                <option value="RJ">Rio de Janeiro</option>
+                <option value="RN">Rio Grande do Norte</option>
                 <option value="RS">Rio Grande do Sul</option>
+                <option value="RO">Rondônia</option>
+                <option value="RR">Roraima</option>
+                <option value="SC">Santa Catarina</option>
+                <option value="SP">São Paulo</option>
+                <option value="SE">Sergipe</option>
+                <option value="TO">Tocantins</option>
               </select>
             </div>
             <div>

@@ -141,18 +141,20 @@ export interface BatchProjection {
 // =============================================
 
 export function calcImportCostBRL(qty: number, inp: SimulatorInputs): number {
+  const icmsFactor = inp.icmsFactor > 0 ? inp.icmsFactor : 1;
   const va = (inp.fobUnitUSD + inp.freightUnitUSD) * qty * inp.exchangeRate;
   const ii = va * inp.iiRate;
   const ipi = (va + ii) * inp.ipiRate;
   const pis = va * inp.pisRate;
   const cofins = va * inp.cofinsRate;
   const baseNormal = va + ii + ipi + pis + cofins + inp.siscomexFixed;
-  const baseAlterada = baseNormal / inp.icmsFactor;
+  const baseAlterada = baseNormal / icmsFactor;
   return baseAlterada + inp.custoOpFixed;
 }
 
 /** Retorna o breakdown detalhado do custo de importação para exibição */
 export function calcImportBreakdown(qty: number, inp: SimulatorInputs) {
+  const icmsFactor = inp.icmsFactor > 0 ? inp.icmsFactor : 1;
   const va = (inp.fobUnitUSD + inp.freightUnitUSD) * qty * inp.exchangeRate;
   const ii = va * inp.iiRate;
   const ipi = (va + ii) * inp.ipiRate;
@@ -160,7 +162,7 @@ export function calcImportBreakdown(qty: number, inp: SimulatorInputs) {
   const cofins = va * inp.cofinsRate;
   const siscomex = inp.siscomexFixed;
   const baseNormal = va + ii + ipi + pis + cofins + siscomex;
-  const baseAlterada = baseNormal / inp.icmsFactor;
+  const baseAlterada = baseNormal / icmsFactor;
   const icms = baseAlterada * inp.icmsRate;
   const custoOp = inp.custoOpFixed;
   const total = baseAlterada + custoOp;
@@ -172,14 +174,15 @@ export function calcImportBreakdown(qty: number, inp: SimulatorInputs) {
  * resolvendo: total(N) = N×variável + fixo ≤ capital
  */
 function maxUnitsForCapital(capital: number, inp: SimulatorInputs): number {
+  const icmsFactor = inp.icmsFactor > 0 ? inp.icmsFactor : 1;
   const cifPerUnit = (inp.fobUnitUSD + inp.freightUnitUSD) * inp.exchangeRate;
   const iiPerUnit = cifPerUnit * inp.iiRate;
   const ipiPerUnit = (cifPerUnit + iiPerUnit) * inp.ipiRate;
   const pisPerUnit = cifPerUnit * inp.pisRate;
   const cofinsPerUnit = cifPerUnit * inp.cofinsRate;
   const baseNormalPerUnit = cifPerUnit + iiPerUnit + ipiPerUnit + pisPerUnit + cofinsPerUnit;
-  const variableCostPerUnit = baseNormalPerUnit / inp.icmsFactor;
-  const fixedCostPerLot = inp.siscomexFixed / inp.icmsFactor + inp.custoOpFixed;
+  const variableCostPerUnit = baseNormalPerUnit / icmsFactor;
+  const fixedCostPerLot = inp.siscomexFixed / icmsFactor + inp.custoOpFixed;
   if (capital <= fixedCostPerLot) return 0;
   return Math.floor((capital - fixedCostPerLot) / variableCostPerUnit);
 }
@@ -303,8 +306,9 @@ export function calculateCycle(
   const siscomex = taxConfig.siscomex_fixed;
   const opCost = taxConfig.operational_fixed;
 
+  const icmsFactor = taxConfig.icms_factor > 0 ? taxConfig.icms_factor : 1;
   const calcBaseNormal = customsValueBRL + ii + ipi + pisPasep + cofins + siscomex;
-  const icmsBaseAltered = calcBaseNormal / taxConfig.icms_factor;
+  const icmsBaseAltered = calcBaseNormal / icmsFactor;
   const icmsImport = icmsBaseAltered * taxConfig.icms_rate;
 
   const totalInvestment = icmsBaseAltered + opCost;
@@ -321,8 +325,8 @@ export function calculateCycle(
   const investorCashRes = investorShare;
   const nextCycleCapital = totalInvestment + investorShare;
 
-  const costPerUnit = totalInvestment / inputs.quantity;
-  const profitPerUnit = grossRevenue / inputs.quantity - costPerUnit;
+  const costPerUnit = inputs.quantity > 0 ? totalInvestment / inputs.quantity : 0;
+  const profitPerUnit = inputs.quantity > 0 ? grossRevenue / inputs.quantity - costPerUnit : 0;
 
   return {
     customsValueBRL,

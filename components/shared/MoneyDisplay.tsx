@@ -18,8 +18,9 @@ const sizes = {
 };
 
 export function MoneyDisplay({ value, className = "", size = "md", colored = false, noSymbol = false }: MoneyDisplayProps) {
-  const color = colored ? (value >= 0 ? "text-green-400" : "text-red-400") : "";
-  const formatted = noSymbol ? value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formatMoney(value);
+  const safe = !isFinite(value) || isNaN(value) ? 0 : value;
+  const color = colored ? (safe >= 0 ? "text-green-400" : "text-red-400") : "";
+  const formatted = noSymbol ? safe.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : formatMoney(safe);
   return (
     <span
       className={`font-mono tracking-tight ${sizes[size]} ${color} ${className}`}

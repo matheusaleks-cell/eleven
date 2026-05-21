@@ -19,7 +19,7 @@ export async function getWeapons() {
       status: w.currentStatus,
       location: w.warehouseLocation || "S/L",
       entryDate: w.entryDate.toLocaleDateString("pt-BR"),
-      lot: w.importLotId.substring(0, 8).toUpperCase(), // Simplificação para exibição
+      lot: (w.importLotId ?? '').substring(0, 8).toUpperCase(),
       customer: w.customer?.name || "ESTOQUE ELEVEN",
       id: w.id,
       di: w.diNumber || "24/0988712-0",

@@ -3,6 +3,50 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
+export async function searchCustomersForLead(query: string) {
+  try {
+    if (query.length < 2) return [];
+    const customers = await prisma.customer.findMany({
+      where: {
+        OR: [
+          { name: { contains: query } },
+          { cpfCnpj: { contains: query } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        cpfCnpj: true,
+        email: true,
+        phone: true,
+        state: true,
+        city: true,
+        crNumber: true,
+        category: true,
+      },
+      orderBy: { name: "asc" },
+      take: 8,
+    });
+
+    return customers.map(c => ({
+      id: c.id,
+      name: c.name,
+      type: c.type,
+      document: c.cpfCnpj,
+      email: c.email || "",
+      phone: c.phone || "",
+      state: c.state || "",
+      city: c.city || "",
+      crNumber: c.crNumber || "",
+      category: c.category || "",
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar clientes para lead:", error);
+    return [];
+  }
+}
+
 export async function getLeads(page = 1, limit = 20, search = "", priority = "ALL", source = "ALL", showArchived = false) {
   try {
     const skip = (page - 1) * limit;

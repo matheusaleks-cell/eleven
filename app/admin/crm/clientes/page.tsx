@@ -179,7 +179,7 @@ export default function ClientesPage() {
       city: cliente.city || "",
       address: cliente.address || "",
       crNumber: cliente.crNumber || "",
-      category: cliente.category || "CAC",
+      category: cliente.category || (cliente.type === "B2B" ? "LOJA DE ARMAS" : "CAC"),
       rg: cliente.rg || "",
       birthDate: cliente.birthDate ? new Date(cliente.birthDate).toISOString().split('T')[0] : "",
       source: cliente.source || "",
