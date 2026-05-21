@@ -314,3 +314,36 @@ export async function updateInvestorPassword(userId: string, newPassword: string
     return { success: false, error: "Erro ao atualizar senha do investidor." };
   }
 }
+
+// ─── DELETAR INVESTIDOR ────────────────────────────────────────────────────────
+export async function deleteInvestor(id: string) {
+  try {
+    const projectsCount = await prisma.investmentProject.count({
+      where: { investorId: id }
+    });
+
+    if (projectsCount > 0) {
+      return {
+        success: false,
+        error: "Este investidor possui projetos de investimento vinculados e não pode ser excluído diretamente. Exclua os projetos primeiro."
+      };
+    }
+
+    // Exclui documentos do investidor
+    await prisma.document.deleteMany({
+      where: { userId: id }
+    });
+
+    // Exclui o próprio usuário
+    await prisma.user.delete({
+      where: { id }
+    });
+
+    revalidatePath("/admin/investidores");
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao deletar investidor:", error);
+    return { success: false, error: "Erro ao deletar investidor do banco de dados." };
+  }
+}
+

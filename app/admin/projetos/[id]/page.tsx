@@ -57,9 +57,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         icms_rate: active.icmsImport / 100,
         icms_factor: 0.75, // Ajuste fixo temporário
         siscomex_fixed: active.siscomexFixed,
-        operational_fixed: 1740.00,
+        operational_fixed: 7884.00,
         sales_tax_rate: (active.icmsSale + active.simplesNacional) / 100,
-        sales_op_rate: 0.08
+        sales_op_rate: 0.15
       });
     }
   }
@@ -487,8 +487,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           taxConfig={realTaxConfig || {
             name: "Padrão (Fallback)",
             ii_rate: 0.18, ipi_rate: 0.55, pis_rate: 0.021, cofins_rate: 0.0965,
-            icms_rate: 0.25, icms_factor: 0.75, siscomex_fixed: 154.23, operational_fixed: 1740,
-            sales_tax_rate: 0.11, sales_op_rate: 0.08
+            icms_rate: 0.25, icms_factor: 0.75, siscomex_fixed: 154.23, operational_fixed: 7884,
+            sales_tax_rate: 0.11, sales_op_rate: 0.15
           }}
           plannedCapital={
             project.cycles.length === 0

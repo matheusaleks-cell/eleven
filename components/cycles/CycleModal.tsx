@@ -61,7 +61,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
   const [rate, setRate] = useState("");
   const [fob, setFob] = useState("");
   const [freight, setFreight] = useState("");
-  const [insurance, setInsurance] = useState("R$ 0,00");
+  const [insurance, setInsurance] = useState("US$ 0,00");
   const [procNum, setProcNum] = useState("");
   const [diNum, setDiNum] = useState("");
   const [diDate, setDiDate] = useState("");
@@ -92,11 +92,20 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
 
   const canSave = result && result.profitToSplit > 0;
 
-  const handleMask = (val: string, setter: (v: string) => void) => {
+  const handleBRLMask = (val: string, setter: (v: string) => void) => {
     const value = val.replace(/\D/g, "");
     const formatted = new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
+    }).format(Number(value) / 100);
+    setter(formatted);
+  };
+
+  const handleUSDMask = (val: string, setter: (v: string) => void) => {
+    const value = val.replace(/\D/g, "");
+    const formatted = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "USD",
     }).format(Number(value) / 100);
     setter(formatted);
   };
@@ -151,7 +160,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Taxa Cambial (USD)</label>
-              <input value={rate} onChange={(e) => handleMask(e.target.value, setRate)} placeholder="R$ 0,00" style={inputStyle} />
+              <input value={rate} onChange={(e) => handleBRLMask(e.target.value, setRate)} placeholder="R$ 0,00" style={inputStyle} />
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Quantidade de Unidades</label>
@@ -159,19 +168,19 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Valor FOB (USD)</label>
-              <input value={fob} onChange={(e) => handleMask(e.target.value, setFob)} placeholder="R$ 0,00" style={inputStyle} />
+              <input value={fob} onChange={(e) => handleUSDMask(e.target.value, setFob)} placeholder="US$ 0,00" style={inputStyle} />
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Frete Internacional (USD)</label>
-              <input value={freight} onChange={(e) => handleMask(e.target.value, setFreight)} placeholder="R$ 0,00" style={inputStyle} />
+              <input value={freight} onChange={(e) => handleUSDMask(e.target.value, setFreight)} placeholder="US$ 0,00" style={inputStyle} />
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Seguro (USD)</label>
-              <input value={insurance} onChange={(e) => handleMask(e.target.value, setInsurance)} placeholder="R$ 0,00" style={inputStyle} />
+              <input value={insurance} onChange={(e) => handleUSDMask(e.target.value, setInsurance)} placeholder="US$ 0,00" style={inputStyle} />
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Preço de Venda / Unidade (R$)</label>
-              <input value={price} onChange={(e) => handleMask(e.target.value, setPrice)} placeholder="R$ 0,00" style={inputStyle} />
+              <input value={price} onChange={(e) => handleBRLMask(e.target.value, setPrice)} placeholder="R$ 0,00" style={inputStyle} />
             </div>
           </div>
 

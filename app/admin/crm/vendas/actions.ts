@@ -130,6 +130,7 @@ export async function createDirectSale(data: {
   customerId: string;
   items: { id: string; name: string; sku: string; price: number; quantity: number }[];
   totalValue: number;
+  discount?: number;
   paymentMethod: string;
   notes?: string;
   status?: string;
@@ -139,6 +140,9 @@ export async function createDirectSale(data: {
 }) {
   try {
     const orderNumber = `ORD-${Date.now()}`;
+    const discount = data.discount || 0;
+    const totalBruto = data.totalValue;
+    const totalLiquido = Math.max(0, totalBruto - discount);
 
     let sellerId = data.sellerId;
     if (!sellerId || sellerId === "system-admin") {
@@ -152,11 +156,13 @@ export async function createDirectSale(data: {
         orderNumber,
         customerId: data.customerId,
         sellerId,
-        totalValue: data.totalValue,
+        totalValue: totalLiquido,
         status: data.status || "PAGO",
         paymentMethod: data.paymentMethod || null,
         products: JSON.stringify(data.items),
-        notes: data.notes,
+        notes: discount > 0
+          ? `[Desconto aplicado: R$ ${discount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}]${data.notes ? `\n${data.notes}` : ""}`
+          : data.notes,
         proposedDate: new Date(),
       },
     });
@@ -203,13 +209,16 @@ export async function createDirectSale(data: {
       }
 
       if (weaponsToSell.length > 0) {
+        const discountFactor = totalBruto > 0 ? (totalLiquido / totalBruto) : 1;
+        const finalSaleValue = Number((item.price * discountFactor).toFixed(2));
+
         await prisma.weaponMap.updateMany({
           where: { id: { in: weaponsToSell.map((w) => w.id) } },
           data: {
             currentStatus: "VENDIDA",
             salesOrderId: order.id,
             saleDate,
-            saleValue: item.price,
+            saleValue: finalSaleValue,
             customerId: data.customerId,
             sellingUserId: sellerId,
             lastMovementDate: saleDate,

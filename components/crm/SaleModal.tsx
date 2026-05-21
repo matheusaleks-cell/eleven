@@ -59,6 +59,7 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
   const [paymentMethod, setPaymentMethod] = useState("PIX");
   const [status, setStatus] = useState("PAGO");
   const [notes, setNotes] = useState("");
+  const [discount, setDiscount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [search, setSearch] = useState("");
@@ -74,6 +75,7 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
       setSearch("");
       setPaymentMethod("PIX");
       setStatus("PAGO");
+      setDiscount(0);
       setLotPreference("AUTO");
       setSelectedProjectId("");
       setLotProjects([]);
@@ -145,6 +147,7 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
         customerId: customer.id,
         items: cart.map(i => ({ id: i.id, name: i.name, sku: i.sku, price: i.price, quantity: i.quantity })),
         totalValue,
+        discount,
         paymentMethod,
         status,
         notes,
@@ -266,9 +269,20 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
             </div>
 
             <div className="p-4 bg-brand-surface/30 border-t border-brand-border space-y-3">
+              {discount > 0 && (
+                <div className="flex justify-between items-center text-[10px] text-brand-text-muted">
+                  <span className="uppercase font-bold tracking-wider">Subtotal bruto</span>
+                  <span className="font-mono line-through">{fmt(totalValue)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Total</span>
-                <span className="text-xl font-mono font-black text-brand-accent">{fmt(totalValue)}</span>
+                <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">
+                  {discount > 0 ? "Total Líquido" : "Total"}
+                </span>
+                <span className="text-xl font-mono font-black text-brand-accent">
+                  {fmt(Math.max(0, totalValue - discount))}
+                </span>
               </div>
 
               {/* Seletor de Origem do Lote */}
@@ -353,6 +367,17 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
                     <option value="RASCUNHO">RASCUNHO</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-brand-text-muted uppercase">Desconto (R$)</label>
+                <Input
+                  type="number"
+                  placeholder="0,00"
+                  value={discount || ""}
+                  onChange={e => setDiscount(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="h-9 font-mono text-white text-right"
+                />
               </div>
 
               <div className="space-y-1">

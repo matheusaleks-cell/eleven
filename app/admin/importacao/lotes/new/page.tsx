@@ -27,14 +27,13 @@ export default function NewBatchPage() {
   const [eta, setEta] = useState("");
   const [currency, setCurrency] = useState("USD");
   const [ptax, setPtax] = useState("R$ 5,12");
-  const [freight, setFreight] = useState("R$ 0,00");
-  const [insurance, setInsurance] = useState("R$ 0,00");
+  const [freight, setFreight] = useState("US$ 0,00");
+  const [insurance, setInsurance] = useState("US$ 0,00");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [addQty, setAddQty] = useState(1);
   const [addUnitPrice, setAddUnitPrice] = useState(0);
   const [items, setItems] = useState<any[]>([]);
   const [catalog, setCatalog] = useState<any[]>([]);
-
 
   useEffect(() => {
     Promise.all([
@@ -54,16 +53,74 @@ export default function NewBatchPage() {
     return isNaN(num) ? 0 : num;
   };
 
+  // Efeito para reformatar frete e seguro quando a moeda do lote mudar
+  useEffect(() => {
+    setFreight(prev => {
+      const numeric = cleanCurrency(prev);
+      return new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: currency,
+      }).format(numeric);
+    });
+    setInsurance(prev => {
+      const numeric = cleanCurrency(prev);
+      return new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: currency,
+      }).format(numeric);
+    });
+  }, [currency]);
+
   const totalFob = useMemo(() => {
     return items.reduce((acc, item) => acc + (item.qty * item.unitFob), 0);
   }, [items]);
 
-  const totalBrl = useMemo(() => {
-    const totalForeign = totalFob + cleanCurrency(freight) + cleanCurrency(insurance);
-    return totalForeign * cleanCurrency(ptax);
-  }, [totalFob, freight, insurance, ptax]);
+  const importSummary = useMemo(() => {
+    const fob = totalFob;
+    const freightVal = cleanCurrency(freight);
+    const insuranceVal = cleanCurrency(insurance);
+    const rate = cleanCurrency(ptax);
 
-  const taxesEst = totalBrl * 0.48; // Estimativa de 48% de impostos totais
+    // Fórmulas exatas do preset VR12_PUMP_PRESET
+    const iiRate = 0.18;
+    const ipiRate = 0.55;
+    const pisRate = 0.021;
+    const cofinsRate = 0.0965;
+    const icmsFactor = 0.75;
+    const icmsRate = 0.25;
+    const siscomexFixed = 154.23;
+    const custoOpFixed = 7884;
+
+    const va = (fob + freightVal + insuranceVal) * rate;
+    const ii = va * iiRate;
+    const ipi = (va + ii) * ipiRate;
+    const pis = va * pisRate;
+    const cofins = va * cofinsRate;
+    const siscomex = siscomexFixed;
+    const baseNormal = va + ii + ipi + pis + cofins + siscomex;
+    const baseAlterada = baseNormal / icmsFactor;
+    const icms = baseAlterada * icmsRate;
+    const custoOp = custoOpFixed;
+    
+    const totalTaxes = ii + ipi + pis + cofins + icms;
+    const totalFees = siscomex + custoOp;
+    const totalCost = baseAlterada + custoOp;
+
+    return {
+      fobBrl: fob * rate,
+      va,
+      ii,
+      ipi,
+      pis,
+      cofins,
+      siscomex,
+      icms,
+      custoOp,
+      totalTaxes,
+      totalFees,
+      totalCost
+    };
+  }, [totalFob, freight, insurance, ptax]);
 
   const handleAddItem = () => {
     if (!selectedProduct) {
@@ -235,7 +292,7 @@ export default function NewBatchPage() {
                     />
                     <Input 
                       label="Valor FOB Total" 
-                      value={totalFob.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                      value={totalFob.toLocaleString('pt-BR', { style: 'currency', currency: currency })}
                       disabled
                     />
                     <Input 
@@ -245,7 +302,7 @@ export default function NewBatchPage() {
                         const value = e.target.value.replace(/\D/g, "");
                         const formatted = new Intl.NumberFormat("pt-BR", {
                           style: "currency",
-                          currency: "BRL",
+                          currency: currency,
                         }).format(Number(value) / 100);
                         setFreight(formatted);
                       }}
@@ -257,7 +314,7 @@ export default function NewBatchPage() {
                         const value = e.target.value.replace(/\D/g, "");
                         const formatted = new Intl.NumberFormat("pt-BR", {
                           style: "currency",
-                          currency: "BRL",
+                          currency: currency,
                         }).format(Number(value) / 100);
                         setInsurance(formatted);
                       }}
@@ -376,19 +433,19 @@ export default function NewBatchPage() {
                  <div className="space-y-4">
                     <div className="flex justify-between text-xs border-b border-brand-border pb-2">
                        <span className="text-brand-text-muted uppercase font-bold">Total FOB (BRL)</span>
-                       <span className="text-white font-mono font-bold">R$ {totalBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                       <span className="text-white font-mono font-bold">R$ {importSummary.fobBrl.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between text-xs border-b border-brand-border pb-2">
                        <span className="text-brand-text-muted uppercase font-bold">Impostos (Estimados)</span>
-                       <span className="text-white font-mono font-bold text-brand-danger">R$ {taxesEst.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                       <span className="text-white font-mono font-bold text-brand-danger">R$ {importSummary.totalTaxes.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between text-xs border-b border-brand-border pb-2">
                        <span className="text-brand-text-muted uppercase font-bold">Despesas Aduaneiras</span>
-                       <span className="text-white font-mono font-bold">R$ 12.000,00</span>
+                       <span className="text-white font-mono font-bold">R$ {importSummary.totalFees.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="pt-2 flex justify-between items-center">
                        <span className="text-sm font-bold text-brand-accent uppercase tracking-widest">Custo Final</span>
-                       <span className="text-2xl font-bold font-mono text-white">R$ {(totalBrl + taxesEst + 12000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
+                       <span className="text-2xl font-bold font-mono text-white">R$ {importSummary.totalCost.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</span>
                     </div>
                  </div>
               </Card>

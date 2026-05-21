@@ -35,7 +35,7 @@ export type LeadFormData = {
   email?: string;
   phone: string;
   interest: string;
-  value: number;
+  value: any;
   priority: "low" | "medium" | "high";
   status: string;
   source: string;
@@ -53,7 +53,7 @@ export type LeadFormData = {
 
 interface LeadFormProps {
   initialData?: Partial<LeadFormData>;
-  products?: { id: string; commercialName: string }[];
+  products?: { id: string; commercialName: string; priceB2C: number; priceB2B?: number | null }[];
   onSubmit: (data: LeadFormData) => void;
   onCancel: () => void;
   submitLabel?: string;
@@ -66,6 +66,7 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema) as any,
@@ -74,7 +75,9 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
       email: initialData?.email || "",
       phone: initialData?.phone || "",
       interest: initialData?.interest || "",
-      value: initialData?.value || 0,
+      value: initialData?.value 
+        ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(initialData.value)
+        : "",
       priority: (initialData?.priority as any) || "medium",
       status: initialData?.status || "NOVO",
       source: initialData?.source || "INSTAGRAM",
@@ -97,6 +100,28 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
   const [linkedCustomer, setLinkedCustomer] = useState<any>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
+
+  const watchInterest = watch("interest");
+  const watchCustomerType = watch("customerType");
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (!watchInterest) return;
+    const selectedProduct = products.find(p => p.commercialName === watchInterest);
+    if (selectedProduct) {
+      const isB2B = watchCustomerType === "PJ";
+      const calculatedPrice = isB2B && selectedProduct.priceB2B ? selectedProduct.priceB2B : selectedProduct.priceB2C;
+      const formatted = new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(calculatedPrice);
+      setValue("value", formatted);
+    }
+  }, [watchInterest, watchCustomerType, products, setValue]);
 
   useEffect(() => {
     if (customerSearch.length < 2) { setSearchResults([]); setShowDropdown(false); return; }
@@ -137,7 +162,7 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
       const cleanValue = typeof data.value === "string" 
         ? Number((data.value as string).replace(/\D/g, "")) / 100 
         : Number(data.value);
-      onSubmit({ ...data, value: cleanValue });
+      onSubmit({ ...data, value: cleanValue } as LeadFormData);
     })} className="space-y-8 max-h-[70vh] overflow-y-auto px-2 custom-scrollbar">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 
@@ -410,7 +435,7 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
                   e.target.value = formatted;
                 }}
               />
-              {errors.value && <p className="text-brand-danger text-[11px] mt-1.5 uppercase font-bold">{errors.value.message}</p>}
+              {errors.value && <p className="text-brand-danger text-[11px] mt-1.5 uppercase font-bold">{(errors.value as any).message}</p>}
             </div>
             <div>
               <label className="text-[12px] font-bold text-brand-text-muted uppercase mb-2 block tracking-widest">Prioridade Comercial</label>

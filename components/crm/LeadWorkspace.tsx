@@ -32,7 +32,8 @@ import { convertToOrder, convertToCustomer, addLeadLog } from "@/app/admin/crm/f
 
 interface LeadWorkspaceProps {
   lead: any;
-  onUpdate: (data: LeadFormData) => void;
+  products?: any[];
+  onUpdate: (data: any) => void;
   onClose: () => void;
 }
 
@@ -45,19 +46,45 @@ const MOCK_PRODUCTS = [
   { id: "6", name: "Taurus TS9 Graphene", price: 5400, caliber: "9mm", sku: "TR-TS9G" },
 ];
 
-export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
+export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWorkspaceProps) {
   const [activeTab, setActiveTab] = useState<"summary" | "products" | "history">("products");
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   
+  const isB2B = lead.customerType === "PJ";
+  const normalizedProducts = products.length > 0
+    ? products.map(p => ({
+        id: p.id,
+        name: p.commercialName,
+        price: isB2B && p.priceB2B ? p.priceB2B : p.priceB2C,
+        caliber: p.caliber || "N/A",
+        sku: p.sku || ""
+      }))
+    : MOCK_PRODUCTS;
+
   // Inicializar itens com base nos dados do lead ou criar padrão se não houver
   const [dealItems, setDealItems] = useState<any[]>(() => {
-    if (lead.items && lead.items.length > 0) return lead.items;
+    if (lead.items && lead.items.length > 0) {
+      return lead.items.map((item: any) => {
+        const matchingProduct = products.find(p => p.id === item.product.id);
+        if (matchingProduct) {
+          const itemPrice = isB2B && matchingProduct.priceB2B ? matchingProduct.priceB2B : matchingProduct.priceB2C;
+          return {
+            ...item,
+            product: {
+              ...item.product,
+              price: itemPrice
+            }
+          };
+        }
+        return item;
+      });
+    }
     
     // Tentar encontrar o produto pelo nome de interesse (usando busca flexível)
     const leadInterest = (Array.isArray(lead.interests) ? lead.interests[0] : lead.interests) || "";
-    const initialProduct = MOCK_PRODUCTS.find(p => 
+    const initialProduct = normalizedProducts.find(p => 
       leadInterest ? p.name.toLowerCase().includes(leadInterest.toLowerCase()) : false
-    ) || MOCK_PRODUCTS[0];
+    ) || normalizedProducts[0];
     
     // Se o lead já tem um valor definido no banco, vamos ajustar o preço do item inicial para bater
     const adjustedProduct = { ...initialProduct };
@@ -74,7 +101,7 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
 
   const totalValue = dealItems.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
 
-  const filteredProducts = MOCK_PRODUCTS.filter(p => 
+  const filteredProducts = normalizedProducts.filter(p => 
     p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
     p.caliber.toLowerCase().includes(productSearch.toLowerCase())
   );
@@ -608,7 +635,8 @@ export function LeadWorkspace({ lead, onUpdate, onClose }: LeadWorkspaceProps) {
                 {isEditingInfo ? (
                   <div className="animate-in slide-in-from-top-2 duration-300">
                     <LeadForm 
-                      initialData={lead} 
+                      initialData={lead}
+                      products={products}
                       onSubmit={handleUpdateInfo} 
                       onCancel={() => setIsEditingInfo(false)} 
                       submitLabel="Salvar Atualização"

@@ -95,28 +95,35 @@ export async function createImportLot(data: any) {
       return { success: false, error: "Nenhum fornecedor cadastrado no sistema." };
     }
 
-    // Read tax rate from TaxConfig (sum of individual rates); fall back to 35%
-    let taxRate = 0.35;
-    try {
-      const taxConfig = await prisma.taxConfig.findFirst({
-        where: { isDefault: true },
-      });
-      if (taxConfig) {
-        taxRate = (
-          Number(taxConfig.ii) +
-          Number(taxConfig.ipi) +
-          Number(taxConfig.pisPasep) +
-          Number(taxConfig.cofins) +
-          Number(taxConfig.icmsImport) +
-          Number(taxConfig.simplesNacional)
-        ) / 100;
-      }
-    } catch {
-      // TaxConfig table may not be seeded yet
-    }
-
     const fob = Number(data.fobTotal) || 0;
+    const freightTotal = Number(data.freightTotal) || 0;
+    const insuranceTotal = Number(data.insuranceTotal) || 0;
     const exchangeRate = Number(data.exchangeRate) || 5.25;
+
+    // Fórmulas exatas do preset VR12_PUMP_PRESET (Turquia)
+    const iiRate = 0.18;
+    const ipiRate = 0.55;
+    const pisRate = 0.021;
+    const cofinsRate = 0.0965;
+    const icmsFactor = 0.75;
+    const icmsRate = 0.25;
+    const siscomexFixed = 154.23;
+    const custoOpFixed = 7884;
+
+    const va = (fob + freightTotal + insuranceTotal) * exchangeRate;
+    const ii = va * iiRate;
+    const ipi = (va + ii) * ipiRate;
+    const pis = va * pisRate;
+    const cofins = va * cofinsRate;
+    const siscomex = siscomexFixed;
+    const baseNormal = va + ii + ipi + pis + cofins + siscomex;
+    const baseAlterada = baseNormal / icmsFactor;
+    const icms = baseAlterada * icmsRate;
+    const custoOp = custoOpFixed;
+
+    const customsTaxes = ii + ipi + pis + cofins + icms;
+    const customsFees = siscomex + custoOp;
+    const totalCostNationalized = baseAlterada + custoOp;
 
     const lot = await prisma.importLot.create({
       data: {
@@ -127,17 +134,19 @@ export async function createImportLot(data: any) {
         currency: data.currency || "USD",
         exchangeRate,
         fobValue: fob,
-        freight: Number(data.freightTotal) || 0,
-        insurance: Number(data.insuranceTotal) || 0,
-        customsTaxes: fob * taxRate,
-        customsFees: 2500,
-        totalCostNationalized: fob * exchangeRate * (1 + taxRate),
+        freight: freightTotal,
+        insurance: insuranceTotal,
+        customsTaxes,
+        customsFees,
+        totalCostNationalized,
         quantityItems: data.items?.reduce((acc: number, i: any) => acc + i.quantity, 0) || 0,
         status: "PEDIDO_FEITO",
-        expectedMarginPct: taxRate,
+        expectedMarginPct: 0.35,
         investmentProjectId: data.projectId || null,
         products: {
-          connect: data.items?.map((i: any) => ({ id: i.productId })) || []
+          connect: data.items
+            ?.filter((i: any) => i.productId && i.productId !== "generic-id")
+            .map((i: any) => ({ id: i.productId })) || []
         }
       }
     });

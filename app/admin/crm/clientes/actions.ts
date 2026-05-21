@@ -71,6 +71,9 @@ export async function getCustomers(page = 1, limit = 20, search = "", searchFiel
       storeEmail: c.storeEmail || "",
       totalSpent: (c.salesOrders || []).reduce((acc, o) => acc + (Number(o.totalValue) || 0), 0),
       ordersCount: (c.salesOrders || []).length,
+      lastOrder: c.salesOrders && c.salesOrders.length > 0
+        ? new Date(Math.max(...c.salesOrders.map(o => new Date(o.createdAt).getTime()))).toLocaleDateString('pt-BR')
+        : "Nenhum pedido",
       badge: "STANDARD",
       salesOrders: (c.salesOrders || []).map(o => ({
         id: o.id,
@@ -130,6 +133,7 @@ export async function getCustomers(page = 1, limit = 20, search = "", searchFiel
         storeEmail: c.storeEmail || "",
         totalSpent: 0,
         ordersCount: 0,
+        lastOrder: "Sem pedidos",
         badge: "STANDARD",
         salesOrders: [],
         documents: []

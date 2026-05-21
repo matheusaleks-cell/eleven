@@ -264,8 +264,6 @@ export default function CRMFunnelPage() {
       await createLead({
         ...data,
         status: "NOVOS LEADS",
-        priority: "medium",
-        value: 0
       });
       setIsAddModalOpen(false);
       toast.success("Lead adicionado com sucesso no banco!");
@@ -798,6 +796,7 @@ export default function CRMFunnelPage() {
         <LeadWorkspace 
           key={editingLead?.id}
           lead={editingLead} 
+          products={availableProducts}
           onUpdate={handleUpdateLead} 
           onClose={() => setEditingLead(null)} 
         />

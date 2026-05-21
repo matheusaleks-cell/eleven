@@ -4,9 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
-import { Plus, Search, Eye, X, User } from "lucide-react";
+import { Plus, Search, Eye, X, User, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { getInvestors, createInvestor } from "./actions";
+import { getInvestors, createInvestor, deleteInvestor } from "./actions";
 import { toast } from "sonner";
 import { maskPhone } from "@/lib/masks";
 
@@ -61,6 +61,25 @@ export default function AdminInvestorsPage() {
       refreshData();
     } catch (error) {
       toast.error("Erro ao cadastrar investidor.");
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Deseja realmente excluir o investidor "${name}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    toast.loading("Excluindo investidor...", { id: "delete-investor" });
+    try {
+      const res = await deleteInvestor(id);
+      if (res.success) {
+        toast.success("Investidor excluído com sucesso!", { id: "delete-investor" });
+        refreshData();
+      } else {
+        toast.error(res.error || "Erro ao excluir investidor.", { id: "delete-investor" });
+      }
+    } catch (error) {
+      toast.error("Erro de conexão ao excluir investidor.", { id: "delete-investor" });
     }
   };
 
@@ -128,15 +147,26 @@ export default function AdminInvestorsPage() {
                     <td className="hidden xl:table-cell"><MoneyDisplay value={investor.totalInvested || 0} size="sm" /></td>
                     <td className="hidden xl:table-cell"><MoneyDisplay value={investor.totalReceived || 0} size="sm" /></td>
                     <td className="text-right">
-                      <Link
-                        href={`/admin/investidores/${investor.id}`}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase transition-all"
-                        style={{ border: "1px solid #F5C400", color: "#F5C400", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", textDecoration: "none" }}
-                        onMouseOver={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(245,196,0,0.1)"}
-                        onMouseOut={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}
-                      >
-                        <Eye size={12} /> Ver
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link
+                          href={`/admin/investidores/${investor.id}`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase transition-all"
+                          style={{ border: "1px solid #F5C400", color: "#F5C400", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", textDecoration: "none" }}
+                          onMouseOver={(e) => (e.currentTarget as HTMLElement).style.background = "rgba(245,196,0,0.1)"}
+                          onMouseOut={(e) => (e.currentTarget as HTMLElement).style.background = "transparent"}
+                        >
+                          <Eye size={12} /> Ver
+                        </Link>
+                        
+                        <button
+                          onClick={() => handleDelete(investor.id, investor.name)}
+                          className="inline-flex items-center justify-center p-2 rounded-[2px] transition-all hover:bg-red-500/10 border border-transparent hover:border-red-500/20 text-red-500 animate-fade-in"
+                          style={{ cursor: "pointer", background: "transparent" }}
+                          title="Excluir Investidor"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
