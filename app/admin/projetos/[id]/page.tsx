@@ -162,6 +162,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const handleSaveCycle = async (data: any) => {
+    // Strip BRL currency mask (e.g. "R$ 6.000,00" → 6000)
+    const cleanBRL = (val: string | number): number => {
+      if (typeof val === "number") return val;
+      return Number(val.replace(/\D/g, "")) / 100 || 0;
+    };
+
     try {
       const result = await createCycle({
         projectId: project.id,
@@ -169,11 +175,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         cycleName: getCycleName(project.currentCycle),
         ...data.result,
         quantity: parseFloat(data.qty),
-        salePricePerUnit: parseFloat(data.price),
-        exchangeRateUsd: parseFloat(data.rate),
-        fobValueUsd: parseFloat(data.fob),
-        freightUsd: parseFloat(data.freight),
-        insuranceUsd: parseFloat(data.insurance),
+        salePricePerUnit: cleanBRL(data.price),
+        exchangeRateUsd: cleanBRL(data.rate),
+        fobValueUsd: cleanBRL(data.fob),
+        freightUsd: cleanBRL(data.freight),
+        insuranceUsd: cleanBRL(data.insurance),
       });
 
       if (result.success) {

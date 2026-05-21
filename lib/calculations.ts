@@ -318,7 +318,7 @@ export function calculateCycle(
   const salesOpCost = grossRevenue * taxConfig.sales_op_rate;
 
   const netBalance =
-    inputs.plannedCapital + grossRevenue - totalInvestment - salesTax - salesOpCost;
+    inputs.plannedCapital + grossRevenue - salesTax - salesOpCost;
   const profitToSplit = netBalance - totalInvestment;
   const investorShare = profitToSplit * splitPct;
   const companyShare = profitToSplit * (1 - splitPct);

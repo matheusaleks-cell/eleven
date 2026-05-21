@@ -167,13 +167,19 @@ export async function createCycle(data: any) {
 
 export async function deleteProject(id: string) {
   try {
-    await prisma.investmentProject.delete({
-      where: { id }
+    // Delete cycles and documents linked to this project
+    await prisma.cycle.deleteMany({ where: { projectId: id } });
+    await prisma.document.deleteMany({ where: { projectId: id } });
+    // Disconnect import lots (keep lots/weapons intact, just remove project reference)
+    await prisma.importLot.updateMany({
+      where: { investmentProjectId: id },
+      data: { investmentProjectId: null },
     });
+    await prisma.investmentProject.delete({ where: { id } });
     revalidatePath("/admin/projetos");
     return { success: true };
   } catch (error) {
     console.error("Erro ao excluir projeto:", error);
-    return { success: false, error: "Este projeto possui ciclos ou lotes atrelados e não pode ser excluído." };
+    return { success: false, error: "Falha ao excluir projeto." };
   }
 }

@@ -46,7 +46,7 @@ export async function getProductsForSale() {
     const lotMap = new Map<string, { investor: number; own: number }>();
     for (const w of weaponsInStock) {
       const cur = lotMap.get(w.productId) ?? { investor: 0, own: 0 };
-      if (w.importLot.investmentProjectId) {
+      if (w.importLot?.investmentProjectId) {
         cur.investor++;
       } else {
         cur.own++;
@@ -104,7 +104,7 @@ export async function getLotOptionsForCart(productIds: string[]) {
     });
 
     const projectIds = [...new Set(
-      weapons.map(w => w.importLot.investmentProjectId).filter(Boolean) as string[]
+      weapons.map(w => w.importLot?.investmentProjectId).filter(Boolean) as string[]
     )];
 
     if (projectIds.length === 0) return [];
@@ -229,5 +229,28 @@ export async function createDirectSale(data: {
   } catch (error: any) {
     console.error("Erro ao criar venda direta:", error);
     return { success: false, error: error.message || "Erro desconhecido ao criar venda." };
+  }
+}
+
+export async function updateSalesOrder(
+  id: string,
+  data: { status?: string; paymentMethod?: string; notes?: string; totalValue?: number }
+) {
+  try {
+    await prisma.salesOrder.update({
+      where: { id },
+      data: {
+        ...(data.status !== undefined && { status: data.status }),
+        ...(data.paymentMethod !== undefined && { paymentMethod: data.paymentMethod }),
+        ...(data.notes !== undefined && { notes: data.notes }),
+        ...(data.totalValue !== undefined && { totalValue: data.totalValue }),
+      },
+    });
+    revalidatePath("/admin/vendas");
+    revalidatePath("/admin");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro ao atualizar pedido:", error);
+    return { success: false, error: error.message || "Falha ao atualizar pedido." };
   }
 }

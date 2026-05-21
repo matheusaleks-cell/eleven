@@ -13,15 +13,16 @@ import {
   DollarSign,
   Calendar,
   User,
-  ArrowRight,
   Clock,
   CheckCircle2,
   AlertCircle,
   X,
   Building2,
+  Pencil,
 } from "lucide-react";
-import { getSalesOrders, getCustomersForSale } from "@/app/admin/crm/vendas/actions";
+import { getSalesOrders, getCustomersForSale, updateSalesOrder } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function VendasPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -34,6 +35,13 @@ export default function VendasPage() {
   const [showPicker, setShowPicker] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+
+  // Edição de pedido
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [editStatus, setEditStatus] = useState("");
+  const [editPayment, setEditPayment] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     try {
@@ -74,6 +82,31 @@ export default function VendasPage() {
     setSelectedCustomer(customer);
     setShowPicker(false);
     setPickerSearch("");
+  };
+
+  const openEdit = (order: any) => {
+    setEditingOrder(order);
+    setEditStatus(order.status);
+    setEditPayment(order.paymentMethod || "PIX");
+    setEditNotes(order.notes || "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingOrder) return;
+    setSavingEdit(true);
+    const res = await updateSalesOrder(editingOrder.id, {
+      status: editStatus,
+      paymentMethod: editPayment,
+      notes: editNotes,
+    });
+    setSavingEdit(false);
+    if (res.success) {
+      toast.success("Pedido atualizado.");
+      setEditingOrder(null);
+      loadData();
+    } else {
+      toast.error(res.error || "Erro ao atualizar pedido.");
+    }
   };
 
   const getStatusStyle = (s: string) => {
@@ -153,12 +186,13 @@ export default function VendasPage() {
                 <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Valor Total</th>
                 <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Pagamento</th>
                 <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Status</th>
+                <th className="px-6 py-4 text-[10px] font-black text-brand-text-muted uppercase tracking-widest text-right">Ação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-brand-border/30">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-20 text-center">
+                  <td colSpan={7} className="py-20 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-8 h-8 border-2 border-brand-accent border-t-transparent rounded-full animate-spin" />
                       <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Carregando...</span>
@@ -200,11 +234,19 @@ export default function VendasPage() {
                         {order.status}
                       </span>
                     </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => openEdit(order)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-wider border border-brand-border text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-all"
+                      >
+                        <Pencil size={11} /> Editar
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={6} className="py-20 text-center">
+                  <td colSpan={7} className="py-20 text-center">
                     <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">
                       {orders.length > 0 ? "Nenhum resultado para o filtro." : "Nenhum pedido registrado ainda."}
                     </span>
@@ -300,6 +342,94 @@ export default function VendasPage() {
         sellerId={session.userId}
         onSuccess={() => { setSelectedCustomer(null); loadData(); }}
       />
+
+      {/* Edit Order Modal */}
+      {editingOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditingOrder(null)} />
+          <div
+            className="relative w-full animate-fade-in"
+            style={{
+              maxWidth: 480,
+              background: "#1A1A1A",
+              border: "1px solid #333",
+              borderTop: "3px solid #F5C400",
+              borderRadius: 4,
+              boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+            }}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border">
+              <div>
+                <h3 className="text-sm font-black text-white uppercase tracking-widest font-rajdhani">EDITAR PEDIDO</h3>
+                <p className="text-[10px] text-brand-text-muted mt-0.5">{editingOrder.orderNumber} · {editingOrder.customer?.name}</p>
+              </div>
+              <button onClick={() => setEditingOrder(null)} className="text-brand-text-muted hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Status</label>
+                <select
+                  className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                  value={editStatus}
+                  onChange={e => setEditStatus(e.target.value)}
+                >
+                  <option value="PAGO">PAGO / FINALIZADO</option>
+                  <option value="PENDENTE">PENDENTE</option>
+                  <option value="RASCUNHO">RASCUNHO</option>
+                  <option value="CANCELADO">CANCELADO</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Forma de Pagamento</label>
+                <select
+                  className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                  value={editPayment}
+                  onChange={e => setEditPayment(e.target.value)}
+                >
+                  <option value="PIX">PIX</option>
+                  <option value="CARTÃO CRÉDITO">CARTÃO CRÉDITO</option>
+                  <option value="BOLETO">BOLETO</option>
+                  <option value="DINHEIRO">DINHEIRO</option>
+                  <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Observações</label>
+                <textarea
+                  className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                  rows={3}
+                  style={{ resize: "none" }}
+                  value={editNotes}
+                  onChange={e => setEditNotes(e.target.value)}
+                  placeholder="Notas adicionais sobre o pedido..."
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2 border-t border-brand-border">
+                <button
+                  onClick={() => setEditingOrder(null)}
+                  className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-border text-brand-text-muted hover:text-white transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit}
+                  className="flex-[2] py-2.5 rounded text-[10px] font-black uppercase tracking-widest"
+                  style={{ background: savingEdit ? "#333" : "#F5C400", color: savingEdit ? "#606060" : "#1A1A1A" }}
+                >
+                  {savingEdit ? "Salvando..." : "★ Salvar Alterações"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
