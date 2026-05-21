@@ -10,7 +10,6 @@ import {
   ShoppingBag,
   Search,
   Plus,
-  DollarSign,
   Calendar,
   User,
   Clock,
@@ -19,8 +18,13 @@ import {
   X,
   Building2,
   Pencil,
+  Trash2,
+  AlertTriangle,
+  Package,
+  FileText,
+  CreditCard,
 } from "lucide-react";
-import { getSalesOrders, getCustomersForSale, updateSalesOrder } from "@/app/admin/crm/vendas/actions";
+import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -41,7 +45,10 @@ export default function VendasPage() {
   const [editStatus, setEditStatus] = useState("");
   const [editPayment, setEditPayment] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editTotal, setEditTotal] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletingOrder, setDeletingOrder] = useState(false);
 
   useEffect(() => {
     try {
@@ -89,6 +96,13 @@ export default function VendasPage() {
     setEditStatus(order.status);
     setEditPayment(order.paymentMethod || "PIX");
     setEditNotes(order.notes || "");
+    setEditTotal(String(order.totalValue || ""));
+    setConfirmDelete(false);
+  };
+
+  const closeEdit = () => {
+    setEditingOrder(null);
+    setConfirmDelete(false);
   };
 
   const handleSaveEdit = async () => {
@@ -98,15 +112,34 @@ export default function VendasPage() {
       status: editStatus,
       paymentMethod: editPayment,
       notes: editNotes,
+      totalValue: parseFloat(editTotal) || editingOrder.totalValue,
     });
     setSavingEdit(false);
     if (res.success) {
-      toast.success("Pedido atualizado.");
-      setEditingOrder(null);
+      toast.success("Pedido atualizado com sucesso.");
+      closeEdit();
       loadData();
     } else {
       toast.error(res.error || "Erro ao atualizar pedido.");
     }
+  };
+
+  const handleDelete = async () => {
+    if (!editingOrder) return;
+    setDeletingOrder(true);
+    const res = await deleteSalesOrder(editingOrder.id);
+    setDeletingOrder(false);
+    if (res.success) {
+      toast.success("Pedido excluído e estoque restaurado.");
+      closeEdit();
+      loadData();
+    } else {
+      toast.error(res.error || "Erro ao excluir pedido.");
+    }
+  };
+
+  const parseProducts = (productsStr: string) => {
+    try { return JSON.parse(productsStr || "[]"); } catch { return []; }
   };
 
   const getStatusStyle = (s: string) => {
@@ -344,92 +377,225 @@ export default function VendasPage() {
       />
 
       {/* Edit Order Modal */}
-      {editingOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditingOrder(null)} />
-          <div
-            className="relative w-full animate-fade-in"
-            style={{
-              maxWidth: 480,
-              background: "#1A1A1A",
-              border: "1px solid #333",
-              borderTop: "3px solid #F5C400",
-              borderRadius: 4,
-              boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-            }}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border">
-              <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-widest font-rajdhani">EDITAR PEDIDO</h3>
-                <p className="text-[10px] text-brand-text-muted mt-0.5">{editingOrder.orderNumber} · {editingOrder.customer?.name}</p>
-              </div>
-              <button onClick={() => setEditingOrder(null)} className="text-brand-text-muted hover:text-white transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Status</label>
-                <select
-                  className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
-                  value={editStatus}
-                  onChange={e => setEditStatus(e.target.value)}
-                >
-                  <option value="PAGO">PAGO / FINALIZADO</option>
-                  <option value="PENDENTE">PENDENTE</option>
-                  <option value="RASCUNHO">RASCUNHO</option>
-                  <option value="CANCELADO">CANCELADO</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Forma de Pagamento</label>
-                <select
-                  className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
-                  value={editPayment}
-                  onChange={e => setEditPayment(e.target.value)}
-                >
-                  <option value="PIX">PIX</option>
-                  <option value="CARTÃO CRÉDITO">CARTÃO CRÉDITO</option>
-                  <option value="BOLETO">BOLETO</option>
-                  <option value="DINHEIRO">DINHEIRO</option>
-                  <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Observações</label>
-                <textarea
-                  className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
-                  rows={3}
-                  style={{ resize: "none" }}
-                  value={editNotes}
-                  onChange={e => setEditNotes(e.target.value)}
-                  placeholder="Notas adicionais sobre o pedido..."
-                />
-              </div>
-
-              <div className="flex gap-3 pt-2 border-t border-brand-border">
-                <button
-                  onClick={() => setEditingOrder(null)}
-                  className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-border text-brand-text-muted hover:text-white transition-all"
-                >
-                  Cancelar
+      {editingOrder && (() => {
+        const products = parseProducts(editingOrder.products);
+        const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeEdit} />
+            <div
+              className="relative w-full animate-fade-in flex flex-col"
+              style={{
+                maxWidth: 580,
+                maxHeight: "90vh",
+                background: "#1A1A1A",
+                border: "1px solid #333",
+                borderTop: "3px solid #F5C400",
+                borderRadius: 4,
+                boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border shrink-0">
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest font-rajdhani">DETALHES DO PEDIDO</h3>
+                  <p className="text-[10px] text-brand-text-muted mt-0.5 font-mono">
+                    {editingOrder.orderNumber} · {new Date(editingOrder.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <button onClick={closeEdit} className="text-brand-text-muted hover:text-white transition-colors">
+                  <X size={18} />
                 </button>
-                <button
-                  onClick={handleSaveEdit}
-                  disabled={savingEdit}
-                  className="flex-[2] py-2.5 rounded text-[10px] font-black uppercase tracking-widest"
-                  style={{ background: savingEdit ? "#333" : "#F5C400", color: savingEdit ? "#606060" : "#1A1A1A" }}
-                >
-                  {savingEdit ? "Salvando..." : "★ Salvar Alterações"}
-                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* Info do pedido */}
+                <div className="px-5 pt-4 pb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <FileText size={11} className="text-brand-accent" />
+                    <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Informações do Pedido</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 p-3 bg-brand-surface/30 rounded border border-brand-border">
+                    <div>
+                      <p className="text-[8px] font-bold text-brand-text-muted uppercase tracking-widest mb-0.5">Cliente</p>
+                      <p className="text-xs font-bold text-white uppercase truncate">{editingOrder.customer?.name || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-bold text-brand-text-muted uppercase tracking-widest mb-0.5">Documento</p>
+                      <p className="text-xs font-mono text-white">{editingOrder.customer?.cpfCnpj || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-bold text-brand-text-muted uppercase tracking-widest mb-0.5">Tipo</p>
+                      <p className="text-xs font-bold text-brand-text-secondary uppercase">{editingOrder.customer?.type || "—"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Produtos */}
+                {products.length > 0 && (
+                  <div className="px-5 pb-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Package size={11} className="text-brand-accent" />
+                      <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Itens do Pedido</span>
+                    </div>
+                    <div className="border border-brand-border rounded overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-brand-surface/50">
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest">Produto</th>
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest text-center">Qtd</th>
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest text-right">Unit.</th>
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest text-right">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand-border/30">
+                          {products.map((item: any, i: number) => (
+                            <tr key={i} className="hover:bg-brand-surface/20">
+                              <td className="px-3 py-2">
+                                <p className="text-[11px] font-bold text-white uppercase">{item.name}</p>
+                                <p className="text-[9px] font-mono text-brand-text-muted">{item.sku}</p>
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <span className="text-xs font-bold text-white">{item.quantity}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <span className="text-xs font-mono text-brand-text-secondary">{fmtBRL(item.price)}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <span className="text-xs font-mono font-black text-brand-accent">{fmtBRL(item.price * item.quantity)}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Campos editáveis */}
+                <div className="px-5 pb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <CreditCard size={11} className="text-brand-accent" />
+                    <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Editar Pedido</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Status</label>
+                        <select
+                          className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                          value={editStatus}
+                          onChange={e => setEditStatus(e.target.value)}
+                        >
+                          <option value="PAGO">PAGO / FINALIZADO</option>
+                          <option value="PENDENTE">PENDENTE</option>
+                          <option value="RASCUNHO">RASCUNHO</option>
+                          <option value="CANCELADO">CANCELADO</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Forma de Pagamento</label>
+                        <select
+                          className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                          value={editPayment}
+                          onChange={e => setEditPayment(e.target.value)}
+                        >
+                          <option value="PIX">PIX</option>
+                          <option value="CARTÃO CRÉDITO">CARTÃO CRÉDITO</option>
+                          <option value="BOLETO">BOLETO</option>
+                          <option value="DINHEIRO">DINHEIRO</option>
+                          <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
+                          <option value="CHEQUE">CHEQUE</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Valor Total (R$)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-brand-accent font-mono font-black outline-none focus:border-brand-accent"
+                        value={editTotal}
+                        onChange={e => setEditTotal(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Observações</label>
+                      <textarea
+                        className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                        rows={3}
+                        style={{ resize: "none" }}
+                        value={editNotes}
+                        onChange={e => setEditNotes(e.target.value)}
+                        placeholder="Notas adicionais sobre o pedido..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-4 border-t border-brand-border shrink-0">
+                {confirmDelete ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 p-3 bg-brand-danger/10 border border-brand-danger/30 rounded">
+                      <AlertTriangle size={16} className="text-brand-danger shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-black text-brand-danger uppercase">Confirmar Exclusão</p>
+                        <p className="text-[10px] text-brand-text-muted mt-0.5">
+                          O pedido será excluído e as armas vinculadas voltarão ao estoque. Esta ação não pode ser desfeita.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-border text-brand-text-muted hover:text-white transition-all"
+                      >
+                        Não, Voltar
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deletingOrder}
+                        className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest"
+                        style={{ background: deletingOrder ? "#333" : "#dc2626", color: deletingOrder ? "#606060" : "#fff" }}
+                      >
+                        {deletingOrder ? "Excluindo..." : "Sim, Excluir Pedido"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-danger/40 text-brand-danger hover:bg-brand-danger/10 transition-all"
+                    >
+                      <Trash2 size={13} /> Excluir
+                    </button>
+                    <button
+                      onClick={closeEdit}
+                      className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-border text-brand-text-muted hover:text-white transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={savingEdit}
+                      className="flex-[2] py-2.5 rounded text-[10px] font-black uppercase tracking-widest"
+                      style={{ background: savingEdit ? "#333" : "#F5C400", color: savingEdit ? "#606060" : "#1A1A1A" }}
+                    >
+                      {savingEdit ? "Salvando..." : "★ Salvar Alterações"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </DashboardLayout>
   );
 }

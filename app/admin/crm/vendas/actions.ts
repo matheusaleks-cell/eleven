@@ -232,6 +232,53 @@ export async function createDirectSale(data: {
   }
 }
 
+export async function deleteSalesOrder(id: string) {
+  try {
+    // Encontra armas vinculadas ao pedido
+    const weapons = await prisma.weaponMap.findMany({
+      where: { salesOrderId: id },
+      select: { id: true, productId: true },
+    });
+
+    if (weapons.length > 0) {
+      // Reverte armas para ESTOQUE
+      await prisma.weaponMap.updateMany({
+        where: { salesOrderId: id },
+        data: {
+          currentStatus: "ESTOQUE",
+          salesOrderId: null,
+          saleDate: null,
+          saleValue: null,
+          customerId: null,
+          sellingUserId: null,
+          lastMovementDate: new Date(),
+        },
+      });
+
+      // Restaura estoque por produto
+      const byProduct: Record<string, number> = {};
+      for (const w of weapons) byProduct[w.productId] = (byProduct[w.productId] || 0) + 1;
+      for (const [productId, count] of Object.entries(byProduct)) {
+        await prisma.product.update({
+          where: { id: productId },
+          data: { stockAvailable: { increment: count } },
+        });
+      }
+    }
+
+    await prisma.salesOrder.delete({ where: { id } });
+
+    revalidatePath("/admin/vendas");
+    revalidatePath("/admin");
+    revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro ao excluir pedido:", error);
+    return { success: false, error: error.message || "Falha ao excluir pedido." };
+  }
+}
+
 export async function updateSalesOrder(
   id: string,
   data: { status?: string; paymentMethod?: string; notes?: string; totalValue?: number }
