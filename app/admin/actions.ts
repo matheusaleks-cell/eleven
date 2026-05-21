@@ -29,15 +29,8 @@ export async function getDashboardStats() {
     });
   });
 
-  // Tentar adicionar ordens de venda (tabela opcional - não bloqueia se falhar)
-  try {
-    const orders = await prisma.salesOrder.findMany();
-    orders.forEach(o => {
-      totalRevenue += Number(o.totalValue) || 0;
-    });
-  } catch {
-    // Tabela de ordens pode não ter dados ainda — ignora silenciosamente
-  }
+  // Nota: salesOrders NÃO são somados aqui pois representam a mesma receita
+  // que já está registrada em cycle.grossRevenue — somar ambos duplicaria o total.
 
   return {
     activeProjects,

@@ -48,6 +48,68 @@ export async function getFinancialStats() {
   }
 }
 
+export async function getSplitRules() {
+  try {
+    const rule = await prisma.financialDistributionRule.findFirst({
+      where: { isActive: true },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (!rule) return null;
+    return {
+      investor: rule.investorPct,
+      company: rule.companyPct,
+      reserve: rule.reservePct,
+      reinvest: rule.reinvestmentPct,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSplitRules(data: {
+  investor: number;
+  company: number;
+  reserve: number;
+  reinvest: number;
+}) {
+  try {
+    const existing = await prisma.financialDistributionRule.findFirst({
+      where: { isActive: true },
+    });
+    if (existing) {
+      await prisma.financialDistributionRule.update({
+        where: { id: existing.id },
+        data: {
+          investorPct: data.investor,
+          companyPct: data.company,
+          reservePct: data.reserve,
+          reinvestmentPct: data.reinvest,
+        },
+      });
+    } else {
+      await prisma.financialDistributionRule.create({
+        data: {
+          name: "Regra Padrão",
+          investorPct: data.investor,
+          companyPct: data.company,
+          reservePct: data.reserve,
+          reinvestmentPct: data.reinvest,
+          operationalCost: 0,
+          salesCommission: 0,
+          minBalanceNewPurchase: 0,
+          newBatchCriteria: "MANUAL",
+          isActive: true,
+        },
+      });
+    }
+    revalidatePath("/admin/financeiro");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro ao salvar regras de distribuição:", error);
+    return { success: false, error: error.message || "Falha ao salvar regras." };
+  }
+}
+
 export async function getRecentTransactions(filters?: { type?: string; month?: number; year?: number }) {
   try {
     const where: any = {};

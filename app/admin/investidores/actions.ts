@@ -280,8 +280,15 @@ export async function deleteInvestorProject(projectId: string) {
       where: { id: projectId },
     });
     if (!project) return { success: false, error: "Projeto não encontrado." };
+    await prisma.cycle.deleteMany({ where: { projectId } });
+    await prisma.document.deleteMany({ where: { projectId } });
+    await prisma.importLot.updateMany({
+      where: { investmentProjectId: projectId },
+      data: { investmentProjectId: null },
+    });
     await prisma.investmentProject.delete({ where: { id: projectId } });
     revalidatePath(`/admin/investidores/${project.investorId}`);
+    revalidatePath("/admin/projetos");
     return { success: true };
   } catch (error) {
     console.error("Erro ao deletar projeto:", error);

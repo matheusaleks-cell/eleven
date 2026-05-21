@@ -229,8 +229,10 @@ export async function convertToOrder(leadId: string, data: any) {
     });
 
     revalidatePath("/admin/crm/funil");
-    revalidatePath("/admin"); 
-    
+    revalidatePath("/admin");
+    revalidatePath("/admin/vendas");
+    revalidatePath("/admin/crm/clientes");
+
     return { success: true, orderId: order.id };
   } catch (error: any) {
     console.error("Erro ao converter lead:", error);

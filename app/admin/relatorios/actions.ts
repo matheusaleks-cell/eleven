@@ -28,9 +28,9 @@ export async function getFinancialReportData() {
     const data = orders.map(o => ({
       Pedido: o.orderNumber,
       Data: o.createdAt.toLocaleDateString("pt-BR"),
-      Cliente: o.customer.name,
-      Documento: o.customer.cpfCnpj,
-      Vendedor: o.seller.name,
+      Cliente: o.customer?.name || "Cliente removido",
+      Documento: o.customer?.cpfCnpj || "S/D",
+      Vendedor: o.seller?.name || "Vendedor removido",
       Valor_Total: o.totalValue,
       Status: o.status,
       Metodo_Pagamento: o.paymentMethod || "Não Informado",
@@ -92,7 +92,7 @@ export async function getInventoryConferenceData() {
       Serie: w.serialNumber,
       Produto: w.product.commercialName,
       SKU: w.product.sku,
-      Lote: w.importLot.batchCode,
+      Lote: w.importLot?.batchCode || "N/A",
       Status: w.currentStatus,
       Localizacao: w.warehouseLocation || "",
       Custo_Unitario: w.unitCost,
@@ -109,7 +109,7 @@ export async function getSellerPerformanceData() {
     const orders = await prisma.salesOrder.findMany({ include: { seller: true } });
     const map = new Map<string, { Vendedor: string; Total_Pedidos: number; Valor_Total: number }>();
     for (const o of orders) {
-      const entry = map.get(o.sellerId) ?? { Vendedor: o.seller.name, Total_Pedidos: 0, Valor_Total: 0 };
+      const entry = map.get(o.sellerId) ?? { Vendedor: o.seller?.name || "Vendedor removido", Total_Pedidos: 0, Valor_Total: 0 };
       entry.Total_Pedidos += 1;
       entry.Valor_Total += o.totalValue;
       map.set(o.sellerId, entry);
@@ -132,9 +132,9 @@ export async function getDefaultersData() {
     });
     const data = orders.map(o => ({
       Pedido: o.orderNumber,
-      Cliente: o.customer.name,
-      Documento: o.customer.cpfCnpj,
-      Estado: o.customer.state,
+      Cliente: o.customer?.name || "Cliente removido",
+      Documento: o.customer?.cpfCnpj || "S/D",
+      Estado: o.customer?.state || "",
       Valor: o.totalValue,
       Status: o.status,
       Data_Pedido: o.createdAt.toLocaleDateString("pt-BR"),
@@ -200,7 +200,7 @@ export async function getAccessLogsData() {
       Data_Hora: l.createdAt.toLocaleString("pt-BR"),
       Acao: l.action,
       Usuario: l.user,
-      Lead: l.lead.name,
+      Lead: l.lead?.name || "Lead removido",
     }));
     return { success: true, data };
   } catch {

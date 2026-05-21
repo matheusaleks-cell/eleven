@@ -11,7 +11,7 @@ import { CreditCard, TrendingUp, ArrowDownRight, ArrowUpRight, DollarSign, Walle
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useEffect, useCallback } from "react";
-import { getFinancialStats, getRecentTransactions } from "./actions";
+import { getFinancialStats, getRecentTransactions, getSplitRules, saveSplitRules } from "./actions";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
@@ -31,6 +31,7 @@ export default function FinancialPage() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
   const [filter, setFilter] = useState({ type: "ALL", period: "JUN/2026" });
+  const [savingRules, setSavingRules] = useState(false);
   const [splitRules, setSplitRules] = useState({
     investor: 50,
     company: 35,
@@ -50,12 +51,14 @@ export default function FinancialPage() {
   const refreshData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sData, tData] = await Promise.all([
+      const [sData, tData, rData] = await Promise.all([
         getFinancialStats(),
-        getRecentTransactions()
+        getRecentTransactions(),
+        getSplitRules(),
       ]);
       setStats(sData);
       setTransactions(tData);
+      if (rData) setSplitRules(rData);
     } catch (error) {
       toast.error("Erro ao carregar dados financeiros.");
     } finally {
@@ -84,14 +87,24 @@ export default function FinancialPage() {
     });
   };
 
-  const handleSaveSplit = () => {
+  const handleSaveSplit = async () => {
     const total = splitRules.investor + splitRules.company + splitRules.reserve + splitRules.reinvest;
     if (total !== 100) {
       toast.error(`A soma dos percentuais deve ser 100%. Atual: ${total}%`);
       return;
     }
-    setIsSplitModalOpen(false);
-    toast.success("Regras de distribuição atualizadas com sucesso!");
+    setSavingRules(true);
+    try {
+      const result = await saveSplitRules(splitRules);
+      if (result.success) {
+        setIsSplitModalOpen(false);
+        toast.success("Regras de distribuição atualizadas com sucesso!");
+      } else {
+        toast.error(result.error || "Falha ao salvar regras.");
+      }
+    } finally {
+      setSavingRules(false);
+    }
   };
 
   return (
@@ -403,8 +416,8 @@ export default function FinancialPage() {
              </div>
              <div className="flex justify-end gap-3 mt-2">
                 <Button variant="ghost" onClick={() => setIsSplitModalOpen(false)} className="text-[10px] font-bold uppercase">DESCARTAR</Button>
-                <Button className="gap-2 text-[10px] font-bold uppercase" onClick={handleSaveSplit}>
-                   <Save size={14} /> SALVAR MOTOR
+                <Button className="gap-2 text-[10px] font-bold uppercase" onClick={handleSaveSplit} disabled={savingRules}>
+                   <Save size={14} /> {savingRules ? "SALVANDO..." : "SALVAR MOTOR"}
                 </Button>
              </div>
           </div>

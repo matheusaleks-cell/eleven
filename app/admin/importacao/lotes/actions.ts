@@ -166,14 +166,22 @@ export async function updateLotStatus(id: string, newStatus: string) {
 
 export async function deleteImportLot(id: string) {
   try {
-    await prisma.importLot.delete({
-      where: { id }
-    });
+    const weaponCount = await prisma.weaponMap.count({ where: { importLotId: id } });
+    if (weaponCount > 0) {
+      return {
+        success: false,
+        error: `Este lote possui ${weaponCount} arma(s) vinculada(s) e não pode ser excluído.`,
+      };
+    }
+    // Null out Cycle.importLotId references before delete (field is nullable, no cascade)
+    await prisma.cycle.updateMany({ where: { importLotId: id }, data: { importLotId: null } });
+    // Documents auto-cascade via schema onDelete: Cascade
+    await prisma.importLot.delete({ where: { id } });
 
     revalidatePath("/admin/importacao/lotes");
     return { success: true };
   } catch (error) {
     console.error("Erro ao excluir lote:", error);
-    return { success: false };
+    return { success: false, error: "Falha ao excluir lote de importação." };
   }
 }
