@@ -12,11 +12,11 @@ export async function getFinancialStats() {
 
     const batchesInTransit = await prisma.importLot.aggregate({
       where: { status: { not: "LIQUIDADO" } },
-      _sum: { fobValue: true }
+      _sum: { totalCostNationalized: true }
     });
 
     const totalRevenue = Number(totalSales._sum.totalValue) || 0;
-    const transitCapital = Number(batchesInTransit._sum.fobValue) || 0;
+    const transitCapital = Number(batchesInTransit._sum.totalCostNationalized) || 0;
 
     // Read split percentages from FinancialDistributionRule
     let investorPct = 0.50;
@@ -133,7 +133,7 @@ export async function getRecentTransactions(filters?: { type?: string; month?: n
     return orders.map((order) => ({
       id: order.orderNumber,
       type: "VENDA",
-      investor: order.customer.name,
+      investor: order.customer?.name || "Cliente removido",
       value: order.totalValue,
       date: order.createdAt.toLocaleDateString("pt-BR"),
       status: order.status,

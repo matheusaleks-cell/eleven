@@ -128,7 +128,7 @@ export default function ReportsPage() {
         const res = await getDefaultersData();
         if (res.success) data = res.data;
       } else if (reportName.includes("Extrato de Cotas")) {
-        const res = await getFinancialReportData();
+        const res = await getReinvestmentProjectionData();
         if (res.success) data = res.data;
       } else if (reportName.includes("Projeção de Reinvestimento")) {
         const res = await getReinvestmentProjectionData();
