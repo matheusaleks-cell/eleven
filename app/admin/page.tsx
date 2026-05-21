@@ -35,7 +35,7 @@ export default function AdminDashboard() {
     if (s) {
       setSession(JSON.parse(s));
     }
-    
+
     // Carregar dados iniciais do banco
     const loadData = async () => {
       setLoading(true);

@@ -28,7 +28,7 @@ export default function AdminLayout({
     try {
       const session = JSON.parse(sessionStr);
       if (session.role !== "ADMIN") {
-        window.location.href = "/login";
+        window.location.href = "/admin/login";
         return;
       }
       setAuthorized(true);
