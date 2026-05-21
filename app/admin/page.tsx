@@ -118,7 +118,7 @@ export default function AdminDashboard() {
   return (
     <DashboardLayout role="ADMIN" userName={session.name} userEmail={session.email} pageTitle="Dashboard">
       {/* Welcome */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6" style={{ marginBottom: "24px", flexShrink: 0 }}>
         <div>
           <h1 style={{ color: "#FFFFFF", fontSize: "32px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "-0.02em" }}>
             Bem-vindo, {session.name}
@@ -148,19 +148,19 @@ export default function AdminDashboard() {
       </div>
 
       {/* Filtros */}
-      <FilterBar
-        startDate={startDate}
-        endDate={endDate}
-        investorId={investorId}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-        onInvestorChange={setInvestorId}
-        onClear={handleClearFilters}
-        onFilter={applyFilters}
-        investors={investors}
-      />
-
-      <div style={{ height: "48px" }} />
+      <div style={{ marginBottom: "24px", flexShrink: 0 }}>
+        <FilterBar
+          startDate={startDate}
+          endDate={endDate}
+          investorId={investorId}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+          onInvestorChange={setInvestorId}
+          onClear={handleClearFilters}
+          onFilter={applyFilters}
+          investors={investors}
+        />
+      </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-8">
@@ -195,7 +195,7 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div style={{ height: "48px" }} />
+      <div style={{ display: "block", height: "32px", width: "100%", flexShrink: 0 }} />
 
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
@@ -224,7 +224,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div style={{ height: "64px" }} />
+      <div style={{ display: "block", height: "48px", width: "100%", flexShrink: 0 }} />
 
       {/* Recent Projects Table */}
       <div className="flex items-center justify-between mb-8">
@@ -236,7 +236,7 @@ export default function AdminDashboard() {
         </Link>
       </div>
 
-      <div style={{ height: "24px" }} />
+      <div style={{ display: "block", height: "24px", width: "100%", flexShrink: 0 }} />
 
       <div className="rounded-[4px] overflow-hidden" style={{ background: "#242424", border: "1px solid #333" }}>
         <div className="overflow-x-auto">

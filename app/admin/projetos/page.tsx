@@ -89,7 +89,7 @@ export default function AdminProjectsPage() {
   return (
     <DashboardLayout role="ADMIN" userName={session.name} userEmail={session.email} pageTitle="Projetos">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" style={{ marginBottom: "24px", flexShrink: 0 }}>
         <div>
           <h1 style={{ color: "#FFFFFF", fontSize: "24px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.04em" }}>
             Projetos
@@ -111,20 +111,22 @@ export default function AdminProjectsPage() {
       </div>
 
       {/* Filters */}
-      <FilterBar
-        startDate={startDate}
-        endDate={endDate}
-        investorId={investorId}
-        onStartDateChange={setStartDate}
-        onEndDateChange={setEndDate}
-        onInvestorChange={setInvestorId}
-        onClear={handleClearFilters}
-        investors={investors}
-      />
+      <div style={{ marginBottom: "24px", flexShrink: 0 }}>
+        <FilterBar
+          startDate={startDate}
+          endDate={endDate}
+          investorId={investorId}
+          onStartDateChange={setStartDate}
+          onEndDateChange={setEndDate}
+          onInvestorChange={setInvestorId}
+          onClear={handleClearFilters}
+          investors={investors}
+        />
+      </div>
 
       <div
-        className="flex flex-col sm:flex-row gap-4 mb-8 p-6 rounded-[4px]"
-        style={{ background: "#242424", border: "1px solid #333" }}
+        className="flex flex-col sm:flex-row gap-4 p-6 rounded-[4px]"
+        style={{ background: "#242424", border: "1px solid #333", marginBottom: "24px", flexShrink: 0 }}
       >
         <div className="flex-1 relative">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2" style={{ color: "#606060" }} />
