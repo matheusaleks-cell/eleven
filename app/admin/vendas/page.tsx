@@ -23,6 +23,7 @@ import {
   Package,
   FileText,
   CreditCard,
+  Layers,
 } from "lucide-react";
 import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
@@ -140,6 +141,22 @@ export default function VendasPage() {
 
   const parseProducts = (productsStr: string) => {
     try { return JSON.parse(productsStr || "[]"); } catch { return []; }
+  };
+
+  const getLotInfo = (order: any) => {
+    const weapons: any[] = order.weapons || [];
+    if (weapons.length === 0) return null;
+    const investorWeapons = weapons.filter((w: any) => w.importLot?.investmentProjectId);
+    const ownWeapons = weapons.filter((w: any) => !w.importLot?.investmentProjectId);
+    if (investorWeapons.length > 0 && ownWeapons.length === 0) {
+      const project = investorWeapons[0].importLot?.investmentProject;
+      return { type: "INVESTIDOR", label: `${project?.investor?.name ?? "Investidor"} — ${project?.name ?? ""}` };
+    }
+    if (ownWeapons.length > 0 && investorWeapons.length === 0) {
+      return { type: "PROPRIO", label: "Lote Próprio" };
+    }
+    const project = investorWeapons[0]?.importLot?.investmentProject;
+    return { type: "MISTO", label: `Misto — Inv: ${investorWeapons.length} / Próprio: ${ownWeapons.length}${project ? ` (${project.investor?.name})` : ""}` };
   };
 
   const getStatusStyle = (s: string) => {
@@ -471,6 +488,31 @@ export default function VendasPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Origem do Lote (derivada das armas do pedido) */}
+                {(() => {
+                  const lotInfo = getLotInfo(editingOrder);
+                  if (!lotInfo) return null;
+                  const colorMap: Record<string, string> = {
+                    INVESTIDOR: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                    PROPRIO: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+                    MISTO: "bg-brand-surface/30 text-brand-text-muted border-brand-border",
+                  };
+                  return (
+                    <div className="px-5 pb-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Layers size={11} className="text-brand-accent" />
+                        <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Origem do Lote</span>
+                      </div>
+                      <div className={cn("flex items-center gap-2 px-3 py-2 rounded border text-[10px] font-bold uppercase", colorMap[lotInfo.type])}>
+                        {lotInfo.type === "INVESTIDOR" && <User size={11} />}
+                        {lotInfo.type === "PROPRIO" && <Building2 size={11} />}
+                        {lotInfo.type === "MISTO" && <Layers size={11} />}
+                        {lotInfo.label}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Campos editáveis */}
                 <div className="px-5 pb-3">

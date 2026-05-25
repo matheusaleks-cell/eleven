@@ -267,6 +267,60 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
               </h3>
             </div>
 
+            {/* Seletor de Origem do Lote — sempre visível no topo */}
+            <div className="px-3 py-2.5 border-b border-brand-border bg-brand-bg/40 space-y-1.5">
+              <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest flex items-center gap-1">
+                <Layers size={10} /> Origem do Lote
+              </label>
+              <div className="flex gap-1 p-0.5 bg-brand-bg rounded border border-brand-border">
+                {(["AUTO", "PROPRIO", "INVESTIDOR"] as LotPreference[]).map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => { setLotPreference(opt); setSelectedProjectId(""); }}
+                    className={cn(
+                      "flex-1 py-1.5 rounded text-[8px] font-black uppercase tracking-wider transition-all",
+                      lotPreference === opt
+                        ? opt === "INVESTIDOR"
+                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                          : opt === "PROPRIO"
+                          ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                          : "bg-brand-surface text-white border border-brand-border"
+                        : "text-brand-text-muted hover:text-white"
+                    )}
+                  >
+                    {opt === "AUTO" ? "Auto (FIFO)" : opt === "PROPRIO" ? "Lote Próprio" : "Investidor"}
+                  </button>
+                ))}
+              </div>
+              {lotPreference === "INVESTIDOR" && (
+                <div>
+                  {loadingLots ? (
+                    <div className="flex items-center gap-2 px-2 py-1 text-[9px] text-brand-text-muted">
+                      <div className="w-3 h-3 border border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      Buscando projetos...
+                    </div>
+                  ) : lotProjects.length === 0 ? (
+                    <p className="text-[9px] text-amber-400/70 font-bold px-1">
+                      Nenhum projeto com estoque dos produtos no carrinho.
+                    </p>
+                  ) : (
+                    <select
+                      className="w-full bg-brand-input border border-amber-500/40 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-amber-500"
+                      value={selectedProjectId}
+                      onChange={e => setSelectedProjectId(e.target.value)}
+                    >
+                      <option value="">Selecionar investidor...</option>
+                      {lotProjects.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.investorName} — {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
               {cart.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center opacity-20 py-12">
@@ -371,61 +425,6 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
                 <span className="text-xl font-mono font-black text-brand-accent">
                   {fmt(Math.max(0, totalValue - discount))}
                 </span>
-              </div>
-
-              {/* Seletor de Origem do Lote */}
-              <div className="space-y-1.5 pt-1 border-t border-brand-border/40">
-                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest flex items-center gap-1">
-                  <Layers size={10} /> Origem do Lote
-                </label>
-                <div className="flex gap-1 p-0.5 bg-brand-bg rounded border border-brand-border">
-                  {(["AUTO", "PROPRIO", "INVESTIDOR"] as LotPreference[]).map(opt => (
-                    <button
-                      key={opt}
-                      onClick={() => { setLotPreference(opt); setSelectedProjectId(""); }}
-                      className={cn(
-                        "flex-1 py-1.5 rounded text-[8px] font-black uppercase tracking-wider transition-all",
-                        lotPreference === opt
-                          ? opt === "INVESTIDOR"
-                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                            : opt === "PROPRIO"
-                            ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                            : "bg-brand-surface text-white border border-brand-border"
-                          : "text-brand-text-muted hover:text-white"
-                      )}
-                    >
-                      {opt === "AUTO" ? "Auto (FIFO)" : opt === "PROPRIO" ? "Lote Próprio" : "Investidor"}
-                    </button>
-                  ))}
-                </div>
-
-                {lotPreference === "INVESTIDOR" && (
-                  <div>
-                    {loadingLots ? (
-                      <div className="flex items-center gap-2 px-2 py-1.5 text-[9px] text-brand-text-muted">
-                        <div className="w-3 h-3 border border-amber-500 border-t-transparent rounded-full animate-spin" />
-                        Buscando projetos...
-                      </div>
-                    ) : lotProjects.length === 0 ? (
-                      <p className="text-[9px] text-amber-400/70 font-bold px-1">
-                        Nenhum projeto com estoque dos produtos no carrinho.
-                      </p>
-                    ) : (
-                      <select
-                        className="w-full bg-brand-input border border-amber-500/40 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-amber-500"
-                        value={selectedProjectId}
-                        onChange={e => setSelectedProjectId(e.target.value)}
-                      >
-                        <option value="">Selecionar investidor...</option>
-                        {lotProjects.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.investorName} — {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

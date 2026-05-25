@@ -80,7 +80,24 @@ export async function getProductsForSale() {
 export async function getSalesOrders() {
   try {
     const orders = await prisma.salesOrder.findMany({
-      include: { customer: true },
+      include: {
+        customer: true,
+        weapons: {
+          select: {
+            importLot: {
+              select: {
+                investmentProjectId: true,
+                investmentProject: {
+                  select: {
+                    name: true,
+                    investor: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
     return orders;
