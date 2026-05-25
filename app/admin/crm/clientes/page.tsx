@@ -62,11 +62,10 @@ export default function ClientesPage() {
   const [customerToSell, setCustomerToSell] = useState<any>(null);
 
 
-  const states = useMemo(() => {
-    if (!Array.isArray(clientes)) return [];
-    const s = new Set(clientes.map(c => c.state).filter(Boolean));
-    return Array.from(s).sort();
-  }, [clientes]);
+  const states = useMemo(() => [
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
+    "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"
+  ], []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -772,8 +771,9 @@ export default function ClientesPage() {
                      <Input 
                        className="h-12 text-base"
                        placeholder="SP" 
+                       maxLength={2}
                        value={newCliente.state}
-                       onChange={(e) => setNewCliente({...newCliente, state: e.target.value})}
+                       onChange={(e) => setNewCliente({...newCliente, state: e.target.value.toUpperCase().slice(0, 2)})}
                      />
                   </div>
                </div>
