@@ -128,7 +128,7 @@ export async function getLotOptionsForCart(productIds: string[]) {
 
 export async function createDirectSale(data: {
   customerId: string;
-  items: { id: string; name: string; sku: string; price: number; quantity: number }[];
+  items: { id: string; name: string; sku: string; price: number; quantity: number; serialNumbers?: string[] }[];
   totalValue: number;
   discount?: number;
   paymentMethod: string;
@@ -184,27 +184,50 @@ export async function createDirectSale(data: {
         lotFilter = { importLot: { investmentProjectId } };
       }
 
-      // Busca armas do lote preferido primeiro (FIFO por data de entrada)
-      let weaponsToSell = await prisma.weaponMap.findMany({
-        where: { productId: item.id, currentStatus: "ESTOQUE", ...lotFilter },
-        take: item.quantity,
-        orderBy: { entryDate: "asc" },
-        select: { id: true },
-      });
+      let weaponsToSell: { id: string }[] = [];
+      
+      if (item.serialNumbers && item.serialNumbers.length > 0) {
+        weaponsToSell = await prisma.weaponMap.findMany({
+          where: {
+            productId: item.id,
+            currentStatus: "ESTOQUE",
+            serialNumber: { in: item.serialNumbers }
+          },
+          select: { id: true }
+        });
+      }
 
-      // Se faltaram armas no lote preferido, complementa com FIFO geral
-      if (weaponsToSell.length < item.quantity && Object.keys(lotFilter).length > 0) {
+      if (weaponsToSell.length < item.quantity) {
         const alreadyIds = weaponsToSell.map(w => w.id);
-        const extras = await prisma.weaponMap.findMany({
+        const needed = item.quantity - weaponsToSell.length;
+
+        let extras = await prisma.weaponMap.findMany({
           where: {
             productId: item.id,
             currentStatus: "ESTOQUE",
             id: alreadyIds.length > 0 ? { notIn: alreadyIds } : undefined,
+            ...lotFilter
           },
-          take: item.quantity - weaponsToSell.length,
+          take: needed,
           orderBy: { entryDate: "asc" },
           select: { id: true },
         });
+
+        if (extras.length < needed && Object.keys(lotFilter).length > 0) {
+          const allAlreadyIds = [...alreadyIds, ...extras.map(w => w.id)];
+          const backupExtras = await prisma.weaponMap.findMany({
+            where: {
+              productId: item.id,
+              currentStatus: "ESTOQUE",
+              id: allAlreadyIds.length > 0 ? { notIn: allAlreadyIds } : undefined,
+            },
+            take: needed - extras.length,
+            orderBy: { entryDate: "asc" },
+            select: { id: true },
+          });
+          extras = [...extras, ...backupExtras];
+        }
+
         weaponsToSell = [...weaponsToSell, ...extras];
       }
 
@@ -308,5 +331,47 @@ export async function updateSalesOrder(
   } catch (error: any) {
     console.error("Erro ao atualizar pedido:", error);
     return { success: false, error: error.message || "Falha ao atualizar pedido." };
+  }
+}
+
+export async function getAvailableSerialsForProduct(
+  productId: string,
+  lotPreference: "AUTO" | "PROPRIO" | "INVESTIDOR",
+  investmentProjectId?: string
+) {
+  try {
+    let lotFilter: any = {};
+    if (lotPreference === "PROPRIO") {
+      lotFilter = { importLot: { investmentProjectId: null } };
+    } else if (lotPreference === "INVESTIDOR" && investmentProjectId) {
+      lotFilter = { importLot: { investmentProjectId } };
+    }
+
+    const weapons = await prisma.weaponMap.findMany({
+      where: {
+        productId,
+        currentStatus: "ESTOQUE",
+        ...lotFilter
+      },
+      select: {
+        id: true,
+        serialNumber: true,
+        importLot: {
+          select: {
+            batchCode: true
+          }
+        }
+      },
+      orderBy: { entryDate: "asc" }
+    });
+
+    return weapons.map(w => ({
+      id: w.id,
+      serial: w.serialNumber,
+      batchCode: w.importLot?.batchCode || "S/L"
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar números de série disponíveis:", error);
+    return [];
   }
 }

@@ -33,6 +33,8 @@ interface InvestorDocument {
   size: string;
   base64Data: string;
   createdAt: string;
+  realizedValue?: number | null;
+  realizedDate?: string | null;
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -48,6 +50,16 @@ function getCategoryColor(category: string) {
     "Comprovante de Residência": "text-green-400 border-green-400/20 bg-green-400/5",
     "Contrato de Investimento": "text-brand-accent border-brand-accent/20 bg-brand-accent/5",
     "Dados Bancários": "text-orange-400 border-orange-400/20 bg-orange-400/5",
+    "INVOICE": "text-emerald-400 border-emerald-400/20 bg-emerald-400/5",
+    "PACKING LIST": "text-teal-400 border-teal-400/20 bg-teal-400/5",
+    "LICENÇA DE IMPORTAÇÃO / LPCO": "text-amber-400 border-amber-400/20 bg-amber-400/5",
+    "SWIFT – COMPROVANTE DE PAGTO/CÂMBIO": "text-yellow-400 border-yellow-400/20 bg-yellow-400/5",
+    "AWB EMBARQUE": "text-cyan-400 border-cyan-400/20 bg-cyan-400/5",
+    "TERMO DE VISTORIA EXÉRCITO BRASILEIRO": "text-pink-400 border-pink-400/20 bg-pink-400/5",
+    "PAGTO TRIBUTOS FEDERAIS": "text-indigo-400 border-indigo-400/20 bg-indigo-400/5",
+    "PAGTO GARE ICMS": "text-violet-400 border-violet-400/20 bg-violet-400/5",
+    "PGTO ARMAZENAGEM": "text-rose-400 border-rose-400/20 bg-rose-400/5",
+    "NFe ENTRADA": "text-lime-400 border-lime-400/20 bg-lime-400/5",
     "Outros": "text-brand-text-muted border-brand-border bg-brand-input",
   };
   return map[category] ?? "text-brand-text-muted border-brand-border bg-brand-input";
@@ -56,23 +68,17 @@ function getCategoryColor(category: string) {
 // ─── download helper ──────────────────────────────────────────────────────────
 
 function downloadDoc(doc: InvestorDocument) {
-  const mime = doc.type === "PDF" ? "application/pdf" : "image/*";
-  const byteCharacters = atob(doc.base64Data);
-  const byteNumbers = Array.from(byteCharacters, (c) => c.charCodeAt(0));
-  const blob = new Blob([new Uint8Array(byteNumbers)], { type: mime });
-  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
+  a.href = doc.base64Data; // already a full data URL
   a.download = doc.name;
   a.click();
-  URL.revokeObjectURL(url);
 }
 
 // ─── viewer modal ─────────────────────────────────────────────────────────────
 
 function DocViewer({ doc, onClose }: { doc: InvestorDocument; onClose: () => void }) {
   const isPdf = doc.type === "PDF";
-  const src = `data:${isPdf ? "application/pdf" : "image/*"};base64,${doc.base64Data}`;
+  const src = doc.base64Data; // already a full data URL (data:<mime>;base64,...)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -245,6 +251,22 @@ export default function DocumentosPage() {
                       <Calendar size={11} />
                       <span className="text-[10px] font-bold uppercase">Enviado em: {fmtDate(doc.createdAt)}</span>
                     </div>
+                    {doc.realizedValue !== null && doc.realizedValue !== undefined && (
+                      <div className="mt-2 p-1.5 bg-brand-bg/50 rounded border border-brand-border/40 flex justify-between items-center text-[9px] font-medium">
+                        <div className="flex items-center gap-1">
+                          <span className="text-brand-text-muted uppercase">Lançado:</span>
+                          <span className="font-mono text-brand-accent font-bold">
+                            R$ {Number(doc.realizedValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-brand-text-muted uppercase">Em:</span>
+                          <span className="font-mono text-white">
+                            {doc.realizedDate ? fmtDate(doc.realizedDate) : fmtDate(doc.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2 mt-4">

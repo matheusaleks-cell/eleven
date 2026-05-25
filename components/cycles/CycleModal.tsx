@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { calculateCycle, getCycleName, formatMoney, TaxConfig } from "@/lib/calculations";
 import { X, Calculator } from "lucide-react";
+import { toast } from "sonner";
 
 interface CycleModalProps {
   projectName: string;
@@ -12,6 +13,7 @@ interface CycleModalProps {
   plannedCapital: number;
   onClose: () => void;
   onSave: (data: any) => void;
+  importLots?: any[];
 }
 
 const inputStyle = {
@@ -55,7 +57,8 @@ function ResultRow({ label, value, accent = false, bold = false }: { label: stri
   );
 }
 
-export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plannedCapital, onClose, onSave }: CycleModalProps) {
+export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plannedCapital, onClose, onSave, importLots }: CycleModalProps) {
+  const activeLot = importLots?.find(lot => lot.status !== "LIQUIDADO") || importLots?.[0];
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
   const [rate, setRate] = useState("");
@@ -157,6 +160,50 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
           <p style={{ color: "#F5C400", fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, marginBottom: 12 }}>
             ★ Dados de Importação
           </p>
+          {activeLot && (
+            <button
+              onClick={() => {
+                if (activeLot.quantityItems) setQty(String(activeLot.quantityItems));
+                
+                const docSwift = activeLot.documents?.find((d: any) => d.category === "SWIFT – COMPROVANTE DE PAGTO/CÂMBIO");
+                const realizedExchange = activeLot.exchangeRate || 5.25;
+                setRate(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(realizedExchange));
+
+                const realizedFob = activeLot.fobValue || 0;
+                setFob(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedFob));
+
+                const docAwb = activeLot.documents?.find((d: any) => d.category === "AWB EMBARQUE");
+                const realizedFreightBrl = docAwb?.realizedValue || (activeLot.freight * realizedExchange);
+                const realizedFreightUsd = realizedFreightBrl / realizedExchange;
+                setFreight(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedFreightUsd));
+
+                const realizedInsuranceBrl = activeLot.insurance * realizedExchange;
+                const realizedInsuranceUsd = realizedInsuranceBrl / realizedExchange;
+                setInsurance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedInsuranceUsd));
+
+                const firstProd = activeLot.products?.[0];
+                const suggestedPrice = firstProd?.priceB2C || 6000;
+                setPrice(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(suggestedPrice));
+
+                if (activeLot.batchCode) setProcNum(activeLot.batchCode);
+                const docNfe = activeLot.documents?.find((d: any) => d.category === "NFe ENTRADA");
+                if (docNfe?.name) setDiNum(docNfe.name.substring(0, 20));
+                if (activeLot.purchaseDate) setDiDate(new Date(activeLot.purchaseDate).toISOString().split('T')[0]);
+
+                toast.success(`Dados reais da importação ${activeLot.batchCode} carregados!`);
+              }}
+              type="button"
+              className="mb-4 px-3 py-1.5 rounded-[2px] font-bold uppercase text-[10px] flex items-center gap-1.5 transition-all"
+              style={{
+                background: "rgba(245,196,0,0.1)",
+                color: "#F5C400",
+                border: "1px solid rgba(245,196,0,0.3)",
+                cursor: "pointer"
+              }}
+            >
+              ★ Carregar Dados Reais da Importação ({activeLot.batchCode})
+            </button>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Taxa Cambial (USD)</label>

@@ -459,6 +459,9 @@ model Document {
   userId          String?            @map("user_id")
   user            User?              @relation("UserDocuments", fields: [userId], references: [id], onDelete: Cascade)
   
+  realizedValue   Float?             @map("realized_value")
+  realizedDate    DateTime?          @map("realized_date")
+
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 

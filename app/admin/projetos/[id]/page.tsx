@@ -495,6 +495,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               ? project.initialCapital
               : project.cycles[project.cycles.length - 1].reinvestmentShare
           }
+          importLots={project.importLots}
           onClose={() => setShowCycleModal(false)}
           onSave={handleSaveCycle}
         />

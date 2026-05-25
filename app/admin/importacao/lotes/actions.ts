@@ -11,22 +11,39 @@ export async function getImportLots() {
         supplier: true,
         products: true,
         documents: true,
+        weapons: {
+          include: {
+            product: true,
+            customer: true
+          }
+        },
         _count: {
           select: { products: true }
         }
       } as any
     }) as any[];
     
+    const STATUS_PROGRESS: Record<string, number> = {
+      PEDIDO_FEITO: 15,
+      TRANSITO: 40,
+      NACIONALIZANDO: 70,
+      DISPONIVEL: 90,
+      LIQUIDADO: 100,
+    };
+
     // Mapear campos do banco para o que a UI espera
     return lots.map(lot => ({
       ...lot,
       lotId: lot.batchCode,
       supplier: lot.supplier?.name || "Fornecedor",
+      origin: lot.countryOrigin,
       originCountry: lot.countryOrigin,
+      value: lot.fobValue,
       fobTotal: lot.fobValue,
       freightTotal: lot.freight,
       insuranceTotal: lot.insurance,
       items_count: lot.quantityItems,
+      progress: STATUS_PROGRESS[lot.status] ?? 0,
       eta: lot.expectedNationalityDate?.toLocaleDateString('pt-BR') || "A definir"
     }));
   } catch (error) {
@@ -37,23 +54,78 @@ export async function getImportLots() {
 
 // ... (createImportLot, updateLotStatus, deleteImportLot mantidos)
 
-export async function addLotDocument(lotId: string, name: string, category: string, base64: string) {
+export async function addLotDocument(
+  lotId: string, 
+  name: string, 
+  category: string, 
+  base64: string,
+  realizedValue?: number | null,
+  realizedDate?: string | null
+) {
   try {
+    const lot = (await prisma.importLot.findUnique({
+      where: { id: lotId },
+      include: {
+        investmentProject: true
+      }
+    })) as any;
+
+    const projectId = lot?.investmentProjectId || null;
+    const userId = lot?.investmentProject?.investorId || null;
+
     const doc = await prisma.document.create({
       data: {
         name,
-        type: "PDF",
+        type: name.toUpperCase().endsWith(".PDF") ? "PDF" : "IMAGE",
         category,
         size: `${(base64.length / 1024 / 1.33).toFixed(1)} KB`,
         base64Data: base64,
-        lotId
+        lotId,
+        projectId,
+        userId,
+        realizedValue: realizedValue ?? null,
+        realizedDate: realizedDate ? new Date(realizedDate) : null
       } as any
     });
     revalidatePath("/admin/importacao/lotes");
+    if (userId) {
+      revalidatePath(`/admin/investidores/${userId}`);
+      revalidatePath(`/investidor/documentos`);
+    }
     return { success: true, doc };
   } catch (error) {
     console.error("Erro ao adicionar documento:", error);
     return { success: false };
+  }
+}
+
+export async function updateDocumentRealizedFields(
+  docId: string,
+  realizedValue: number | null,
+  realizedDate: string | null
+) {
+  try {
+    const doc = await prisma.document.update({
+      where: { id: docId },
+      data: {
+        realizedValue: realizedValue !== null ? Number(realizedValue) : null,
+        realizedDate: realizedDate ? new Date(realizedDate) : null
+      } as any,
+      include: {
+        importLot: true
+      } as any
+    }) as any;
+
+    revalidatePath("/admin/importacao/lotes");
+    if (doc?.userId) {
+      revalidatePath(`/admin/investidores/${doc.userId}`);
+      revalidatePath(`/investidor/documentos`);
+    }
+
+    return { success: true, doc };
+  } catch (error) {
+    console.error("Erro ao atualizar campos realizados do documento:", error);
+    return { success: false, error: "Falha ao atualizar dados de pagamento." };
   }
 }
 
@@ -192,5 +264,65 @@ export async function deleteImportLot(id: string) {
   } catch (error) {
     console.error("Erro ao excluir lote:", error);
     return { success: false, error: "Falha ao excluir lote de importação." };
+  }
+}
+
+export async function registerLotSerials(lotId: string, productId: string, serials: string[]) {
+  try {
+    const lot = await prisma.importLot.findUnique({
+      where: { id: lotId }
+    });
+
+    if (!lot) {
+      return { success: false, error: "Lote de importação não encontrado." };
+    }
+
+    const cleanSerials = serials
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
+    if (cleanSerials.length === 0) {
+      return { success: false, error: "Nenhum número de série válido fornecido." };
+    }
+
+    const existing = await prisma.weaponMap.findMany({
+      where: {
+        serialNumber: { in: cleanSerials }
+      },
+      select: { serialNumber: true }
+    });
+
+    if (existing.length > 0) {
+      const dups = existing.map(e => e.serialNumber).join(", ");
+      return {
+        success: false,
+        error: `Os seguintes números de série já estão cadastrados no sistema: ${dups}`
+      };
+    }
+
+    const creations = cleanSerials.map(serial => {
+      return prisma.weaponMap.create({
+        data: {
+          serialNumber: serial,
+          productId: productId,
+          supplierId: lot.supplierId,
+          importLotId: lot.id,
+          currentStatus: "ESTOQUE",
+          unitCost: (lot.totalCostNationalized / (lot.quantityItems || 1)),
+          entryDate: new Date(),
+        }
+      });
+    });
+
+    await prisma.$transaction(creations);
+
+    revalidatePath("/admin/importacao/lotes");
+    revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
+
+    return { success: true, count: cleanSerials.length };
+  } catch (error) {
+    console.error("Erro ao registrar números de série:", error);
+    return { success: false, error: "Falha interna ao registrar números de série." };
   }
 }

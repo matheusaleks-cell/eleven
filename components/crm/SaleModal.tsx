@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { ShoppingBag, Plus, Trash2, DollarSign, Building2, User, Layers } from "lucide-react";
-import { getProductsForSale, createDirectSale, getLotOptionsForCart } from "@/app/admin/crm/vendas/actions";
+import { getProductsForSale, createDirectSale, getLotOptionsForCart, getAvailableSerialsForProduct } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -25,6 +25,7 @@ interface CartItem {
   price: number;
   quantity: number;
   stock: number;
+  selectedSerials?: string[];
 }
 
 const fmt = (v: number) =>
@@ -94,6 +95,23 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
     }
   }, [lotPreference, cart]);
 
+  const [availableSerialsMap, setAvailableSerialsMap] = useState<Record<string, { id: string; serial: string; batchCode: string }[]>>({});
+
+  useEffect(() => {
+    if (cart.length > 0) {
+      cart.forEach(item => {
+        getAvailableSerialsForProduct(item.id, lotPreference, selectedProjectId || undefined).then(serials => {
+          setAvailableSerialsMap(prev => ({
+            ...prev,
+            [item.id]: serials
+          }));
+        });
+      });
+    } else {
+      setAvailableSerialsMap({});
+    }
+  }, [cart.map(i => i.id).join(","), lotPreference, selectedProjectId]);
+
   const loadProducts = async () => {
     setLoadingProducts(true);
     const data = await getProductsForSale();
@@ -129,7 +147,9 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
         toast.error(`Estoque insuficiente. Disponível: ${i.stock}`);
         return i;
       }
-      return { ...i, quantity: next };
+      const serials = i.selectedSerials || [];
+      const nextSerials = serials.slice(0, next);
+      return { ...i, quantity: next, selectedSerials: nextSerials };
     }));
   };
 
@@ -145,7 +165,14 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
     try {
       const res = await createDirectSale({
         customerId: customer.id,
-        items: cart.map(i => ({ id: i.id, name: i.name, sku: i.sku, price: i.price, quantity: i.quantity })),
+        items: cart.map(i => ({ 
+          id: i.id, 
+          name: i.name, 
+          sku: i.sku, 
+          price: i.price, 
+          quantity: i.quantity,
+          serialNumbers: i.selectedSerials || []
+        })),
         totalValue,
         discount,
         paymentMethod,
@@ -248,20 +275,81 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
                 </div>
               ) : (
                 cart.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-2.5 bg-brand-input rounded border border-brand-border">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-black text-white uppercase truncate">{item.name}</p>
-                      <p className="text-[9px] text-brand-text-muted font-bold">{fmt(item.price)} × {item.quantity} = {fmt(item.price * item.quantity)}</p>
-                    </div>
-                    <div className="flex items-center gap-2 ml-2 shrink-0">
-                      <div className="flex items-center bg-brand-bg rounded border border-brand-border overflow-hidden">
-                        <button onClick={() => updateQty(item.id, -1)} className="px-2 py-0.5 hover:bg-brand-surface text-brand-text-muted text-sm">−</button>
-                        <span className="px-2 text-xs font-mono font-bold text-white">{item.quantity}</span>
-                        <button onClick={() => updateQty(item.id, 1)} className="px-2 py-0.5 hover:bg-brand-surface text-brand-text-muted text-sm">+</button>
+                  <div key={item.id} className="p-2.5 bg-brand-input rounded border border-brand-border flex flex-col gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-white uppercase truncate">{item.name}</p>
+                        <p className="text-[9px] text-brand-text-muted font-bold">{fmt(item.price)} × {item.quantity} = {fmt(item.price * item.quantity)}</p>
                       </div>
-                      <button onClick={() => removeFromCart(item.id)} className="text-brand-text-muted hover:text-red-400 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+                      <div className="flex items-center gap-2 ml-2 shrink-0">
+                        <div className="flex items-center bg-brand-bg rounded border border-brand-border overflow-hidden">
+                          <button onClick={() => updateQty(item.id, -1)} className="px-2 py-0.5 hover:bg-brand-surface text-brand-text-muted text-sm">−</button>
+                          <span className="px-2 text-xs font-mono font-bold text-white">{item.quantity}</span>
+                          <button onClick={() => updateQty(item.id, 1)} className="px-2 py-0.5 hover:bg-brand-surface text-brand-text-muted text-sm">+</button>
+                        </div>
+                        <button onClick={() => removeFromCart(item.id)} className="text-brand-text-muted hover:text-red-400 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Seletor de Números de Série */}
+                    <div className="pt-2 border-t border-brand-border/40">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[8px] font-black text-brand-text-muted uppercase tracking-wider">
+                          Séries Selecionadas (Alvo: {item.quantity})
+                        </span>
+                        {item.selectedSerials && item.selectedSerials.length > 0 && (
+                          <span className={cn(
+                            "text-[8px] font-black px-1.5 py-0.2 rounded font-mono",
+                            item.selectedSerials.length === item.quantity ? "text-brand-success bg-brand-success/10" : "text-brand-warning bg-brand-warning/10"
+                          )}>
+                            {item.selectedSerials.length}/{item.quantity}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {availableSerialsMap[item.id] && availableSerialsMap[item.id].length > 0 ? (
+                        <div className="flex flex-wrap gap-1 max-h-[70px] overflow-y-auto pr-1 py-1 custom-scrollbar">
+                          {availableSerialsMap[item.id].map(s => {
+                            const isSelected = item.selectedSerials?.includes(s.serial) || false;
+                            return (
+                              <button
+                                key={s.id}
+                                onClick={() => {
+                                  setCart(prev => prev.map(c => {
+                                    if (c.id !== item.id) return c;
+                                    const current = c.selectedSerials || [];
+                                    let next = [];
+                                    if (current.includes(s.serial)) {
+                                      next = current.filter(x => x !== s.serial);
+                                    } else {
+                                      if (current.length >= c.quantity) {
+                                        toast.info(`Remova uma série antes de selecionar mais do que a quantidade (${c.quantity})`);
+                                        return c;
+                                      }
+                                      next = [...current, s.serial];
+                                    }
+                                    return { ...c, selectedSerials: next };
+                                  }));
+                                }}
+                                className={cn(
+                                  "px-2 py-0.5 rounded text-[8px] font-mono font-bold border transition-all",
+                                  isSelected 
+                                    ? "bg-brand-accent text-brand-bg border-brand-accent shadow-[0_0_8px_rgba(245,196,0,0.15)]" 
+                                    : "bg-brand-bg text-brand-text-muted border-brand-border hover:border-brand-text-muted hover:text-white"
+                                )}
+                              >
+                                {s.serial}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-[8px] text-brand-warning/60 font-bold uppercase tracking-wider">
+                          Nenhum número de série em estoque disponível para este produto.
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))

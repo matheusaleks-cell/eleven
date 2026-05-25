@@ -78,7 +78,102 @@ export async function createProject(data: any) {
       }
     });
 
+    // 3. Processar produto e lote de importação automaticamente
+    try {
+      const qty = parseInt(data.quantity) || 1;
+      const costPriceBrl = parseFloat(String(data.costPrice || "0").replace(/\D/g, "")) / 100 || 0;
+      const salePriceBrl = parseFloat(String(data.salePrice || "0").replace(/\D/g, "")) / 100 || 0;
+      const exchangeRate = 5.25;
+
+      let product = null;
+      if (data.product) {
+        product = await prisma.product.findFirst({
+          where: {
+            OR: [
+              { sku: data.product.toUpperCase() },
+              { commercialName: { equals: data.product } }
+            ]
+          }
+        });
+
+        if (!product) {
+          const brand = data.manufacturer || "Desconhecido";
+          const cleanedProduct = data.product.toUpperCase().replace(/[^A-Z0-9]/g, "-");
+          const sku = `SKU-${cleanedProduct}-${Math.floor(100 + Math.random() * 900)}`;
+
+          product = await prisma.product.create({
+            data: {
+              sku,
+              commercialName: data.product,
+              brand,
+              model: data.product,
+              caliber: "9mm",
+              species: "Pistola",
+              actionType: "Semiautomática",
+              capacity: 15,
+              barrelLength: 4.0,
+              finish: "Preto",
+              originCountry: "Turquia",
+              ncm: "9303.20.00",
+              priceB2C: salePriceBrl || costPriceBrl * 1.5,
+              priceB2B: costPriceBrl,
+              stockAvailable: qty,
+              status: "ACTIVE"
+            }
+          });
+        }
+      }
+
+      let supplier = await prisma.supplier.findFirst({
+        where: { status: "ACTIVE" }
+      });
+
+      if (!supplier) {
+        supplier = await prisma.supplier.create({
+          data: {
+            name: data.manufacturer || "Fornecedor Turquia",
+            country: "Turquia",
+            status: "ACTIVE"
+          }
+        });
+      }
+
+      const unitFobUsd = costPriceBrl / exchangeRate;
+      const fobTotal = unitFobUsd * qty;
+      const batchCode = `LOT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      await prisma.importLot.create({
+        data: {
+          batchCode,
+          supplierId: supplier.id,
+          countryOrigin: "Turquia",
+          purchaseDate: new Date(),
+          currency: "USD",
+          exchangeRate: exchangeRate,
+          fobValue: fobTotal,
+          freight: 0,
+          insurance: 0,
+          customsTaxes: fobTotal * exchangeRate * 0.48,
+          customsFees: 7884,
+          totalCostNationalized: costPriceBrl * qty,
+          quantityItems: qty,
+          status: "PEDIDO_FEITO",
+          expectedMarginPct: 0.35,
+          investmentProjectId: project.id,
+          products: product ? {
+            connect: [{ id: product.id }]
+          } : undefined
+        }
+      });
+    } catch (err) {
+      console.error("Erro ao gerar lote de importação automático para o projeto:", err);
+    }
+
     revalidatePath("/admin/projetos");
+    revalidatePath("/admin/importacao/lotes");
+    if (data.investorId) {
+      revalidatePath(`/admin/investidores/${data.investorId}`);
+    }
     return { success: true, project };
   } catch (error) {
     console.error("Erro ao criar projeto:", error);
@@ -96,7 +191,12 @@ export async function getProjectById(id: string) {
         cycles: {
           orderBy: { cycleNumber: "asc" }
         },
-        importLots: true
+        importLots: {
+          include: {
+            documents: true,
+            products: true
+          }
+        }
       }
     });
 

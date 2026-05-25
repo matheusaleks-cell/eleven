@@ -268,6 +268,7 @@ export async function getCycleSales(cycleId: string, email: string) {
     const cycle = await prisma.cycle.findFirst({
       where: { id: cycleId, project: { investor: { email } } },
       include: {
+        project: true,
         importLot: {
           include: {
             weapons: {
@@ -280,21 +281,41 @@ export async function getCycleSales(cycleId: string, email: string) {
             }
           }
         }
-      }
-    });
+      } as any
+    }) as any;
 
     if (!cycle || !cycle.importLot) return { success: false, sales: [] };
 
-    const sales = cycle.importLot.weapons.map(w => ({
-      id: w.id,
-      productName: w.product.commercialName,
-      serialNumber: w.serialNumber,
-      saleDate: w.saleDate?.toLocaleDateString("pt-BR"),
-      saleValue: w.saleValue || 0,
-      customerName: w.customer?.name || "Cliente Final",
-    }));
+    const splitPct = cycle.project?.profitSplitPct || 0.50;
+    const grossRev = cycle.grossRevenue || 1;
+    const totalDeductions = (cycle.salesTax || 0) + (cycle.salesOperationalCost || 0);
+    const deductionRate = totalDeductions / grossRev;
 
-    const totalSoldValue = sales.reduce((acc, s) => acc + s.saleValue, 0);
+    const sales = cycle.importLot.weapons.map((w: any) => {
+      const uCost = w.unitCost || (cycle.totalInvestment / (cycle.quantity || 1));
+      const sValue = w.saleValue || 0;
+      
+      // Deduções proporcionais de impostos e operacional de venda para esta peça
+      const weaponDeductions = sValue * deductionRate;
+      // Lucro líquido unitário apurado
+      const netProfit = sValue - uCost - weaponDeductions;
+      // Retorno do investidor = custo unitário amortizado + fatia do lucro
+      const investorProfitShare = netProfit > 0 ? netProfit * splitPct : 0;
+      const investorReturn = uCost + investorProfitShare;
+
+      return {
+        id: w.id,
+        productName: w.product.commercialName,
+        serialNumber: w.serialNumber,
+        saleDate: w.saleDate?.toLocaleDateString("pt-BR"),
+        saleValue: sValue,
+        customerName: w.customer?.name || "Cliente Final",
+        unitCost: uCost,
+        investorReturn: investorReturn
+      };
+    });
+
+    const totalSoldValue = sales.reduce((acc: number, s: any) => acc + s.saleValue, 0);
 
     return { success: true, sales, totalSoldValue };
   } catch (error) {

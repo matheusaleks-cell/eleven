@@ -208,13 +208,15 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
                                    <th className="px-4 py-2 uppercase">Data</th>
                                    <th className="px-4 py-2 uppercase">Produto / Serial</th>
                                    <th className="px-4 py-2 uppercase">Cliente</th>
-                                   <th className="px-4 py-2 text-right uppercase">Valor Bruto</th>
+                                   <th className="px-4 py-2 text-right uppercase">Custo Unitário (Aporte)</th>
+                                   <th className="px-4 py-2 text-right uppercase font-bold text-white">Valor Venda</th>
+                                   <th className="px-4 py-2 text-right uppercase text-brand-accent">Seu Retorno (Saldo)</th>
                                 </tr>
                              </thead>
                              <tbody className="divide-y divide-brand-border/30">
                                 {salesLoading ? (
                                    <tr>
-                                      <td colSpan={4} className="px-4 py-8 text-center text-brand-text-muted animate-pulse font-bold">Sincronizando dados de vendas...</td>
+                                      <td colSpan={6} className="px-4 py-8 text-center text-brand-text-muted animate-pulse font-bold">Sincronizando dados de vendas...</td>
                                    </tr>
                                 ) : cycleSales.length > 0 ? (
                                    cycleSales.map((sale) => (
@@ -225,12 +227,14 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
                                             <span className="block text-[9px] text-brand-text-muted">SN: {sale.serialNumber}</span>
                                          </td>
                                          <td className="px-4 py-2 text-brand-text-secondary">{sale.customerName}</td>
-                                         <td className="px-4 py-2 text-right font-mono font-bold text-brand-success">{formatMoney(sale.saleValue)}</td>
+                                         <td className="px-4 py-2 text-right font-mono text-brand-text-muted">{formatMoney(sale.unitCost)}</td>
+                                         <td className="px-4 py-2 text-right font-mono text-white">{formatMoney(sale.saleValue)}</td>
+                                         <td className="px-4 py-2 text-right font-mono font-bold text-brand-success">{formatMoney(sale.investorReturn)}</td>
                                       </tr>
                                    ))
                                 ) : (
                                    <tr>
-                                      <td colSpan={4} className="px-4 py-8 text-center text-brand-text-muted font-bold">Aguardando início das vendas deste lote.</td>
+                                      <td colSpan={6} className="px-4 py-8 text-center text-brand-text-muted font-bold">Aguardando início das vendas deste lote.</td>
                                    </tr>
                                 )}
                              </tbody>
