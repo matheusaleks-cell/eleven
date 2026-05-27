@@ -259,7 +259,7 @@ export default function ImportBatchesPage() {
         className="max-w-4xl"
        >
          <BatchWorkspace 
-          batch={selectedLot} 
+          batch={lots.find(x => x.dbId === selectedLot?.dbId || x.id === selectedLot?.id) || selectedLot} 
           onClose={() => setSelectedLot(null)} 
           onRefresh={refreshLots}
          />

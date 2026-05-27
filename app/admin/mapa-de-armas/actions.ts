@@ -10,7 +10,10 @@ export async function getWeapons() {
         product: true,
         customer: true,
       },
-      orderBy: { entryDate: "desc" },
+      orderBy: [
+        { entryDate: "desc" },
+        { serialNumber: "asc" }
+      ],
     });
 
     return weapons.map(w => ({

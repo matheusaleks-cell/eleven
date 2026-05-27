@@ -12,6 +12,7 @@ export async function getImportLots() {
         products: true,
         documents: true,
         weapons: {
+          orderBy: { serialNumber: "asc" },
           include: {
             product: true,
             customer: true

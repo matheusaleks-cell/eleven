@@ -669,7 +669,9 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                            </tr>
                         </thead>
                         <tbody className="divide-y divide-brand-border/30">
-                           {batch.weapons?.map((w: any) => (
+                           {[...(batch.weapons || [])]
+                             .sort((a, b) => a.serialNumber.localeCompare(b.serialNumber))
+                             .map((w: any) => (
                              <tr key={w.id} className="hover:bg-brand-surface/20 transition-all">
                                 <td className="px-4 py-2 font-mono font-bold text-white">{w.serialNumber}</td>
                                 <td className="px-4 py-2 text-brand-text-secondary uppercase">{w.product?.commercialName}</td>
