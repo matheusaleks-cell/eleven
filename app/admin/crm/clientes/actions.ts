@@ -344,3 +344,67 @@ export async function deleteCustomerDocument(documentId: string) {
     return { success: false, error: "Falha ao excluir documento." };
   }
 }
+
+export async function getCustomerById(id: string) {
+  try {
+    const c = await prisma.customer.findUnique({
+      where: { id },
+      include: {
+        salesOrders: true,
+        documents: true,
+      },
+    });
+
+    if (!c) return null;
+
+    return {
+      id: c.id,
+      name: c.name || "Sem Nome",
+      type: c.type || "B2C",
+      document: c.cpfCnpj || "S/D",
+      email: c.email || "",
+      phone: c.phone || "",
+      state: c.state || "",
+      city: c.city || "",
+      address: c.address || "",
+      cep: c.cep || "",
+      addressNumber: c.addressNumber || "",
+      addressComplement: c.addressComplement || "",
+      neighborhood: c.neighborhood || "",
+      crNumber: c.crNumber || "",
+      category: c.category || "",
+      rg: c.rg || "",
+      birthDate: c.birthDate ? c.birthDate.toISOString() : "",
+      crValidityDate: c.crValidityDate ? c.crValidityDate.toISOString() : "",
+      source: c.source || "",
+      notes: c.notes || "",
+      fantasyName: c.fantasyName || "",
+      stateRegistration: c.stateRegistration || "",
+      responsibleName: c.responsibleName || "",
+      storeEmail: c.storeEmail || "",
+      totalSpent: (c.salesOrders || []).reduce((acc, o) => acc + (Number(o.totalValue) || 0), 0),
+      ordersCount: (c.salesOrders || []).length,
+      lastOrder: c.salesOrders && c.salesOrders.length > 0
+        ? new Date(Math.max(...c.salesOrders.map(o => new Date(o.createdAt).getTime()))).toLocaleDateString('pt-BR')
+        : "Nenhum pedido",
+      badge: "STANDARD",
+      salesOrders: (c.salesOrders || []).map(o => ({
+        id: o.id,
+        orderNumber: o.orderNumber,
+        totalValue: Number(o.totalValue) || 0,
+        status: o.status || "PAGO",
+        createdAt: o.createdAt.toISOString()
+      })),
+      documents: (c.documents || []).map(d => ({
+        id: d.id,
+        name: d.name,
+        category: d.category,
+        type: d.type,
+        size: d.size || 0,
+      }))
+    };
+  } catch (error) {
+    console.error("Erro ao buscar cliente por id:", error);
+    return null;
+  }
+}

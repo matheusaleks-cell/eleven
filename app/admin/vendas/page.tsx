@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { SaleModal } from "@/components/crm/SaleModal";
+import { CustomerProfile } from "@/components/crm/CustomerProfile";
+import { getCustomerById } from "@/app/admin/crm/clientes/actions";
 import {
   ShoppingBag,
   Search,
@@ -49,6 +51,7 @@ export default function VendasPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [session, setSession] = useState({ userName: "Administrador", userEmail: "", userId: "" });
+  const [profileCustomer, setProfileCustomer] = useState<any>(null);
 
   // Picker de cliente
   const [showPicker, setShowPicker] = useState(false);
@@ -277,7 +280,23 @@ export default function VendasPage() {
                     <td className="px-6 py-4 relative group">
                       <div 
                         className="flex items-center gap-2 cursor-pointer"
-                        onClick={() => openEdit(order)}
+                        onClick={async () => {
+                          if (!order.customer?.id) return;
+                          const loadToast = toast.loading("Carregando perfil do cliente...");
+                          try {
+                            const full = await getCustomerById(order.customer.id);
+                            if (full) {
+                              setProfileCustomer(full);
+                            } else {
+                              toast.error("Erro ao carregar perfil do cliente.");
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            toast.error("Erro ao conectar ao servidor.");
+                          } finally {
+                            toast.dismiss(loadToast);
+                          }
+                        }}
                       >
                         <User size={14} className="text-brand-accent" />
                         <span className="text-xs font-bold text-white uppercase hover:text-brand-accent transition-colors">
@@ -717,6 +736,23 @@ export default function VendasPage() {
           </div>
         );
       })()}
+
+      {profileCustomer && (
+        <CustomerProfile
+          isOpen={!!profileCustomer}
+          onClose={() => setProfileCustomer(null)}
+          customer={profileCustomer}
+          onRefresh={async () => {
+            loadData();
+            if (profileCustomer?.id) {
+              const full = await getCustomerById(profileCustomer.id);
+              if (full) {
+                setProfileCustomer(full);
+              }
+            }
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }
