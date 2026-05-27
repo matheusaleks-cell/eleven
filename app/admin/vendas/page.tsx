@@ -29,6 +29,20 @@ import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
+const cleanMoney = (val: string) => {
+  const num = Number(val.replace(/\D/g, "")) / 100;
+  return isNaN(num) ? 0 : num;
+};
+
+const handleBRLMask = (val: string, setter: (v: string) => void) => {
+  const value = val.replace(/\D/g, "");
+  const formatted = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number(value) / 100);
+  setter(formatted);
+};
+
 export default function VendasPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -97,7 +111,11 @@ export default function VendasPage() {
     setEditStatus(order.status);
     setEditPayment(order.paymentMethod || "PIX");
     setEditNotes(order.notes || "");
-    setEditTotal(String(order.totalValue || ""));
+    const formatted = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(order.totalValue || 0);
+    setEditTotal(formatted);
     setConfirmDelete(false);
   };
 
@@ -109,11 +127,12 @@ export default function VendasPage() {
   const handleSaveEdit = async () => {
     if (!editingOrder) return;
     setSavingEdit(true);
+    const cleanValue = cleanMoney(editTotal);
     const res = await updateSalesOrder(editingOrder.id, {
       status: editStatus,
       paymentMethod: editPayment,
       notes: editNotes,
-      totalValue: parseFloat(editTotal) || editingOrder.totalValue,
+      totalValue: cleanValue > 0 ? cleanValue : editingOrder.totalValue,
     });
     setSavingEdit(false);
     if (res.success) {
@@ -256,7 +275,10 @@ export default function VendasPage() {
                       <span className="text-xs font-mono font-black text-white">{order.orderNumber}</span>
                     </td>
                     <td className="px-6 py-4 relative group">
-                      <div className="flex items-center gap-2 cursor-pointer">
+                      <div 
+                        className="flex items-center gap-2 cursor-pointer"
+                        onClick={() => openEdit(order)}
+                      >
                         <User size={14} className="text-brand-accent" />
                         <span className="text-xs font-bold text-white uppercase hover:text-brand-accent transition-colors">
                           {order.customer?.name || "—"}
@@ -265,7 +287,7 @@ export default function VendasPage() {
 
                       {/* Card de Informações do Cliente (Hover) */}
                       {order.customer && (
-                        <div className="absolute left-0 bottom-full mb-2 z-50 hidden group-hover:block w-[350px] p-5 bg-[#161616] border border-brand-border rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.8)] border-t-2 border-t-brand-accent animate-fade-in text-left">
+                        <div className="absolute left-0 bottom-full mb-2 z-50 hidden group-hover:block w-[350px] p-5 bg-[#161616] border border-brand-border rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.8)] border-t-2 border-t-brand-accent animate-fade-in text-left pointer-events-none">
                           <p className="text-[10px] font-black text-brand-accent uppercase tracking-widest mb-3 border-b border-brand-border/40 pb-1.5 flex items-center gap-1.5">
                             <User size={12} /> Cadastro do Cliente
                           </p>
@@ -614,12 +636,10 @@ export default function VendasPage() {
                     <div className="space-y-1.5">
                       <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Valor Total (R$)</label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
                         className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-brand-accent font-mono font-black outline-none focus:border-brand-accent"
                         value={editTotal}
-                        onChange={e => setEditTotal(e.target.value)}
+                        onChange={e => handleBRLMask(e.target.value, setEditTotal)}
                       />
                     </div>
 
