@@ -40,7 +40,7 @@ export async function getInvestorDashboardData(email: string) {
     const formattedProjects = investor.investedProjects.map(project => {
       let projectInvested = project.initialCapital || 0;
       
-      // Nova contabilidade baseada estritamente em armas vendidas (com fallback de ciclos sem armas)
+      // Nova contabilidade baseada estritamente em armas vendidas
       let totalProjectInvestorYield = 0;
       let activeCycleSoldWeapons = 0;
       let activeCycleTotalWeapons = 0;
@@ -58,59 +58,41 @@ export async function getInvestorDashboardData(email: string) {
           deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
         }
 
-        // Se tem armas, calcula estritamente com base nelas
-        if (lot.weapons && lot.weapons.length > 0) {
-          if (lot.status !== "LIQUIDADO") {
-            activeCycleTotalWeapons += lot.quantityItems || lot.weapons.length || 0;
-          }
+        if (lot.status !== "LIQUIDADO") {
+          activeCycleTotalWeapons += lot.quantityItems || lot.weapons.length || 0;
+        }
 
-          lot.weapons.forEach(w => {
-            const uCost = w.unitCost || uCostAvg;
-            if (w.currentStatus === "VENDIDA") {
-              if (lot.status !== "LIQUIDADO") {
-                activeCycleSoldWeapons++;
-              }
-              const sValue = w.saleValue || 0;
-              const weaponDeductions = sValue * deductionRate;
-              const netProfit = sValue - uCost - weaponDeductions;
-              const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
-
-              totalProjectInvestorYield += investorProfit;
-              if (lot.status !== "LIQUIDADO") {
-                activeCycleRealizedProfit += investorProfit;
-              }
-
-              allSoldWeapons.push({
-                id: w.id,
-                productName: w.product.commercialName,
-                serialNumber: w.serialNumber,
-                saleDate: w.saleDate,
-                saleValue: sValue,
-                investorProfit: investorProfit,
-                projectName: project.name
-              });
-            } else if (w.currentStatus === "ESTOQUE" || w.currentStatus === "RESERVADA" || w.currentStatus === "IMPORTADA") {
-              if (lot.status !== "LIQUIDADO") {
-                activeCycleInventoryValue += uCost;
-              }
+        lot.weapons.forEach(w => {
+          const uCost = w.unitCost || uCostAvg;
+          if (w.currentStatus === "VENDIDA") {
+            if (lot.status !== "LIQUIDADO") {
+              activeCycleSoldWeapons++;
             }
-          });
-        } else {
-          // Fallback para lotes legados sem armas cadastradas
-          if (lotCycle && lotCycle.status === "COMPLETED") {
-            totalProjectInvestorYield += lotCycle.investorShare || 0;
-          }
-        }
-      });
+            const sValue = w.saleValue || 0;
+            const weaponDeductions = sValue * deductionRate;
+            const netProfit = sValue - uCost - weaponDeductions;
+            const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
 
-      // Ciclos legados adicionais sem lote correspondente associado a armas
-      project.cycles.forEach(c => {
-        if (c.status === "COMPLETED") {
-          const hasLotWithWeapons = project.importLots.some(l => l.id === c.importLotId && l.weapons && l.weapons.length > 0);
-          if (!hasLotWithWeapons) {
-            totalProjectInvestorYield += c.investorShare || 0;
+            totalProjectInvestorYield += investorProfit;
+            if (lot.status !== "LIQUIDADO") {
+              activeCycleRealizedProfit += investorProfit;
+            }
+
+            allSoldWeapons.push({
+              id: w.id,
+              productName: w.product.commercialName,
+              serialNumber: w.serialNumber,
+              saleDate: w.saleDate,
+              saleValue: sValue,
+              investorProfit: investorProfit,
+              projectName: project.name
+            });
+          } else if (w.currentStatus === "ESTOQUE" || w.currentStatus === "RESERVADA" || w.currentStatus === "IMPORTADA") {
+            if (lot.status !== "LIQUIDADO") {
+              activeCycleInventoryValue += uCost;
+            }
           }
-        }
+        });
       });
 
       let projectCurrent = projectInvested + totalProjectInvestorYield;
@@ -126,23 +108,8 @@ export async function getInvestorDashboardData(email: string) {
         date: project.startDate || project.createdAt
       });
       
-      // Evolução do capital pelos ciclos concluídos legados
+      // Evolução do capital pelos ciclos concluídos
       let runningCapital = projectInvested;
-      project.cycles.forEach(cycle => {
-        if (cycle.status === "COMPLETED") {
-          const hasLotWithWeapons = project.importLots.some(l => l.id === cycle.importLotId && l.weapons && l.weapons.length > 0);
-          if (!hasLotWithWeapons) {
-            runningCapital += cycle.investorShare || 0;
-            const monthLabel = cycle.updatedAt.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-            chartData.push({
-              name: monthLabel,
-              capital: runningCapital,
-              growth: cycle.investorShare || 0,
-              date: cycle.updatedAt
-            });
-          }
-        }
-      });
 
       // Evolução do capital pelas armas vendidas reais
       let accumYieldFromWeapons = 0;
@@ -289,36 +256,7 @@ export async function getInvestorStatement(email: string) {
       });
     });
 
-    // Rendimentos dos Ciclos Concluídos Legados (que não possuem armas no lote correspondente) e Reinvestimentos
-    investor.investedProjects.forEach(project => {
-      project.cycles.forEach(cycle => {
-        if (cycle.status === "COMPLETED") {
-          const hasLotWithWeapons = project.importLots.some(l => l.id === cycle.importLotId && l.weapons && l.weapons.length > 0);
-          if (!hasLotWithWeapons) {
-            if (cycle.investorShare > 0) {
-              statement.push({
-                id: `YC-${cycle.id.substring(0,6)}`,
-                dataStr: cycle.updatedAt.toLocaleDateString("pt-BR"),
-                dateObj: cycle.updatedAt,
-                descricao: `Distribuição de Lucro - ${project.name} (${cycle.cycleName})`,
-                tipo: "RENDIMENTO",
-                valor: cycle.investorShare
-              });
-            }
-            if (cycle.reinvestmentShare > 0) {
-               statement.push({
-                id: `RV-${cycle.id.substring(0,6)}`,
-                dataStr: cycle.updatedAt.toLocaleDateString("pt-BR"),
-                dateObj: cycle.updatedAt,
-                descricao: `Reinvestimento Automático - ${project.name}`,
-                tipo: "REINVEST",
-                valor: cycle.reinvestmentShare
-              });
-            }
-          }
-        }
-      });
-    });
+
 
     // Rendimentos das Vendas Proporcionais (Todos os lotes que possuem armas, sejam ativos ou liquidados)
     investor.investedProjects.forEach(project => {
@@ -423,20 +361,6 @@ export async function getInvestorProjects(email: string) {
               totalReceived += investorProfit;
             }
           });
-        } else {
-          if (lotCycle && lotCycle.status === "COMPLETED") {
-            totalReceived += lotCycle.investorShare || 0;
-          }
-        }
-      });
-
-      // Ciclos adicionais legados sem lote de armas
-      p.cycles.forEach(c => {
-        if (c.status === "COMPLETED") {
-          const hasLotWithWeapons = p.importLots.some(l => l.id === c.importLotId && l.weapons && l.weapons.length > 0);
-          if (!hasLotWithWeapons) {
-            totalReceived += c.investorShare || 0;
-          }
         }
       });
 
@@ -508,20 +432,6 @@ export async function getInvestorProjectDetails(id: string, email: string) {
             totalReceived += investorProfit;
           }
         });
-      } else {
-        if (lotCycle && lotCycle.status === "COMPLETED") {
-          totalReceived += lotCycle.investorShare || 0;
-        }
-      }
-    });
-
-    // Ciclos legados adicionais sem lote de armas
-    project.cycles.forEach(c => {
-      if (c.status === "COMPLETED") {
-        const hasLotWithWeapons = project.importLots.some(l => l.id === c.importLotId && l.weapons && l.weapons.length > 0);
-        if (!hasLotWithWeapons) {
-          totalReceived += c.investorShare || 0;
-        }
       }
     });
 
@@ -546,12 +456,6 @@ export async function getInvestorProjectDetails(id: string, email: string) {
             grossRevenue += sValue;
           }
         });
-      } else {
-        // Fallback para ciclos sem lote de armas cadastrado
-        if (c.status === "COMPLETED") {
-          investorProfitShare = c.investorShare;
-          grossRevenue = c.grossRevenue;
-        }
       }
 
       return {

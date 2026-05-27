@@ -43,23 +43,7 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
   }
 
   projects.forEach(p => {
-    // 1. Somar ciclos legados adicionais (que não possuem lote associado com armas)
-    p.cycles?.forEach((c: any) => {
-      if (c.status === "COMPLETED") {
-        const hasAssociatedLotWithWeapons = p.importLots?.some((l: any) => l.id === c.importLotId && l.weapons && l.weapons.length > 0);
-        if (!hasAssociatedLotWithWeapons) {
-          const cDate = new Date(c.updatedAt || c.createdAt);
-          if (startDateObj && cDate < startDateObj) return;
-          if (endDateObj && cDate > endDateObj) return;
-
-          totalRevenue += Number(c.grossRevenue) || 0;
-          totalInvestorShare += Number(c.investorShare) || 0;
-          totalCompanyShare += Number(c.companyShare) || 0;
-        }
-      }
-    });
-
-    // 2. Somar vendas reais de todas as armas de todos os lotes do projeto (ativos ou liquidados)
+    // Somar vendas reais de todas as armas de todos os lotes do projeto (ativos ou liquidados)
     p.importLots?.forEach((lot: any) => {
       const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
       let deductionRate = 0.23; // fallback 23%
@@ -70,39 +54,25 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
         deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
       }
 
-      // Se o lote tem armas cadastradas, calculamos o faturamento real com base nas armas vendidas
-      if (lot.weapons && lot.weapons.length > 0) {
-        lot.weapons.forEach((w: any) => {
-          if (w.currentStatus === "VENDIDA") {
-            const wDate = w.saleDate ? new Date(w.saleDate) : new Date(w.updatedAt || w.createdAt);
-            if (startDateObj && wDate < startDateObj) return;
-            if (endDateObj && wDate > endDateObj) return;
+      lot.weapons?.forEach((w: any) => {
+        if (w.currentStatus === "VENDIDA") {
+          const wDate = w.saleDate ? new Date(w.saleDate) : new Date(w.updatedAt || w.createdAt);
+          if (startDateObj && wDate < startDateObj) return;
+          if (endDateObj && wDate > endDateObj) return;
 
-            const uCost = w.unitCost || uCostAvg;
-            const sValue = w.saleValue || 0;
-            const weaponDeductions = sValue * deductionRate;
-            const netProfit = sValue - uCost - weaponDeductions;
+          const uCost = w.unitCost || uCostAvg;
+          const sValue = w.saleValue || 0;
+          const weaponDeductions = sValue * deductionRate;
+          const netProfit = sValue - uCost - weaponDeductions;
 
-            const invShare = netProfit > 0 ? netProfit * splitPct : 0;
-            const compShare = netProfit > 0 ? netProfit * (1 - splitPct) : 0;
+          const invShare = netProfit > 0 ? netProfit * splitPct : 0;
+          const compShare = netProfit > 0 ? netProfit * (1 - splitPct) : 0;
 
-            totalRevenue += sValue;
-            totalInvestorShare += invShare;
-            totalCompanyShare += compShare;
-          }
-        });
-      } else {
-        // Fallback para lotes legados sem armas mapeadas no banco
-        if (lotCycle && lotCycle.status === "COMPLETED") {
-          const cDate = new Date(lotCycle.updatedAt || lotCycle.createdAt);
-          if (startDateObj && cDate < startDateObj) return;
-          if (endDateObj && cDate > endDateObj) return;
-
-          totalRevenue += Number(lotCycle.grossRevenue) || 0;
-          totalInvestorShare += Number(lotCycle.investorShare) || 0;
-          totalCompanyShare += Number(lotCycle.companyShare) || 0;
+          totalRevenue += sValue;
+          totalInvestorShare += invShare;
+          totalCompanyShare += compShare;
         }
-      }
+      });
     });
   });
 
