@@ -12,6 +12,15 @@ export async function getInvestorDashboardData(email: string) {
           include: {
             cycles: {
               orderBy: { cycleNumber: 'asc' }
+            },
+            importLots: {
+              include: {
+                weapons: {
+                  include: {
+                    product: true
+                  }
+                }
+              }
             }
           }
         }
@@ -26,10 +35,69 @@ export async function getInvestorDashboardData(email: string) {
     
     // Gráfico: sempre começa com o aporte inicial de cada projeto
     const chartData: any[] = [];
+    const allSoldWeapons: any[] = [];
 
     const formattedProjects = investor.investedProjects.map(project => {
       let projectInvested = project.initialCapital || 0;
-      let projectCurrent = projectInvested;
+      let completedYield = 0;
+
+      // Rendimentos de ciclos já concluídos
+      project.cycles.forEach(cycle => {
+        if (cycle.status === "COMPLETED") {
+          completedYield += cycle.investorShare || 0;
+        }
+      });
+
+      // Rendimentos de vendas em andamento nos lotes ativos
+      let activeYield = 0;
+      let activeCycleSoldWeapons = 0;
+      let activeCycleTotalWeapons = 0;
+      let activeCycleInventoryValue = 0;
+      let activeCycleRealizedProfit = 0;
+
+      const activeLots = project.importLots.filter(lot => lot.status !== "LIQUIDADO");
+      activeLots.forEach(lot => {
+        const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
+        let deductionRate = 0.23; // fallback: 8% imposto + 15% operacional
+        let splitPct = project.profitSplitPct || 0.50;
+        let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+
+        if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
+          deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
+        }
+
+        activeCycleTotalWeapons += lot.quantityItems || 0;
+
+        lot.weapons.forEach(w => {
+          const uCost = w.unitCost || uCostAvg;
+          if (w.currentStatus === "VENDIDA") {
+            activeCycleSoldWeapons++;
+            const sValue = w.saleValue || 0;
+            const weaponDeductions = sValue * deductionRate;
+            const netProfit = sValue - uCost - weaponDeductions;
+            const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
+            
+            activeYield += investorProfit;
+            activeCycleRealizedProfit += investorProfit;
+
+            allSoldWeapons.push({
+              id: w.id,
+              productName: w.product.commercialName,
+              serialNumber: w.serialNumber,
+              saleDate: w.saleDate,
+              saleValue: sValue,
+              investorProfit: investorProfit,
+              projectName: project.name
+            });
+          } else if (w.currentStatus === "ESTOQUE" || w.currentStatus === "RESERVADA" || w.currentStatus === "IMPORTADA") {
+            activeCycleInventoryValue += uCost;
+          }
+        });
+      });
+
+      let projectCurrent = projectInvested + completedYield + activeYield;
+      totalYield += completedYield + activeYield;
+      totalPatrimony += projectCurrent;
 
       // Ponto de partida: data de início do projeto (aporte)
       const startLabel = (project.startDate || project.createdAt).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
@@ -40,22 +108,30 @@ export async function getInvestorDashboardData(email: string) {
         date: project.startDate || project.createdAt
       });
       
+      // Evolução do capital pelos ciclos concluídos
+      let runningCapital = projectInvested;
       project.cycles.forEach(cycle => {
         if (cycle.status === "COMPLETED") {
-          projectCurrent += cycle.investorShare || 0;
-          totalYield += cycle.investorShare || 0;
-          
+          runningCapital += cycle.investorShare || 0;
           const monthLabel = cycle.updatedAt.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
           chartData.push({
             name: monthLabel,
-            capital: projectCurrent,
+            capital: runningCapital,
             growth: cycle.investorShare || 0,
             date: cycle.updatedAt
           });
         }
       });
 
-      totalPatrimony += projectCurrent;
+      // Inclui ponto atual de vendas progressivas se houver
+      if (activeYield > 0) {
+        chartData.push({
+          name: "Atual (Realizado)",
+          capital: projectCurrent,
+          growth: activeYield,
+          date: new Date()
+        });
+      }
 
       const yieldPercentage = projectInvested > 0 ? ((projectCurrent - projectInvested) / projectInvested) * 100 : 0;
 
@@ -65,7 +141,11 @@ export async function getInvestorDashboardData(email: string) {
         invested: projectInvested,
         current: projectCurrent,
         yield: yieldPercentage.toFixed(1),
-        cycle: project.cycles.length
+        cycle: project.cycles.length,
+        activeCycleSoldWeapons,
+        activeCycleTotalWeapons,
+        activeCycleInventoryValue,
+        activeCycleRealizedProfit
       };
     });
 
@@ -75,6 +155,18 @@ export async function getInvestorDashboardData(email: string) {
       idx === 0 || item.name !== arr[idx - 1].name
     );
 
+    // Ordenar vendas recentes de armas
+    allSoldWeapons.sort((a, b) => {
+      const dateA = a.saleDate ? new Date(a.saleDate).getTime() : 0;
+      const dateB = b.saleDate ? new Date(b.saleDate).getTime() : 0;
+      return dateB - dateA;
+    });
+
+    const recentSales = allSoldWeapons.slice(0, 5).map(s => ({
+      ...s,
+      saleDate: s.saleDate ? s.saleDate.toLocaleDateString("pt-BR") : "—"
+    }));
+
     return {
       success: true,
       data: {
@@ -82,7 +174,8 @@ export async function getInvestorDashboardData(email: string) {
         totalYield,
         activeProjectsCount,
         chartData: uniqueChartData.length > 0 ? uniqueChartData : [{ name: "Aporte Inicial", capital: totalPatrimony, growth: 0 }],
-        projects: formattedProjects
+        projects: formattedProjects,
+        recentSales
       }
     };
   } catch (error) {
@@ -98,7 +191,16 @@ export async function getInvestorStatement(email: string) {
       include: {
         investedProjects: {
           include: {
-            cycles: true
+            cycles: true,
+            importLots: {
+              include: {
+                weapons: {
+                  include: {
+                    product: true
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -107,9 +209,8 @@ export async function getInvestorStatement(email: string) {
     if (!investor) throw new Error("Investidor não encontrado");
 
     const statement: any[] = [];
-    let currentBalance = 0;
 
-    // Aportes Iniciais (Saída do saldo imaginário / Investimento)
+    // Aportes Iniciais
     investor.investedProjects.forEach(project => {
       statement.push({
         id: `AP-${project.id.substring(0,6)}`,
@@ -117,11 +218,11 @@ export async function getInvestorStatement(email: string) {
         dateObj: project.startDate || project.createdAt,
         descricao: `Aporte de Capital - ${project.name}`,
         tipo: "APORTE",
-        valor: project.initialCapital || 0
+        valor: -(project.initialCapital || 0) // Aporte é débito/investimento
       });
     });
 
-    // Rendimentos dos Ciclos
+    // Rendimentos dos Ciclos Concluídos e Reinvestimentos
     investor.investedProjects.forEach(project => {
       project.cycles.forEach(cycle => {
         if (cycle.status === "COMPLETED") {
@@ -149,19 +250,53 @@ export async function getInvestorStatement(email: string) {
       });
     });
 
+    // Rendimentos das Vendas Proporcionais (Ciclos Ativos)
+    investor.investedProjects.forEach(project => {
+      const activeLots = project.importLots.filter(lot => lot.status !== "LIQUIDADO");
+      activeLots.forEach(lot => {
+        const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
+        let deductionRate = 0.23;
+        if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
+          deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
+        }
+        let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        
+        lot.weapons.forEach(w => {
+          if (w.currentStatus === "VENDIDA") {
+            const uCost = w.unitCost || uCostAvg;
+            const sValue = w.saleValue || 0;
+            const netProfit = sValue - uCost - (sValue * deductionRate);
+            const investorProfit = netProfit > 0 ? netProfit * project.profitSplitPct : 0;
+
+            if (investorProfit > 0) {
+              statement.push({
+                id: `VP-${w.id.substring(0,6)}`,
+                dataStr: w.saleDate ? w.saleDate.toLocaleDateString("pt-BR") : w.updatedAt.toLocaleDateString("pt-BR"),
+                dateObj: w.saleDate || w.updatedAt,
+                descricao: `Venda Proporcional - ${w.product.commercialName} (${w.serialNumber}) - ${project.name}`,
+                tipo: "RENDIMENTO",
+                valor: investorProfit
+              });
+            }
+          }
+        });
+      });
+    });
+
     // Ordenar cronologicamente para calcular o saldo evolutivo
     statement.sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
 
     let balance = 0;
     const finalStatement = statement.map(item => {
-       balance += item.valor; // Se fosse saque seria "-", mas só temos entradas e reinvestimentos no modelo atual
+       // O saldo evolutivo reflete o patrimônio ativo (soma o valor absoluto, pois aportes já foram inseridos como negativos)
+       balance += Math.abs(item.valor); 
        return {
          ...item,
-         saldo: balance
+         saldo: balance,
+         valor: Math.abs(item.valor) // exibe valor absoluto no extrato
        };
-    });
+     });
 
-    // Retorna ordenado do mais recente para o mais antigo para visualização
     return {
       success: true,
       statement: finalStatement.reverse()
@@ -179,7 +314,12 @@ export async function getInvestorProjects(email: string) {
       include: {
         investedProjects: {
           include: {
-            cycles: true
+            cycles: true,
+            importLots: {
+              include: {
+                weapons: true
+              }
+            }
           }
         }
       }
@@ -193,14 +333,36 @@ export async function getInvestorProjects(email: string) {
         if (c.status === "COMPLETED") totalReceived += c.investorShare;
       });
 
+      // Vendas em andamento nos lotes ativos
+      let activeYield = 0;
+      const activeLots = p.importLots.filter(lot => lot.status !== "LIQUIDADO");
+      activeLots.forEach(lot => {
+        const lotCycle = p.cycles.find(c => c.importLotId === lot.id);
+        let deductionRate = 0.23;
+        if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
+          deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
+        }
+        let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        
+        lot.weapons.forEach(w => {
+          if (w.currentStatus === "VENDIDA") {
+            const uCost = w.unitCost || uCostAvg;
+            const sValue = w.saleValue || 0;
+            const netProfit = sValue - uCost - (sValue * deductionRate);
+            const investorProfit = netProfit > 0 ? netProfit * p.profitSplitPct : 0;
+            activeYield += investorProfit;
+          }
+        });
+      });
+
       return {
         id: p.id,
         name: p.name,
         product_name: p.productName,
         status: p.status,
         initial_capital: p.initialCapital,
-        currentCapital: p.initialCapital + totalReceived,
-        totalInvestorShare: totalReceived,
+        currentCapital: p.initialCapital + totalReceived + activeYield,
+        totalInvestorShare: totalReceived + activeYield,
         currentCycle: p.cycles.length,
         max_cycles: p.maxCycles
       };
@@ -224,7 +386,12 @@ export async function getInvestorProjectDetails(id: string, email: string) {
         importLots: {
           include: {
             documents: true,
-            products: true
+            products: true,
+            weapons: {
+              include: {
+                product: true
+              }
+            }
           }
         },
         documents: true
@@ -234,17 +401,70 @@ export async function getInvestorProjectDetails(id: string, email: string) {
     if (!project) return { success: false, project: null };
 
     let totalReceived = 0;
-    const mappedCycles = project.cycles.map(c => {
+    project.cycles.forEach(c => {
       if (c.status === "COMPLETED") totalReceived += c.investorShare;
+    });
+
+    // Vendas em andamento nos lotes ativos
+    let activeYield = 0;
+    const activeLots = project.importLots.filter(lot => lot.status !== "LIQUIDADO");
+    activeLots.forEach(lot => {
+      const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
+      let deductionRate = 0.23;
+      if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
+        deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
+      }
+      let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+      
+      lot.weapons.forEach(w => {
+        if (w.currentStatus === "VENDIDA") {
+          const uCost = w.unitCost || uCostAvg;
+          const sValue = w.saleValue || 0;
+          const netProfit = sValue - uCost - (sValue * deductionRate);
+          const investorProfit = netProfit > 0 ? netProfit * project.profitSplitPct : 0;
+          activeYield += investorProfit;
+        }
+      });
+    });
+
+    const mappedCycles = project.cycles.map(c => {
+      let isCompleted = c.status === "COMPLETED";
+      let investorProfitShare = 0;
+      let grossRevenue = 0;
+      
+      if (isCompleted) {
+        investorProfitShare = c.investorShare;
+        grossRevenue = c.grossRevenue;
+      } else {
+        // Se o ciclo está ativo, mostramos o progresso real de vendas dele
+        const lot = project.importLots.find(l => l.id === c.importLotId);
+        if (lot) {
+          let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+          let deductionRate = 0.23;
+          if (c.grossRevenue && c.grossRevenue > 0) {
+            deductionRate = ((c.salesTax || 0) + (c.salesOperationalCost || 0)) / c.grossRevenue;
+          }
+          lot.weapons.forEach(w => {
+            if (w.currentStatus === "VENDIDA") {
+              const uCost = w.unitCost || uCostAvg;
+              const sValue = w.saleValue || 0;
+              const netProfit = sValue - uCost - (sValue * deductionRate);
+              investorProfitShare += netProfit > 0 ? netProfit * project.profitSplitPct : 0;
+              grossRevenue += sValue;
+            }
+          });
+        }
+      }
+
       return {
         id: c.id,
         cycleName: c.cycleName,
         quantity: c.quantity,
         startDate: c.createdAt.toLocaleDateString("pt-BR"),
-        investor_profit_share: c.status === "COMPLETED" ? c.investorShare : 0,
+        investor_profit_share: investorProfitShare,
         total_investment: c.totalInvestment,
-        gross_revenue: c.status === "COMPLETED" ? c.grossRevenue : 0,
-        next_cycle_capital: c.status === "COMPLETED" ? c.reinvestmentShare : 0,
+        gross_revenue: grossRevenue,
+        next_cycle_capital: isCompleted ? c.reinvestmentShare : 0,
         status: c.status
       };
     });
@@ -257,8 +477,8 @@ export async function getInvestorProjectDetails(id: string, email: string) {
         product_name: project.productName,
         status: project.status,
         initial_capital: project.initialCapital,
-        currentCapital: project.initialCapital + totalReceived,
-        totalInvestorShare: totalReceived,
+        currentCapital: project.initialCapital + totalReceived + activeYield,
+        totalInvestorShare: totalReceived + activeYield,
         currentCycle: project.cycles.length,
         max_cycles: project.maxCycles,
         cycles: mappedCycles,

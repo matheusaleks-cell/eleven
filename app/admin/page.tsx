@@ -297,6 +297,66 @@ export default function AdminDashboard() {
           </table>
         </div>
       </div>
+
+      {/* Informações Físicas de Lotes e Distribuição de Estoque */}
+      {stats?.activeLotsProgress && stats.activeLotsProgress.length > 0 && (
+        <>
+          <div style={{ display: "block", height: "48px", width: "100%", flexShrink: 0 }} />
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-10">
+            {/* Liquidação de Lotes */}
+            <div className="xl:col-span-2 rounded-[4px] p-8" style={{ background: "#242424", border: "1px solid #333" }}>
+              <h3 style={{ margin: "0 0 20px 0", fontSize: "12px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
+                ★ Liquidação Física de Lotes em Giro ★
+              </h3>
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                {stats.activeLotsProgress.map((lot: any) => (
+                  <div key={lot.id} className="p-4 bg-[#1b1b1b] border border-[#2d2d2d] rounded flex flex-col gap-2">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-white uppercase tracking-wider">{lot.batchCode} · {lot.projectName}</span>
+                      <span className="font-bold text-[#A0A0A0] text-[10px]">{lot.investorName}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] font-bold text-[#A0A0A0] uppercase">
+                      <span>Progresso de Vendas</span>
+                      <span style={{ color: "#F5C400" }}>{lot.sold} / {lot.total} unidades ({lot.percentage}%)</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-brand-border overflow-hidden">
+                      <div 
+                        className="h-full rounded-full" 
+                        style={{ width: `${lot.percentage}%`, background: "linear-gradient(90deg, #F5C400, #FFD740)" }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Status de Armas */}
+            <div className="rounded-[4px] p-8" style={{ background: "#242424", border: "1px solid #333" }}>
+              <h3 style={{ margin: "0 0 20px 0", fontSize: "12px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
+                ★ Distribuição de Estoque Geral ★
+              </h3>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-2.5 border-b border-[#2d2d2d] text-xs">
+                  <span className="font-bold text-[#A0A0A0] uppercase tracking-wider">Armas Vendidas</span>
+                  <span className="font-mono font-bold text-[#4CAF50] bg-[#4CAF50]/10 border border-[#4CAF50]/20 px-2 py-0.5 rounded">{stats?.weaponsSold || 0} un.</span>
+                </div>
+                <div className="flex justify-between items-center py-2.5 border-b border-[#2d2d2d] text-xs">
+                  <span className="font-bold text-[#A0A0A0] uppercase tracking-wider">Disponíveis em Estoque</span>
+                  <span className="font-mono font-bold text-[#F5C400] bg-[#F5C400]/10 border border-[#F5C400]/20 px-2 py-0.5 rounded">{stats?.weaponsInStock || 0} un.</span>
+                </div>
+                <div className="flex justify-between items-center py-2.5 border-b border-[#2d2d2d] text-xs">
+                  <span className="font-bold text-[#A0A0A0] uppercase tracking-wider">Reservadas (Vendas Pendentes)</span>
+                  <span className="font-mono font-bold text-[#FF9800] bg-[#FF9800]/10 border border-[#FF9800]/20 px-2 py-0.5 rounded">{stats?.weaponsReserved || 0} un.</span>
+                </div>
+                <div className="flex justify-between items-center py-2.5 text-xs">
+                  <span className="font-bold text-[#A0A0A0] uppercase tracking-wider">Aguardando Desembaraço</span>
+                  <span className="font-mono font-bold text-[#2196F3] bg-[#2196F3]/10 border border-[#2196F3]/20 px-2 py-0.5 rounded">{stats?.weaponsImported || 0} un.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </DashboardLayout>
   );
 }

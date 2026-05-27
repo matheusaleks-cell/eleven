@@ -185,6 +185,26 @@ export default function InvestorDashboard() {
                       </span>
                    </div>
                    <h4 className="text-sm font-bold text-white mb-1 group-hover:text-brand-accent transition-colors uppercase tracking-tight">{project.name}</h4>
+                   
+                   {project.activeCycleTotalWeapons > 0 && (
+                     <div className="mt-4 pt-3 border-t border-brand-border/40 space-y-1.5">
+                       <div className="flex justify-between items-center text-[9px] font-bold uppercase tracking-wider text-brand-text-secondary">
+                         <span>Progresso de Vendas</span>
+                         <span className="text-brand-accent">{project.activeCycleSoldWeapons} / {project.activeCycleTotalWeapons} un.</span>
+                       </div>
+                       <div className="h-1 rounded-full bg-brand-border overflow-hidden">
+                         <div 
+                           className="h-full rounded-full bg-brand-accent" 
+                           style={{ width: `${(project.activeCycleSoldWeapons / project.activeCycleTotalWeapons) * 100}%` }}
+                         />
+                       </div>
+                       <div className="flex justify-between text-[8px] font-bold text-brand-text-muted mt-1 uppercase">
+                         <span>Em estoque: {project.activeCycleTotalWeapons - project.activeCycleSoldWeapons} un.</span>
+                         <span>Giro: R$ {project.activeCycleInventoryValue.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
+                       </div>
+                     </div>
+                   )}
+
                    <div className="flex items-center gap-3 mt-4 pt-4 border-t border-brand-border/50">
                       <div>
                          <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest mb-1">Investido</p>
@@ -206,6 +226,81 @@ export default function InvestorDashboard() {
               </Button>
            </div>
         </div>
+
+        {/* Vendas Recentes & Resumo do Ciclo */}
+        {dashboardData?.recentSales && dashboardData.recentSales.length > 0 && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
+            <Card className="lg:col-span-2 p-6 bg-brand-surface/20 border-brand-border">
+              <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white mb-4 flex items-center gap-2">
+                <History size={16} className="text-brand-accent" />
+                VENDAS RECENTES DE SUAS UNIDADES
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-brand-border text-[9px] font-black text-brand-text-muted uppercase tracking-widest">
+                      <th className="pb-3 font-black">Projeto</th>
+                      <th className="pb-3 font-black">Produto</th>
+                      <th className="pb-3 font-black">Nº Série</th>
+                      <th className="pb-3 font-black">Data Venda</th>
+                      <th className="pb-3 font-black text-right">Valor Venda</th>
+                      <th className="pb-3 font-black text-right text-brand-accent">Seu Lucro (Est.)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-brand-border/30 text-xs font-medium text-white/90">
+                    {dashboardData.recentSales.map((sale: any) => (
+                      <tr key={sale.id} className="hover:bg-brand-accent/5 transition-colors">
+                        <td className="py-3 uppercase font-bold text-[10px] text-brand-text-secondary">{sale.projectName}</td>
+                        <td className="py-3 uppercase">{sale.productName}</td>
+                        <td className="py-3 font-mono font-bold text-brand-text-muted">{sale.serialNumber}</td>
+                        <td className="py-3 text-brand-text-muted">{sale.saleDate}</td>
+                        <td className="py-3 text-right font-mono font-bold text-white">
+                          {sale.saleValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="py-3 text-right font-mono font-black text-brand-accent">
+                          +{sale.investorProfit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+
+            <Card className="p-6 bg-brand-surface/20 border-brand-border flex flex-col justify-between">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white mb-4">
+                  RESUMO DO CICLO EM GIRO
+                </h3>
+                <div className="space-y-4">
+                  {dashboardData.projects?.map((p: any) => {
+                    if (p.activeCycleTotalWeapons === 0) return null;
+                    return (
+                      <div key={p.id} className="p-3 bg-brand-bg/40 border border-brand-border rounded-lg space-y-2.5">
+                        <p className="text-[10px] font-black text-brand-accent uppercase tracking-widest">{p.name}</p>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-brand-text-muted uppercase text-[9px] font-bold">Lucro Líquido Concretizado</span>
+                          <span className="font-mono font-black text-brand-success">
+                            {p.activeCycleRealizedProfit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-brand-text-muted uppercase text-[9px] font-bold">Capital Ativo em Estoque</span>
+                          <span className="font-mono font-bold text-white">
+                            {p.activeCycleInventoryValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <p className="text-[9px] text-brand-text-muted font-bold mt-4 uppercase leading-relaxed">
+                * Os lucros das vendas em andamento são apurados à medida que cada arma é faturada e serão disponibilizados para reinvestimento/saque na conclusão do ciclo de importação.
+              </p>
+            </Card>
+          </div>
+        )}
 
         {/* ── PROJEÇÃO DE CRESCIMENTO — ESCALADA DE LOTES ── */}
         <div className="flex flex-col gap-5">

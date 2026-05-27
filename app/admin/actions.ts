@@ -3,11 +3,18 @@
 import { prisma } from "@/lib/prisma";
 
 export async function getDashboardStats() {
-  // Buscar projetos com ciclos (fonte principal de dados)
+  // Buscar projetos com ciclos e lotes (fonte principal de dados)
   let projects: any[] = [];
   try {
     projects = await prisma.investmentProject.findMany({
-      include: { cycles: true }
+      include: { 
+        cycles: true,
+        importLots: {
+          include: {
+            weapons: true
+          }
+        }
+      }
     });
   } catch (error) {
     console.error("[Stats] Erro ao buscar projetos:", error);
@@ -16,21 +23,103 @@ export async function getDashboardStats() {
   const activeProjects = projects.filter(p => p.status === "ACTIVE").length;
   const completedProjects = projects.filter(p => p.status === "COMPLETED").length;
 
-  // Calcular totais a partir dos ciclos
+  // Calcular totais
   let totalRevenue = 0;
   let totalInvestorShare = 0;
   let totalCompanyShare = 0;
 
   projects.forEach(p => {
+    // 1. Somar ciclos concluídos
     p.cycles?.forEach((c: any) => {
-      totalRevenue += Number(c.grossRevenue) || 0;
-      totalInvestorShare += Number(c.investorShare) || 0;
-      totalCompanyShare += Number(c.companyShare) || 0;
+      if (c.status === "COMPLETED") {
+        totalRevenue += Number(c.grossRevenue) || 0;
+        totalInvestorShare += Number(c.investorShare) || 0;
+        totalCompanyShare += Number(c.companyShare) || 0;
+      }
+    });
+
+    // 2. Somar vendas em andamento dos lotes ativos (não liquidados)
+    const activeLots = p.importLots?.filter((l: any) => l.status !== "LIQUIDADO") || [];
+    activeLots.forEach((lot: any) => {
+      const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
+      let deductionRate = 0.23; // fallback 23%
+      let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+      let splitPct = p.profitSplitPct || 0.50;
+
+      if (lotCycle) {
+        if (lotCycle.grossRevenue > 0) {
+          deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
+        }
+      }
+
+      lot.weapons?.forEach((w: any) => {
+        if (w.currentStatus === "VENDIDA") {
+          const uCost = w.unitCost || uCostAvg;
+          const sValue = w.saleValue || 0;
+          const weaponDeductions = sValue * deductionRate;
+          const netProfit = sValue - uCost - weaponDeductions;
+
+          const invShare = netProfit > 0 ? netProfit * splitPct : 0;
+          const compShare = netProfit > 0 ? netProfit * (1 - splitPct) : 0;
+
+          totalRevenue += sValue;
+          totalInvestorShare += invShare;
+          totalCompanyShare += compShare;
+        }
+      });
     });
   });
 
-  // Nota: salesOrders NÃO são somados aqui pois representam a mesma receita
-  // que já está registrada em cycle.grossRevenue — somar ambos duplicaria o total.
+  // Margem e status de armas
+  let weaponsSold = 0;
+  let weaponsInStock = 0;
+  let weaponsReserved = 0;
+  let weaponsImported = 0;
+  
+  try {
+    const allWeapons = await prisma.weaponMap.findMany({
+      select: { currentStatus: true }
+    });
+    allWeapons.forEach(w => {
+      if (w.currentStatus === "VENDIDA") weaponsSold++;
+      else if (w.currentStatus === "ESTOQUE") weaponsInStock++;
+      else if (w.currentStatus === "RESERVADA") weaponsReserved++;
+      else if (w.currentStatus === "IMPORTADA") weaponsImported++;
+    });
+  } catch (err) {
+    console.error("Erro ao computar status de armas:", err);
+  }
+
+  // Progresso de liquidação de lotes
+  const activeLotsProgress: any[] = [];
+  try {
+    const activeLots = await prisma.importLot.findMany({
+      where: { status: { not: "LIQUIDADO" } },
+      include: {
+        weapons: true,
+        investmentProject: {
+          include: { investor: true }
+        }
+      }
+    });
+
+    activeLots.forEach(lot => {
+      const sold = lot.weapons.filter(w => w.currentStatus === "VENDIDA").length;
+      const total = lot.quantityItems || lot.weapons.length || 1;
+      const pct = (sold / total) * 100;
+      activeLotsProgress.push({
+        id: lot.id,
+        batchCode: lot.batchCode,
+        projectName: lot.investmentProject?.name || "Lote Próprio",
+        investorName: lot.investmentProject?.investor?.name || "Eleven Armas",
+        sold,
+        total,
+        percentage: parseFloat(pct.toFixed(1))
+      });
+    });
+  } catch (err) {
+    console.error("Erro ao buscar progresso dos lotes:", err);
+  }
 
   return {
     activeProjects,
@@ -38,6 +127,11 @@ export async function getDashboardStats() {
     totalRevenue,
     totalInvestorShare,
     totalCompanyShare,
+    weaponsSold,
+    weaponsInStock,
+    weaponsReserved,
+    weaponsImported,
+    activeLotsProgress
   };
 }
 
