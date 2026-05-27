@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 // ─── LISTAGEM ───────────────────────────────────────────────────────────────
 
@@ -153,12 +154,13 @@ export async function createInvestor(data: {
   commercialRefs?: string;
 }) {
   try {
+    const hashedPassword = await bcrypt.hash(data.password, 12);
     const investor = await prisma.user.create({
       data: {
         name: data.name,
         email: data.email,
         phone: data.phone || null,
-        password: data.password,
+        password: hashedPassword,
         role: "INVESTOR",
         cpfCnpj: data.cpfCnpj || null,
         rg: data.rg || null,
@@ -303,9 +305,10 @@ export async function updateInvestorPassword(userId: string, newPassword: string
     if (!newPassword || newPassword.length < 6) {
       return { success: false, error: "A senha deve ter pelo menos 6 caracteres." };
     }
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
       where: { id: userId },
-      data: { password: newPassword },
+      data: { password: hashedPassword },
     });
     revalidatePath(`/admin/investidores/${userId}`);
     return { success: true };

@@ -33,21 +33,30 @@ export async function getInvestorDashboardData(email: string) {
     let totalYield = 0;
     const activeProjectsCount = investor.investedProjects.filter(p => p.status === "ACTIVE").length;
     
-    // Gráfico: sempre começa com o aporte inicial de cada projeto
-    const chartData: any[] = [];
+    // Gráfico e vendas
+    let chartData: any[] = [];
     const allSoldWeapons: any[] = [];
 
     const formattedProjects = investor.investedProjects.map(project => {
       let projectInvested = project.initialCapital || 0;
       
       // Nova contabilidade baseada estritamente em armas vendidas
-      let totalProjectInvestorYield = 0;
       let activeCycleSoldWeapons = 0;
       let activeCycleTotalWeapons = 0;
       let activeCycleInventoryValue = 0;
       let activeCycleRealizedProfit = 0;
+      let completedCyclesYield = 0;
 
-      // Iterar em todos os lotes do projeto
+      // Obter o ciclo ativo (IN_PROGRESS) e os concluídos
+      const activeCycle = project.cycles.find(c => c.status === "IN_PROGRESS");
+      const completedCycles = project.cycles.filter(c => c.status === "COMPLETED");
+
+      // Somar o lucro dos ciclos concluídos
+      completedCycles.forEach(c => {
+        completedCyclesYield += c.investorShare || 0;
+      });
+
+      // Iterar em todos os lotes do projeto para calcular vendas em tempo real
       project.importLots.forEach(lot => {
         const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
         let deductionRate = 0.23;
@@ -73,14 +82,13 @@ export async function getInvestorDashboardData(email: string) {
             const netProfit = sValue - uCost - weaponDeductions;
             const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
 
-            totalProjectInvestorYield += investorProfit;
             if (lot.status !== "LIQUIDADO") {
               activeCycleRealizedProfit += investorProfit;
             }
 
             allSoldWeapons.push({
               id: w.id,
-              productName: w.product.commercialName,
+              productName: w.product?.commercialName || 'Produto Desconhecido',
               serialNumber: w.serialNumber,
               saleDate: w.saleDate,
               saleValue: sValue,
@@ -95,83 +103,75 @@ export async function getInvestorDashboardData(email: string) {
         });
       });
 
-      let projectCurrent = projectInvested + totalProjectInvestorYield;
-      totalYield += totalProjectInvestorYield;
+      // Capital em risco no ciclo atual:
+      // - Se há ciclo IN_PROGRESS, usa o totalInvestment desse ciclo
+      // - Se todos concluídos, usa o reinvestmentShare do último ciclo (capital acumulado reinvestido)
+      // - Se não há ciclos, usa o initialCapital original
+      const lastCompletedCycle = completedCycles.length > 0 ? completedCycles[completedCycles.length - 1] : null;
+      const currentAporte = activeCycle
+        ? activeCycle.totalInvestment
+        : (lastCompletedCycle?.reinvestmentShare ?? projectInvested);
+      
+      // Patrimônio do investidor = Aporte do Ciclo Atual + Rendimentos em andamento do ciclo ativo
+      let projectCurrent = currentAporte + activeCycleRealizedProfit;
+      
+      // O rendimento acumulado total = Lucros dos ciclos concluídos + Lucros do ciclo ativo
+      const projectYield = completedCyclesYield + activeCycleRealizedProfit;
+
+      totalYield += projectYield;
       totalPatrimony += projectCurrent;
 
-      // Ponto de partida: data de início do projeto (aporte)
-      const startLabel = (project.startDate || project.createdAt).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-      chartData.push({
-        name: startLabel,
-        capital: projectInvested,
+      // 1. Gerar a projeção dinâmica do projeto com base nos ciclos reais do banco de dados (que mapeiam as abas da planilha)
+      const projection = project.cycles.map((c, idx) => {
+        const totalInv = c.totalInvestment || 0;
+        const invShare = c.investorShare || 0;
+        const investorROI = totalInv > 0 ? (invShare / totalInv) * 100 : 0;
+
+        let cumulativeInvestorEarnings = 0;
+        for (let i = 0; i <= idx; i++) {
+          cumulativeInvestorEarnings += project.cycles[i].investorShare || 0;
+        }
+
+        return {
+          batchNumber: c.cycleNumber,
+          quantity: c.quantity || 0,
+          grossRevenue: c.grossRevenue || 0,
+          investorShare: invShare,
+          cumulativeInvestorEarnings: parseFloat(cumulativeInvestorEarnings.toFixed(2)),
+          investorROI: parseFloat(investorROI.toFixed(1)),
+          totalImportCostBRL: totalInv
+        };
+      });
+
+      // 2. Montar o chartData baseado no avanço dos ciclos concluídos e do atual
+      const projectChartPoints = project.cycles.map((c) => {
+        const nextCycle = project.cycles.find(nc => nc.cycleNumber === c.cycleNumber + 1);
+        const totalInv = c.totalInvestment || 0;
+        const invShare = c.investorShare || 0;
+        const capital = nextCycle ? (nextCycle.totalInvestment || 0) : (totalInv + invShare);
+        return {
+          name: c.cycleName.split(" ")[0] || `Lote ${c.cycleNumber}`,
+          capital: parseFloat(capital.toFixed(2)),
+          growth: parseFloat(invShare.toFixed(2)),
+          date: c.createdAt
+        };
+      });
+
+      projectChartPoints.unshift({
+        name: "Aporte",
+        capital: project.initialCapital,
         growth: 0,
         date: project.startDate || project.createdAt
       });
-      
-      // Evolução do capital pelos ciclos concluídos
-      let runningCapital = projectInvested;
 
-      // Evolução do capital pelas armas vendidas reais
-      let accumYieldFromWeapons = 0;
-      // Agrupar vendas reais por mês para gerar pontos no gráfico
-      const salesByMonth: { [key: string]: { value: number; date: Date } } = {};
-      
-      project.importLots.forEach(lot => {
-        if (lot.weapons && lot.weapons.length > 0) {
-          const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
-          let deductionRate = 0.23;
-          let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-          let splitPct = project.profitSplitPct || 0.50;
+      chartData = projectChartPoints;
 
-          if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
-            deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
-          }
-
-          lot.weapons.forEach(w => {
-            if (w.currentStatus === "VENDIDA") {
-              const uCost = w.unitCost || uCostAvg;
-              const sValue = w.saleValue || 0;
-              const netProfit = sValue - uCost - (sValue * deductionRate);
-              const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
-
-              if (investorProfit > 0) {
-                const wDate = w.saleDate || w.updatedAt;
-                const monthLabel = wDate.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
-                if (!salesByMonth[monthLabel] || salesByMonth[monthLabel].date < wDate) {
-                  salesByMonth[monthLabel] = {
-                    value: (salesByMonth[monthLabel]?.value || 0) + investorProfit,
-                    date: wDate
-                  };
-                } else {
-                  salesByMonth[monthLabel].value += investorProfit;
-                }
-              }
-            }
-          });
-        }
-      });
-
-      const sortedMonthPoints = Object.keys(salesByMonth).map(monthStr => ({
-        name: monthStr,
-        growth: salesByMonth[monthStr].value,
-        date: salesByMonth[monthStr].date
-      })).sort((a, b) => a.date.getTime() - b.date.getTime());
-
-      sortedMonthPoints.forEach(point => {
-        runningCapital += point.growth;
-        chartData.push({
-          name: point.name,
-          capital: runningCapital,
-          growth: point.growth,
-          date: point.date
-        });
-      });
-
-      const yieldPercentage = projectInvested > 0 ? ((projectCurrent - projectInvested) / projectInvested) * 100 : 0;
+      const yieldPercentage = projectInvested > 0 ? (projectYield / projectInvested) * 100 : 0;
 
       return {
         id: project.id,
         name: project.name,
+        product_name: project.productName,
         invested: projectInvested,
         current: projectCurrent,
         yield: yieldPercentage.toFixed(1),
@@ -179,7 +179,8 @@ export async function getInvestorDashboardData(email: string) {
         activeCycleSoldWeapons,
         activeCycleTotalWeapons,
         activeCycleInventoryValue,
-        activeCycleRealizedProfit
+        activeCycleRealizedProfit,
+        projection
       };
     });
 
@@ -278,11 +279,13 @@ export async function getInvestorStatement(email: string) {
               const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
 
               if (investorProfit > 0) {
+                const stmtDate = w.saleDate || w.updatedAt;
+                if (!stmtDate) return;
                 statement.push({
                   id: `VP-${w.id.substring(0,6)}`,
-                  dataStr: w.saleDate ? w.saleDate.toLocaleDateString("pt-BR") : w.updatedAt.toLocaleDateString("pt-BR"),
-                  dateObj: w.saleDate || w.updatedAt,
-                  descricao: `Venda Proporcional - ${w.product.commercialName} (${w.serialNumber}) - ${project.name}`,
+                  dataStr: w.saleDate ? w.saleDate.toLocaleDateString("pt-BR") : w.updatedAt!.toLocaleDateString("pt-BR"),
+                  dateObj: stmtDate,
+                  descricao: `Venda Proporcional - ${w.product?.commercialName || 'Produto'} (${w.serialNumber}) - ${project.name}`,
                   tipo: "RENDIMENTO",
                   valor: investorProfit
                 });
@@ -564,7 +567,7 @@ export async function getCycleSales(cycleId: string, email: string) {
 
       return {
         id: w.id,
-        productName: w.product.commercialName,
+        productName: w.product?.commercialName || 'Produto Desconhecido',
         serialNumber: w.serialNumber,
         saleDate: w.saleDate?.toLocaleDateString("pt-BR"),
         saleValue: sValue,

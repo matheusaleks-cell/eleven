@@ -11,8 +11,8 @@ export async function getWeapons() {
         customer: true,
       },
       orderBy: [
-        { entryDate: "desc" },
-        { serialNumber: "asc" }
+        { serialNumber: "asc" },
+        { entryDate: "desc" }
       ],
     });
 

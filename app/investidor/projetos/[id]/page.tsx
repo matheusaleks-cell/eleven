@@ -267,15 +267,26 @@ const LotDocumentCard: React.FC<LotDocumentCardProps> = ({
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
+                        const maxSizeBytes = 4.5 * 1024 * 1024;
+                        if (file.size > maxSizeBytes) {
+                          const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+                          toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 4.5 MB. Comprima o arquivo ou use uma imagem menor.`);
+                          return;
+                        }
                         const reader = new FileReader();
                         reader.onloadend = async () => {
-                          const base64 = reader.result as string;
-                          const res = await addLotDocument(lotId, file.name, requiredCat, base64);
-                          if (res.success) {
-                            toast.success(`Documento "${requiredCat}" anexado com sucesso!`);
-                            onRefresh?.();
-                          } else {
-                            toast.error("Erro ao fazer upload.");
+                          try {
+                            const base64 = reader.result as string;
+                            const res = await addLotDocument(lotId, file.name, requiredCat, base64);
+                            if (res.success) {
+                              toast.success(`Documento "${requiredCat}" anexado com sucesso!`);
+                              onRefresh?.();
+                            } else {
+                              toast.error("Erro ao fazer upload. Verifique as dimensões ou tente novamente.");
+                            }
+                          } catch (err) {
+                            console.error("Erro de upload no client:", err);
+                            toast.error("Erro de rede ou payload muito grande. Tente comprimir o arquivo.");
                           }
                         };
                         reader.readAsDataURL(file);

@@ -224,6 +224,157 @@ export default function AdminDashboard() {
 
       <div style={{ display: "block", height: "32px", width: "100%", flexShrink: 0 }} />
 
+      {/* ── PAINEL: FLUXO DE CAIXA REALIZADO ── */}
+      {stats && (
+        <div className="rounded-[4px] p-8 relative overflow-hidden" style={{ background: "linear-gradient(135deg, #1a1a1a 0%, #242424 100%)", border: "1px solid #333", borderTop: "3px solid #F5C400" }}>
+          {/* Glow de fundo */}
+          <div style={{ position: "absolute", top: 0, right: 0, width: "300px", height: "300px", background: "radial-gradient(circle, rgba(245,196,0,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
+          
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <p style={{ margin: 0, fontSize: "11px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
+                ★ Fluxo de Caixa Realizado (Vendas Físicas em Tempo Real) ★
+              </p>
+              <p style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif", marginTop: 4 }}>
+                Contabilidade real baseada em cada arma vendida · {stats.weaponsSold || 0} unidades liquidadas
+              </p>
+            </div>
+            {stats.totalRevenue > 0 && (
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: "10px", color: "#606060", fontFamily: "'Rajdhani', sans-serif", textTransform: "uppercase", letterSpacing: "0.1em" }}>Lucro Líquido</p>
+                <p style={{ fontSize: "24px", fontWeight: 700, color: "#4CAF50", fontFamily: "'Rajdhani', sans-serif", margin: 0 }}>
+                  R$ {((stats.totalRevenue || 0) - (stats.totalUnitCosts || 0) - (stats.totalTaxes || 0) - (stats.totalOperationalCosts || 0)).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Barra de decomposição da receita bruta */}
+          {stats.totalRevenue > 0 ? (
+            <>
+              {/* Barra visual */}
+              <div className="mb-6">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "10px", color: "#606060", fontFamily: "'Rajdhani', sans-serif", textTransform: "uppercase", letterSpacing: "0.1em" }}>Decomposição do Faturamento Bruto</span>
+                  <span style={{ fontSize: "14px", fontWeight: 700, color: "#FFFFFF", fontFamily: "'Rajdhani', sans-serif" }}>
+                    R$ {(stats.totalRevenue || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
+                <div style={{ height: "10px", borderRadius: "5px", overflow: "hidden", display: "flex", background: "#1b1b1b" }}>
+                  {/* Custo de importação */}
+                  <div style={{ width: `${((stats.totalUnitCosts || 0) / stats.totalRevenue * 100).toFixed(1)}%`, background: "#2196F3", transition: "width 0.8s ease" }} title={`Custo: ${((stats.totalUnitCosts || 0) / stats.totalRevenue * 100).toFixed(1)}%`} />
+                  {/* Impostos */}
+                  <div style={{ width: "8%", background: "#f44336", transition: "width 0.8s ease" }} title="Impostos: 8%" />
+                  {/* Operacional */}
+                  <div style={{ width: "15%", background: "#FF9800", transition: "width 0.8s ease" }} title="Operacional: 15%" />
+                  {/* Lucro investidores */}
+                  <div style={{ width: `${Math.max(0, ((stats.totalInvestorShare || 0) / stats.totalRevenue * 100)).toFixed(1)}%`, background: "#9C27B0", transition: "width 0.8s ease" }} title="Lucro Investidores" />
+                  {/* Lucro empresa */}
+                  <div style={{ flex: 1, background: "#4CAF50", transition: "width 0.8s ease" }} title="Lucro Empresa" />
+                </div>
+                <div style={{ display: "flex", gap: "16px", marginTop: "8px", flexWrap: "wrap" }}>
+                  {[
+                    { color: "#2196F3", label: "Custo Import." },
+                    { color: "#f44336", label: "Impostos 8%" },
+                    { color: "#FF9800", label: "Operac. 15%" },
+                    { color: "#9C27B0", label: "Lucro Invest." },
+                    { color: "#4CAF50", label: "Lucro Empresa" },
+                  ].map(({ color, label }) => (
+                    <div key={label} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+                      <span style={{ fontSize: "9px", color: "#606060", fontFamily: "'Rajdhani', sans-serif", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Grid de cartões financeiros */}
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+                {[
+                  {
+                    label: "Faturamento Bruto",
+                    value: stats.totalRevenue || 0,
+                    color: "#FFFFFF",
+                    bg: "rgba(255,255,255,0.03)",
+                    border: "#333",
+                    icon: "💰",
+                    pct: null
+                  },
+                  {
+                    label: "Custo Import. (Giro)",
+                    value: stats.totalUnitCosts || 0,
+                    color: "#2196F3",
+                    bg: "rgba(33,150,243,0.05)",
+                    border: "rgba(33,150,243,0.2)",
+                    icon: "📦",
+                    pct: stats.totalRevenue > 0 ? ((stats.totalUnitCosts || 0) / stats.totalRevenue * 100).toFixed(1) : "0"
+                  },
+                  {
+                    label: "Impostos 8%",
+                    value: stats.totalTaxes || 0,
+                    color: "#f44336",
+                    bg: "rgba(244,67,54,0.05)",
+                    border: "rgba(244,67,54,0.2)",
+                    icon: "🏛️",
+                    pct: "8.0"
+                  },
+                  {
+                    label: "Operacional 15%",
+                    value: stats.totalOperationalCosts || 0,
+                    color: "#FF9800",
+                    bg: "rgba(255,152,0,0.05)",
+                    border: "rgba(255,152,0,0.2)",
+                    icon: "⚙️",
+                    pct: "15.0"
+                  },
+                  {
+                    label: "Lucro Investidores",
+                    value: stats.totalInvestorShare || 0,
+                    color: "#9C27B0",
+                    bg: "rgba(156,39,176,0.05)",
+                    border: "rgba(156,39,176,0.2)",
+                    icon: "👥",
+                    pct: stats.totalRevenue > 0 ? ((stats.totalInvestorShare || 0) / stats.totalRevenue * 100).toFixed(1) : "0"
+                  },
+                  {
+                    label: "Lucro Empresa",
+                    value: stats.totalCompanyShare || 0,
+                    color: "#4CAF50",
+                    bg: "rgba(76,175,80,0.05)",
+                    border: "rgba(76,175,80,0.2)",
+                    icon: "🏢",
+                    pct: stats.totalRevenue > 0 ? ((stats.totalCompanyShare || 0) / stats.totalRevenue * 100).toFixed(1) : "0"
+                  }
+                ].map((item) => (
+                  <div key={item.label} style={{ padding: "14px 12px", borderRadius: "4px", background: item.bg, border: `1px solid ${item.border}`, display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "16px" }}>{item.icon}</span>
+                      {item.pct !== null && (
+                        <span style={{ fontSize: "9px", fontWeight: 700, color: item.color, background: `${item.color}20`, border: `1px solid ${item.color}40`, padding: "1px 5px", borderRadius: "3px", fontFamily: "'Roboto Mono', monospace" }}>
+                          {item.pct}%
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: 0, fontSize: "9px", color: "#606060", fontFamily: "'Rajdhani', sans-serif", textTransform: "uppercase", letterSpacing: "0.08em", lineHeight: 1.3 }}>{item.label}</p>
+                    <p style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: item.color, fontFamily: "'Roboto Mono', monospace" }}>
+                      R$ {item.value.toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: "32px", textAlign: "center", color: "#404040" }}>
+              <p style={{ fontFamily: "'Rajdhani', sans-serif", textTransform: "uppercase", letterSpacing: "0.15em", fontSize: "13px" }}>
+                Nenhuma venda registrada. O fluxo de caixa aparecerá aqui à medida que as armas forem vendidas.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "block", height: "32px", width: "100%", flexShrink: 0 }} />
+
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
         <div className="rounded-[4px] p-10" style={{ background: "#242424", border: "1px solid #333" }}>

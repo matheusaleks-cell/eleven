@@ -72,10 +72,13 @@ export default function InvestorDashboard() {
 
   if (!session) return null;
 
-  const lastBatch = BATCH_PROJECTION[BATCH_PROJECTION.length - 1];
+  const project = dashboardData?.projects?.[0];
+  const batches: any[] = project?.projection && project.projection.length > 0 ? project.projection : BATCH_PROJECTION;
+  const lastBatch = batches[batches.length - 1];
   const totalInvestorEarnings = lastBatch?.cumulativeInvestorEarnings ?? 0;
-  const initialAporte = BATCH_PROJECTION[0]?.totalImportCostBRL ?? 1;
+  const initialAporte = batches[0]?.totalImportCostBRL ?? 1;
   const globalROI = (totalInvestorEarnings / initialAporte) * 100;
+
 
   return (
     <DashboardLayout role="INVESTOR" userName={session.name} userEmail={session.email}>
@@ -302,6 +305,93 @@ export default function InvestorDashboard() {
           </div>
         )}
 
+        {/* ── DETALHAMENTO DE RECEITA REALIZADA ── */}
+        {dashboardData?.projects && dashboardData.projects.some((p: any) => p.activeCycleRealizedProfit > 0 || p.activeCycleSoldWeapons > 0) && (
+          <div className="rounded-lg overflow-hidden" style={{ background: "linear-gradient(135deg, rgba(245,196,0,0.03) 0%, rgba(245,196,0,0.01) 100%)", border: "1px solid rgba(245,196,0,0.15)", borderTop: "2px solid #F5C400" }}>
+            <div className="p-6 border-b border-brand-border/40">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold uppercase tracking-[0.2em] text-white flex items-center gap-2">
+                    <TrendingUp size={16} className="text-brand-accent" />
+                    DETALHAMENTO DE RECEITA REALIZADA (PROPORCIONAL)
+                  </h3>
+                  <p className="text-[10px] text-brand-text-muted mt-1 uppercase tracking-wider">
+                    Transparência total · Receita bruta → dedução → sua fatia líquida
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {dashboardData.projects.filter((p: any) => p.activeCycleSoldWeapons > 0).map((p: any) => {
+                // Estimativas baseadas em 8% imposto + 15% operacional sobre a receita gerada
+                // activeCycleRealizedProfit já é a fatia do investidor (lucro líquido × splitPct)
+                // Vamos exibir a decomposição da receita que gerou esse lucro
+                const realizedProfit = p.activeCycleRealizedProfit || 0;
+                const inventoryCost = p.activeCycleInventoryValue || 0;
+                // Estimativa: Receita bruta ≈ custo + lucro líquido / (1 - 0.23)  
+                // Como o investidor representa splitPct do lucro, e o lucro = receita×0.77 - custo
+                // E realizedProfit = lucro × splitPct → lucro = realizedProfit / splitPct ≈ realizedProfit × 2 (para 50%)
+                const estimatedLucroLiq = realizedProfit * 2; // 50% split default
+                const estimatedReceita = inventoryCost > 0 
+                  ? (estimatedLucroLiq + (inventoryCost / Math.max(1, p.activeCycleTotalWeapons)) * p.activeCycleSoldWeapons) / 0.77
+                  : estimatedLucroLiq / 0.77;
+                const taxEstimate = estimatedReceita * 0.08;
+                const opEstimate = estimatedReceita * 0.15;
+                const costEstimate = (inventoryCost / Math.max(1, p.activeCycleTotalWeapons)) * p.activeCycleSoldWeapons;
+
+                const items = [
+                  { label: "Receita Bruta (Vendas)", value: estimatedReceita, color: "#FFFFFF", pct: "100%" },
+                  { label: "(-) Custo Amortizado", value: -costEstimate, color: "#2196F3", pct: `${((costEstimate / estimatedReceita) * 100).toFixed(1)}%` },
+                  { label: "(-) Impostos 8%", value: -taxEstimate, color: "#f44336", pct: "8%" },
+                  { label: "(-) Operacional 15%", value: -opEstimate, color: "#FF9800", pct: "15%" },
+                  { label: "= Sua Fatia Líquida", value: realizedProfit, color: "#F5C400", pct: `${estimatedReceita > 0 ? ((realizedProfit / estimatedReceita) * 100).toFixed(1) : "0"}%` },
+                ];
+
+                return (
+                  <div key={p.id} className="space-y-3">
+                    <p className="text-[10px] font-black text-brand-accent uppercase tracking-[0.2em] flex items-center gap-2">
+                      <Package size={12} /> {p.name} · {p.activeCycleSoldWeapons} un. vendidas
+                    </p>
+                    {/* Barra de decomposição */}
+                    <div className="h-2 rounded-full overflow-hidden flex bg-brand-border/30">
+                      <div style={{ width: `${((costEstimate / estimatedReceita) * 100).toFixed(1)}%`, background: "#2196F3" }} />
+                      <div style={{ width: "8%", background: "#f44336" }} />
+                      <div style={{ width: "15%", background: "#FF9800" }} />
+                      <div style={{ flex: 1, background: "#F5C400" }} />
+                    </div>
+                    {/* Lista de itens */}
+                    <div className="space-y-1">
+                      {items.map((item, i) => (
+                        <div key={i} className={cn(
+                          "flex items-center justify-between py-1.5 px-3 rounded text-xs",
+                          i === items.length - 1 ? "bg-brand-accent/8 border border-brand-accent/20" : "hover:bg-brand-bg/40 transition-colors"
+                        )}>
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: item.color }} />
+                            <span style={{ color: i === items.length - 1 ? "#F5C400" : "#A0A0A0", fontFamily: "'Rajdhani', sans-serif", fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>
+                              {item.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span style={{ fontFamily: "'Roboto Mono', monospace", fontSize: "9px", color: "#404040" }}>{item.pct}</span>
+                            <span style={{ fontFamily: "'Roboto Mono', monospace", fontSize: "12px", fontWeight: 700, color: item.color }}>
+                              {item.value >= 0 ? "+" : ""}R$ {Math.abs(item.value).toLocaleString("pt-BR", { maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-[8px] text-brand-text-muted/50 uppercase tracking-widest pt-2 border-t border-brand-border/30">
+                * Estimativas baseadas nos percentuais acordados: 8% impostos + 15% operacional. Valores exatos disponíveis na conclusão do ciclo.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── PROJEÇÃO DE CRESCIMENTO — ESCALADA DE LOTES ── */}
         <div className="flex flex-col gap-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -311,7 +401,7 @@ export default function InvestorDashboard() {
                 Projeção de Crescimento — Escalada de Lotes
               </h2>
               <p className="text-[10px] text-brand-text-muted mt-1 uppercase tracking-wider">
-                Rifle .22LR · Reinvestimento automático: Capital + Lucro do Investidor
+                {project?.product_name || "Vezir VR12 Pump"} · Reinvestimento automático: Capital + Lucro do Investidor
               </p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded border border-brand-accent/20 bg-brand-accent/5 w-fit">
@@ -323,9 +413,9 @@ export default function InvestorDashboard() {
           </div>
 
           {/* Cards de lote */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {BATCH_PROJECTION.map((b, idx) => {
-              const maxQty = Math.max(...BATCH_PROJECTION.map((x) => x.quantity));
+          <div className="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-7 gap-3">
+            {batches.map((b, idx) => {
+              const maxQty = Math.max(...batches.map((x) => x.quantity));
               const heightPct = maxQty > 0 ? (b.quantity / maxQty) * 100 : 0;
               const isFirst = b.batchNumber === 1;
 
@@ -381,7 +471,7 @@ export default function InvestorDashboard() {
                     </div>
                   </div>
 
-                  {idx < BATCH_PROJECTION.length - 1 && (
+                  {idx < batches.length - 1 && (
                     <div className="hidden md:flex justify-end">
                       <ArrowRight size={12} className="text-brand-text-muted group-hover:text-brand-accent transition-colors" />
                     </div>
@@ -398,8 +488,8 @@ export default function InvestorDashboard() {
                 <Package size={14} className="text-brand-accent" />
               </div>
               <div>
-                <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest">Lote {BATCH_PROJECTION.length} (final)</p>
-                <p className="text-base font-bold text-white">{lastBatch?.quantity ?? "–"} rifles</p>
+                <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-widest">Lote {batches.length} (final)</p>
+                <p className="text-base font-bold text-white">{lastBatch?.quantity ?? "–"} {project ? 'unidades' : 'rifles'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-4 rounded-lg border border-brand-success/20 bg-brand-success/5">

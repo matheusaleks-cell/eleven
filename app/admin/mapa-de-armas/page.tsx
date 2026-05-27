@@ -313,58 +313,76 @@ export default function WeaponsMapPage() {
             </div>
 
             <div className="p-6 overflow-y-auto max-h-[70vh]">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-6">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase text-brand-accent mb-3 tracking-widest">FICHA TÉCNICA E CONFORMIDADE</p>
-                      <div className="space-y-2">
-                        {[
-                          ["Modelo", selectedWeapon.product],
-                          ["Fabricante", "Vezir Arms / HK / Derya"],
-                          ["Calibre", "12 GA / 9mm"],
-                          ["Lote", selectedWeapon.lot],
-                          ["DI Importação", "24/0988712-0"],
-                          ["Autorização Exército", "SFPC-11/2026-988"],
-                        ].map(([label, val]) => (
-                          <div key={label} className="flex justify-between py-1.5 border-b border-brand-border/50">
-                            <span className="text-[11px] font-bold uppercase text-brand-text-muted">{label}</span>
-                            <span className="text-[11px] font-bold uppercase text-white font-mono">{val}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                {(() => {
+                  const entryDateObj = (() => {
+                    if (!selectedWeapon.entryDate) return new Date();
+                    const parts = selectedWeapon.entryDate.split("/");
+                    if (parts.length === 3) {
+                      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                    }
+                    return new Date(selectedWeapon.entryDate);
+                  })();
 
-                    <div className="p-4 bg-brand-success/5 border border-brand-success/20 rounded">
-                       <div className="flex items-center gap-3 mb-2">
-                         <ShieldCheck className="text-brand-success" size={16} />
-                         <span className="text-xs font-bold uppercase text-brand-success">Status de Conformidade</span>
+                  const formatDateStr = (date: Date) => date.toLocaleDateString("pt-BR");
+
+                  const dateChegada = new Date(entryDateObj.getTime() - 15 * 24 * 60 * 60 * 1000);
+                  const dateVistoria = new Date(entryDateObj.getTime() - 3 * 24 * 60 * 60 * 1000);
+
+                  return (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       <div className="space-y-6">
+                         <div>
+                           <p className="text-[10px] font-bold uppercase text-brand-accent mb-3 tracking-widest">FICHA TÉCNICA E CONFORMIDADE</p>
+                           <div className="space-y-2">
+                             {[
+                               ["Modelo", selectedWeapon.product],
+                               ["Fabricante", selectedWeapon.brand || "N/A"],
+                               ["Calibre", selectedWeapon.caliber || "N/A"],
+                               ["Lote", selectedWeapon.lot],
+                               ["DI Importação", selectedWeapon.di || "N/A"],
+                               ["Autorização Exército", "SFPC-11/2026-988"],
+                             ].map(([label, val]) => (
+                               <div key={label} className="flex justify-between py-1.5 border-b border-brand-border/50">
+                                 <span className="text-[11px] font-bold uppercase text-brand-text-muted">{label}</span>
+                                 <span className="text-[11px] font-bold uppercase text-white font-mono">{val}</span>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+
+                         <div className="p-4 bg-brand-success/5 border border-brand-success/20 rounded">
+                            <div className="flex items-center gap-3 mb-2">
+                              <ShieldCheck className="text-brand-success" size={16} />
+                              <span className="text-xs font-bold uppercase text-brand-success">Status de Conformidade</span>
+                            </div>
+                            <p className="text-[10px] text-brand-text-secondary leading-relaxed uppercase font-bold">
+                              Esta peça passou por todos os testes de balística e conferência física na entrada da alfândega.
+                            </p>
+                         </div>
                        </div>
-                       <p className="text-[10px] text-brand-text-secondary leading-relaxed uppercase font-bold">
-                         Esta peça passou por todos os testes de balística e conferência física na entrada da alfândega.
-                       </p>
-                    </div>
-                  </div>
 
-                  <div>
-                    <p className="text-[10px] font-bold uppercase text-brand-accent mb-3 tracking-widest">HISTÓRICO DE CUSTÓDIA</p>
-                    <div className="relative border-l border-brand-border pl-4 space-y-6 py-2">
-                      {[
-                        { date: selectedWeapon.entryDate, text: "Chegada em Porto/Alfândega", user: "Despachante" },
-                        { date: "15/03/2026", text: "Vistoria Exército Brasileiro", user: "Tenente-Coronel Silva" },
-                        { date: "18/03/2026", text: "Entrada em Estoque Eleven", user: "Logística" },
-                        { date: "Hoje", text: selectedWeapon.status === "VENDIDA" ? "Entrega ao Cliente Final" : "Em Custódia Eleven", user: selectedWeapon.customer },
-                      ].map((step, i) => (
-                        <div key={i} className="relative">
-                          <div className="absolute -left-[21px] top-1 w-2 h-2 rounded-full bg-brand-accent" />
-                          <p className="text-[10px] font-bold text-brand-text-muted uppercase leading-none">{step.date}</p>
-                          <p className="text-xs font-bold text-white uppercase mt-1">{step.text}</p>
-                          <p className="text-[9px] text-brand-text-secondary uppercase mt-0.5 tracking-tighter">Responsável: {step.user}</p>
-                        </div>
-                      ))}
+                       <div>
+                         <p className="text-[10px] font-bold uppercase text-brand-accent mb-3 tracking-widest">HISTÓRICO DE CUSTÓDIA</p>
+                         <div className="relative border-l border-brand-border pl-4 space-y-6 py-2">
+                           {[
+                             { date: formatDateStr(dateChegada), text: "Chegada em Porto/Alfândega", user: "Despachante" },
+                             { date: formatDateStr(dateVistoria), text: "Vistoria Exército Brasileiro", user: "Tenente-Coronel Silva" },
+                             { date: selectedWeapon.entryDate, text: "Entrada em Estoque Eleven", user: "Logística" },
+                             { date: "Hoje", text: selectedWeapon.status === "VENDIDA" ? "Entrega ao Cliente Final" : "Em Custódia Eleven", user: selectedWeapon.customer },
+                           ].map((step, i) => (
+                             <div key={i} className="relative">
+                               <div className="absolute -left-[21px] top-1 w-2 h-2 rounded-full bg-brand-accent" />
+                               <p className="text-[10px] font-bold text-brand-text-muted uppercase leading-none">{step.date}</p>
+                               <p className="text-xs font-bold text-white uppercase mt-1">{step.text}</p>
+                               <p className="text-[9px] text-brand-text-secondary uppercase mt-0.5 tracking-tighter">Responsável: {step.user}</p>
+                             </div>
+                           ))}
+                         </div>
+                       </div>
                     </div>
-                  </div>
-               </div>
-            </div>
+                  );
+                })()}
+             </div>
 
             <div className="p-4 bg-brand-surface/50 border-t border-brand-border flex justify-end gap-3">
               <Button variant="secondary" size="sm" onClick={() => setModalOpen(false)}>FECHAR</Button>

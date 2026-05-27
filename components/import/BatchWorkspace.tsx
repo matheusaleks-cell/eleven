@@ -287,15 +287,26 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
+                    const maxSizeBytes = 4.5 * 1024 * 1024;
+                    if (file.size > maxSizeBytes) {
+                      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+                      toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 4.5 MB. Comprima o arquivo ou use uma imagem menor.`);
+                      return;
+                    }
                     const reader = new FileReader();
                     reader.onloadend = async () => {
-                      const base64 = reader.result as string;
-                      const res = await addLotDocument(lotId, file.name, requiredCat, base64);
-                      if (res.success) {
-                        toast.success(`Documento "${requiredCat}" anexado com sucesso!`);
-                        onRefresh?.();
-                      } else {
-                        toast.error("Erro ao fazer upload.");
+                      try {
+                        const base64 = reader.result as string;
+                        const res = await addLotDocument(lotId, file.name, requiredCat, base64);
+                        if (res.success) {
+                          toast.success(`Documento "${requiredCat}" anexado com sucesso!`);
+                          onRefresh?.();
+                        } else {
+                          toast.error("Erro ao fazer upload. Verifique as dimensões ou tente novamente.");
+                        }
+                      } catch (err) {
+                        console.error("Erro de upload no client:", err);
+                        toast.error("Erro de rede ou payload muito grande. Tente comprimir o arquivo.");
                       }
                     };
                     reader.readAsDataURL(file);
@@ -636,7 +647,9 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                       setUpdating(true);
                       const res = await registerLotSerials(batch.dbId || batch.id, productId, serialsList);
                       if (res.success) {
-                        toast.success(`${res.count} arma(s) cadastrada(s) com sucesso!`);
+                        toast.success(`${res.count} arma(s) cadastrada(s) com sucesso!`, {
+                          description: "As séries aparecem na lista ao lado e no Mapa de Armas."
+                        });
                         if (serialsTextarea) serialsTextarea.value = "";
                         onRefresh?.();
                       } else {
@@ -973,15 +986,26 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                           const file = e.target.files?.[0];
                           const category = (document.getElementById("doc-category-extra") as HTMLSelectElement).value;
                           if (file) {
+                            const maxSizeBytes = 4.5 * 1024 * 1024;
+                            if (file.size > maxSizeBytes) {
+                              const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+                              toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 4.5 MB. Comprima o arquivo ou use uma imagem menor.`);
+                              return;
+                            }
                             const reader = new FileReader();
                             reader.onloadend = async () => {
-                              const base64 = reader.result as string;
-                              const res = await addLotDocument(batch.dbId || batch.id, file.name, category, base64);
-                              if (res.success) {
-                                toast.success("Documento adicional anexado!");
-                                onRefresh?.();
-                              } else {
-                                toast.error("Erro ao subir documento adicional.");
+                              try {
+                                const base64 = reader.result as string;
+                                const res = await addLotDocument(batch.dbId || batch.id, file.name, category, base64);
+                                if (res.success) {
+                                  toast.success("Documento adicional anexado!");
+                                  onRefresh?.();
+                                } else {
+                                  toast.error("Erro ao subir documento adicional.");
+                                }
+                              } catch (err) {
+                                console.error("Erro de upload no client (adicional):", err);
+                                toast.error("Erro de rede ou payload muito grande. Tente comprimir o arquivo.");
                               }
                             };
                             reader.readAsDataURL(file);
