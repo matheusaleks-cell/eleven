@@ -58,16 +58,43 @@ export default function AdminDashboard() {
     loadData();
   }, []);
 
-  const applyFilters = () => {
-    toast.info("Filtragem de banco em desenvolvimento. Usando visão geral.");
+  const applyFilters = async () => {
+    setLoading(true);
+    try {
+      const [sData, pData] = await Promise.all([
+        getDashboardStats({ investorId, startDate, endDate }),
+        getRecentProjects(investorId === "ALL" ? undefined : investorId)
+      ]);
+      setStats(sData);
+      setFilteredProjects(pData);
+      toast.success("Filtros aplicados com sucesso!");
+    } catch (error) {
+      console.error("Erro ao filtrar:", error);
+      toast.error("Erro ao aplicar filtros.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleClearFilters = () => {
+  const handleClearFilters = async () => {
     setStartDate("");
     setEndDate("");
     setInvestorId("ALL");
-    // Recarregar do banco
-    getRecentProjects().then(setFilteredProjects);
+    setLoading(true);
+    try {
+      const [sData, pData] = await Promise.all([
+        getDashboardStats(),
+        getRecentProjects()
+      ]);
+      setStats(sData);
+      setFilteredProjects(pData);
+      toast.success("Filtros limpos!");
+    } catch (error) {
+      console.error("Erro ao limpar filtros:", error);
+      toast.error("Erro ao limpar filtros.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) {

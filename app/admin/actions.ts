@@ -2,11 +2,18 @@
 
 import { prisma } from "@/lib/prisma";
 
-export async function getDashboardStats() {
+export async function getDashboardStats(filters?: { investorId?: string; startDate?: string; endDate?: string }) {
   // Buscar projetos com ciclos e lotes (fonte principal de dados)
   let projects: any[] = [];
+  
+  let projectsWhere: any = {};
+  if (filters?.investorId && filters.investorId !== "ALL") {
+    projectsWhere.investorId = filters.investorId;
+  }
+
   try {
     projects = await prisma.investmentProject.findMany({
+      where: projectsWhere,
       include: { 
         cycles: true,
         importLots: {
@@ -28,10 +35,21 @@ export async function getDashboardStats() {
   let totalInvestorShare = 0;
   let totalCompanyShare = 0;
 
+  // Datas
+  let startDateObj = filters?.startDate ? new Date(filters.startDate) : null;
+  let endDateObj = filters?.endDate ? new Date(filters.endDate) : null;
+  if (endDateObj) {
+    endDateObj.setHours(23, 59, 59, 999);
+  }
+
   projects.forEach(p => {
     // 1. Somar ciclos concluídos
     p.cycles?.forEach((c: any) => {
       if (c.status === "COMPLETED") {
+        const cDate = new Date(c.updatedAt || c.createdAt);
+        if (startDateObj && cDate < startDateObj) return;
+        if (endDateObj && cDate > endDateObj) return;
+
         totalRevenue += Number(c.grossRevenue) || 0;
         totalInvestorShare += Number(c.investorShare) || 0;
         totalCompanyShare += Number(c.companyShare) || 0;
@@ -54,6 +72,10 @@ export async function getDashboardStats() {
 
       lot.weapons?.forEach((w: any) => {
         if (w.currentStatus === "VENDIDA") {
+          const wDate = w.saleDate ? new Date(w.saleDate) : new Date(w.updatedAt || w.createdAt);
+          if (startDateObj && wDate < startDateObj) return;
+          if (endDateObj && wDate > endDateObj) return;
+
           const uCost = w.unitCost || uCostAvg;
           const sValue = w.saleValue || 0;
           const weaponDeductions = sValue * deductionRate;
@@ -77,7 +99,16 @@ export async function getDashboardStats() {
   let weaponsImported = 0;
   
   try {
+    let weaponsWhere: any = {};
+    if (filters?.investorId && filters.investorId !== "ALL") {
+      weaponsWhere.importLot = {
+        investmentProject: {
+          investorId: filters.investorId
+        }
+      };
+    }
     const allWeapons = await prisma.weaponMap.findMany({
+      where: weaponsWhere,
       select: { currentStatus: true }
     });
     allWeapons.forEach(w => {
@@ -93,8 +124,14 @@ export async function getDashboardStats() {
   // Progresso de liquidação de lotes
   const activeLotsProgress: any[] = [];
   try {
+    let lotsWhere: any = { status: { not: "LIQUIDADO" } };
+    if (filters?.investorId && filters.investorId !== "ALL") {
+      lotsWhere.investmentProject = {
+        investorId: filters.investorId
+      };
+    }
     const activeLots = await prisma.importLot.findMany({
-      where: { status: { not: "LIQUIDADO" } },
+      where: lotsWhere,
       include: {
         weapons: true,
         investmentProject: {
@@ -135,9 +172,14 @@ export async function getDashboardStats() {
   };
 }
 
-export async function getRecentProjects() {
+export async function getRecentProjects(investorId?: string) {
   try {
+    let projectsWhere: any = {};
+    if (investorId && investorId !== "ALL") {
+      projectsWhere.investorId = investorId;
+    }
     const projects = await prisma.investmentProject.findMany({
+      where: projectsWhere,
       take: 5,
       orderBy: { createdAt: "desc" },
       include: {
