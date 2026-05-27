@@ -145,7 +145,16 @@ export async function getLotOptionsForCart(productIds: string[]) {
 
 export async function createDirectSale(data: {
   customerId: string;
-  items: { id: string; name: string; sku: string; price: number; quantity: number; serialNumbers?: string[] }[];
+  items: { 
+    id: string; 
+    name: string; 
+    sku: string; 
+    price: number; 
+    quantity: number; 
+    serialNumbers?: string[];
+    lotPreference?: "AUTO" | "PROPRIO" | "INVESTIDOR";
+    investmentProjectId?: string;
+  }[];
   totalValue: number;
   discount?: number;
   paymentMethod: string;
@@ -185,7 +194,7 @@ export async function createDirectSale(data: {
     });
 
     const saleDate = new Date();
-    const { lotPreference = "AUTO", investmentProjectId } = data;
+    const { lotPreference: globalLotPreference = "AUTO", investmentProjectId: globalInvestmentProjectId } = data;
 
     for (const item of data.items) {
       await prisma.product.updateMany({
@@ -193,12 +202,15 @@ export async function createDirectSale(data: {
         data: { stockAvailable: { decrement: item.quantity } },
       });
 
-      // Monta filtro de lote conforme preferência
+      // Monta filtro de lote conforme preferência (item prioritário sobre o global)
+      const itemPref = item.lotPreference || globalLotPreference;
+      const itemProjId = item.investmentProjectId || globalInvestmentProjectId;
+
       let lotFilter: any = {};
-      if (lotPreference === "PROPRIO") {
+      if (itemPref === "PROPRIO") {
         lotFilter = { importLot: { investmentProjectId: null } };
-      } else if (lotPreference === "INVESTIDOR" && investmentProjectId) {
-        lotFilter = { importLot: { investmentProjectId } };
+      } else if (itemPref === "INVESTIDOR" && itemProjId) {
+        lotFilter = { importLot: { investmentProjectId: itemProjId } };
       }
 
       let weaponsToSell: { id: string }[] = [];
@@ -333,6 +345,125 @@ export async function updateSalesOrder(
   data: { status?: string; paymentMethod?: string; notes?: string; totalValue?: number }
 ) {
   try {
+    const currentOrder = await prisma.salesOrder.findUnique({
+      where: { id },
+      include: { weapons: true }
+    });
+
+    if (!currentOrder) {
+      return { success: false, error: "Pedido não encontrado." };
+    }
+
+    const wasCancelled = currentOrder.status === "CANCELADO";
+    const isCancelling = data.status === "CANCELADO";
+
+    // 1. Se o pedido está sendo CANCELADO e não era cancelado antes
+    if (isCancelling && !wasCancelled) {
+      // Reverter as armas vinculadas para ESTOQUE
+      const weapons = await prisma.weaponMap.findMany({
+        where: { salesOrderId: id },
+        select: { id: true, productId: true },
+      });
+
+      if (weapons.length > 0) {
+        await prisma.weaponMap.updateMany({
+          where: { salesOrderId: id },
+          data: {
+            currentStatus: "ESTOQUE",
+            salesOrderId: null,
+            saleDate: null,
+            saleValue: null,
+            customerId: null,
+            sellingUserId: null,
+            lastMovementDate: new Date(),
+          },
+        });
+
+        // Restaura estoque
+        const byProduct: Record<string, number> = {};
+        for (const w of weapons) byProduct[w.productId] = (byProduct[w.productId] || 0) + 1;
+        for (const [productId, count] of Object.entries(byProduct)) {
+          await prisma.product.update({
+            where: { id: productId },
+            data: { stockAvailable: { increment: count } },
+          });
+        }
+      }
+    }
+
+    // 2. Se o pedido era CANCELADO e está voltando a ser ativo (PAGO ou PENDENTE ou RASCUNHO)
+    if (wasCancelled && data.status && data.status !== "CANCELADO") {
+      // Precisamos alocar as armas de volta!
+      const items = JSON.parse(currentOrder.products || "[]");
+      const saleDate = new Date();
+
+      for (const item of items) {
+        // Decrementa o estoque
+        await prisma.product.updateMany({
+          where: { id: item.id, stockAvailable: { gte: item.quantity } },
+          data: { stockAvailable: { decrement: item.quantity } },
+        });
+
+        // Busca armas em estoque
+        let weaponsToSell = await prisma.weaponMap.findMany({
+          where: {
+            productId: item.id,
+            currentStatus: "ESTOQUE",
+          },
+          take: item.quantity,
+          orderBy: { entryDate: "asc" },
+          select: { id: true },
+        });
+
+        if (weaponsToSell.length > 0) {
+          const totalBruto = items.reduce((acc: number, it: any) => acc + (it.price * it.quantity), 0);
+          const totalLiquido = data.totalValue !== undefined ? data.totalValue : currentOrder.totalValue;
+          const discountFactor = totalBruto > 0 ? (totalLiquido / totalBruto) : 1;
+          const finalSaleValue = Number((item.price * discountFactor).toFixed(2));
+
+          await prisma.weaponMap.updateMany({
+            where: { id: { in: weaponsToSell.map(w => w.id) } },
+            data: {
+              currentStatus: "VENDIDA",
+              salesOrderId: currentOrder.id,
+              saleDate,
+              saleValue: finalSaleValue,
+              customerId: currentOrder.customerId,
+              sellingUserId: currentOrder.sellerId,
+              lastMovementDate: saleDate,
+            },
+          });
+        }
+      }
+    }
+
+    // 3. Se o valor total do pedido mudou e o pedido continua ativo, devemos recalcular e atualizar o saleValue das armas
+    if (data.totalValue !== undefined && data.totalValue !== currentOrder.totalValue && data.status !== "CANCELADO" && currentOrder.status !== "CANCELADO") {
+      const weapons = await prisma.weaponMap.findMany({
+        where: { salesOrderId: id },
+        include: { product: true }
+      });
+
+      if (weapons.length > 0) {
+        const items = JSON.parse(currentOrder.products || "[]");
+        const totalBruto = items.reduce((acc: number, item: any) => acc + (item.price * item.quantity), 0);
+        const totalLiquido = data.totalValue;
+        const discountFactor = totalBruto > 0 ? (totalLiquido / totalBruto) : 1;
+
+        for (const w of weapons) {
+          const orderItem = items.find((item: any) => item.id === w.productId);
+          const originalPrice = orderItem ? orderItem.price : (w.product?.priceB2C || 0);
+          const finalSaleValue = Number((originalPrice * discountFactor).toFixed(2));
+
+          await prisma.weaponMap.update({
+            where: { id: w.id },
+            data: { saleValue: finalSaleValue }
+          });
+        }
+      }
+    }
+
+    // E finalmente, atualiza o pedido
     await prisma.salesOrder.update({
       where: { id },
       data: {
@@ -342,8 +473,11 @@ export async function updateSalesOrder(
         ...(data.totalValue !== undefined && { totalValue: data.totalValue }),
       },
     });
+
     revalidatePath("/admin/vendas");
     revalidatePath("/admin");
+    revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
     return { success: true };
   } catch (error: any) {
     console.error("Erro ao atualizar pedido:", error);

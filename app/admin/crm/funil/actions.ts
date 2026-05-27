@@ -223,7 +223,48 @@ export async function convertToOrder(leadId: string, data: any) {
       }
     });
 
-    // 3. Deletar o Lead (já que virou cliente/pedido)
+    // 3. Alocar armas e atualizar estoque físico
+    const saleDate = new Date();
+    const items = data.items || [];
+    const totalBruto = items.reduce((acc: number, it: any) => acc + (it.price * it.quantity), 0);
+    const totalLiquido = Number(data.value) || 0;
+    const discountFactor = totalBruto > 0 ? (totalLiquido / totalBruto) : 1;
+
+    for (const item of items) {
+      await prisma.product.updateMany({
+        where: { id: item.id, stockAvailable: { gte: item.quantity } },
+        data: { stockAvailable: { decrement: item.quantity } },
+      });
+
+      let weaponsToSell = await prisma.weaponMap.findMany({
+        where: {
+          productId: item.id,
+          currentStatus: "ESTOQUE",
+        },
+        take: item.quantity,
+        orderBy: { entryDate: "asc" },
+        select: { id: true },
+      });
+
+      if (weaponsToSell.length > 0) {
+        const finalSaleValue = Number((item.price * discountFactor).toFixed(2));
+
+        await prisma.weaponMap.updateMany({
+          where: { id: { in: weaponsToSell.map((w) => w.id) } },
+          data: {
+            currentStatus: "VENDIDA",
+            salesOrderId: order.id,
+            saleDate,
+            saleValue: finalSaleValue,
+            customerId: customer.id,
+            sellingUserId: sellerId,
+            lastMovementDate: saleDate,
+          },
+        });
+      }
+    }
+
+    // 4. Deletar o Lead (já que virou cliente/pedido)
     await prisma.lead.delete({
       where: { id: leadId }
     });
@@ -232,6 +273,8 @@ export async function convertToOrder(leadId: string, data: any) {
     revalidatePath("/admin");
     revalidatePath("/admin/vendas");
     revalidatePath("/admin/crm/clientes");
+    revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
 
     return { success: true, orderId: order.id };
   } catch (error: any) {

@@ -10,6 +10,7 @@ export async function uploadDocument(data: {
   size: string;
   base64Data: string;
   projectId: string;
+  userId?: string | null;
 }) {
   try {
     const document = await prisma.document.create({
@@ -20,6 +21,7 @@ export async function uploadDocument(data: {
         size: data.size,
         base64Data: data.base64Data,
         projectId: data.projectId,
+        userId: data.userId || null,
       }
     });
     

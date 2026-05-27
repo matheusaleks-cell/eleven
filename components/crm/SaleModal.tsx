@@ -26,6 +26,8 @@ interface CartItem {
   quantity: number;
   stock: number;
   selectedSerials?: string[];
+  lotPreference: LotPreference;
+  selectedProjectId: string;
 }
 
 const fmt = (v: number) =>
@@ -64,10 +66,9 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [search, setSearch] = useState("");
-  const [lotPreference, setLotPreference] = useState<LotPreference>("AUTO");
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [lotProjects, setLotProjects] = useState<{ id: string; name: string; investorName: string }[]>([]);
-  const [loadingLots, setLoadingLots] = useState(false);
+
+  const [productProjectsMap, setProductProjectsMap] = useState<Record<string, { id: string; name: string; investorName: string }[]>>({});
+  const [loadingProjectsMap, setLoadingProjectsMap] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (isOpen) {
@@ -77,30 +78,39 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
       setPaymentMethod("PIX");
       setStatus("PAGO");
       setDiscount(0);
-      setLotPreference("AUTO");
-      setSelectedProjectId("");
-      setLotProjects([]);
+      setProductProjectsMap({});
+      setLoadingProjectsMap({});
       loadProducts();
     }
   }, [isOpen]);
 
-  useEffect(() => {
-    if (lotPreference === "INVESTIDOR" && cart.length > 0) {
-      setLoadingLots(true);
-      getLotOptionsForCart(cart.map(i => i.id)).then(opts => {
-        setLotProjects(opts);
-        setLoadingLots(false);
-        if (opts.length > 0 && !selectedProjectId) setSelectedProjectId(opts[0].id);
-      });
+  const loadProjectsForProduct = async (productId: string) => {
+    if (productProjectsMap[productId]) return;
+    setLoadingProjectsMap(prev => ({ ...prev, [productId]: true }));
+    try {
+      const opts = await getLotOptionsForCart([productId]);
+      setProductProjectsMap(prev => ({ ...prev, [productId]: opts }));
+      if (opts.length > 0) {
+        setCart(prev => prev.map(c => {
+          if (c.id === productId && !c.selectedProjectId) {
+            return { ...c, selectedProjectId: opts[0].id };
+          }
+          return c;
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingProjectsMap(prev => ({ ...prev, [productId]: false }));
     }
-  }, [lotPreference, cart]);
+  };
 
   const [availableSerialsMap, setAvailableSerialsMap] = useState<Record<string, { id: string; serial: string; batchCode: string }[]>>({});
 
   useEffect(() => {
     if (cart.length > 0) {
       cart.forEach(item => {
-        getAvailableSerialsForProduct(item.id, lotPreference, selectedProjectId || undefined).then(serials => {
+        getAvailableSerialsForProduct(item.id, item.lotPreference || "AUTO", item.selectedProjectId || undefined).then(serials => {
           setAvailableSerialsMap(prev => ({
             ...prev,
             [item.id]: serials
@@ -110,7 +120,7 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
     } else {
       setAvailableSerialsMap({});
     }
-  }, [cart.map(i => i.id).join(","), lotPreference, selectedProjectId]);
+  }, [JSON.stringify(cart.map(i => ({ id: i.id, pref: i.lotPreference, proj: i.selectedProjectId })))]);
 
   const loadProducts = async () => {
     setLoadingProducts(true);
@@ -133,7 +143,17 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
         }
         return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, { id: product.id, name: product.commercialName, sku: product.sku, price: unitPrice, quantity: 1, stock: product.stockAvailable }];
+      return [...prev, { 
+        id: product.id, 
+        name: product.commercialName, 
+        sku: product.sku, 
+        price: unitPrice, 
+        quantity: 1, 
+        stock: product.stockAvailable,
+        lotPreference: "AUTO",
+        selectedProjectId: "",
+        selectedSerials: []
+      }];
     });
   };
 
@@ -157,10 +177,15 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
 
   const handleSave = async () => {
     if (cart.length === 0) { toast.error("Adicione pelo menos um produto."); return; }
-    if (lotPreference === "INVESTIDOR" && !selectedProjectId) {
-      toast.error("Selecione o projeto do investidor para direcionar a venda.");
-      return;
+    
+    // Validação por item do carrinho
+    for (const item of cart) {
+      if (item.lotPreference === "INVESTIDOR" && !item.selectedProjectId) {
+        toast.error(`Selecione o projeto do investidor para o produto: ${item.name}`);
+        return;
+      }
     }
+
     setLoading(true);
     try {
       const res = await createDirectSale({
@@ -171,7 +196,9 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
           sku: i.sku, 
           price: i.price, 
           quantity: i.quantity,
-          serialNumbers: i.selectedSerials || []
+          serialNumbers: i.selectedSerials || [],
+          lotPreference: i.lotPreference,
+          investmentProjectId: i.selectedProjectId || undefined,
         })),
         totalValue,
         discount,
@@ -179,8 +206,6 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
         status,
         notes,
         sellerId,
-        lotPreference,
-        investmentProjectId: lotPreference === "INVESTIDOR" ? selectedProjectId : undefined,
       });
       if (res.success) {
         toast.success(`Pedido ${res.orderNumber} registrado!`);
@@ -267,61 +292,7 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
               </h3>
             </div>
 
-            {/* Seletor de Origem do Lote — sempre visível no topo */}
-            <div className="px-3 py-2.5 border-b border-brand-border bg-brand-bg/40 space-y-1.5">
-              <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest flex items-center gap-1">
-                <Layers size={10} /> Origem do Lote
-              </label>
-              <div className="flex gap-1 p-0.5 bg-brand-bg rounded border border-brand-border">
-                {(["AUTO", "PROPRIO", "INVESTIDOR"] as LotPreference[]).map(opt => (
-                  <button
-                    key={opt}
-                    onClick={() => { setLotPreference(opt); setSelectedProjectId(""); }}
-                    className={cn(
-                      "flex-1 py-1.5 rounded text-[8px] font-black uppercase tracking-wider transition-all",
-                      lotPreference === opt
-                        ? opt === "INVESTIDOR"
-                          ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                          : opt === "PROPRIO"
-                          ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                          : "bg-brand-surface text-white border border-brand-border"
-                        : "text-brand-text-muted hover:text-white"
-                    )}
-                  >
-                    {opt === "AUTO" ? "Auto (FIFO)" : opt === "PROPRIO" ? "Lote Próprio" : "Investidor"}
-                  </button>
-                ))}
-              </div>
-              {lotPreference === "INVESTIDOR" && (
-                <div>
-                  {loadingLots ? (
-                    <div className="flex items-center gap-2 px-2 py-1 text-[9px] text-brand-text-muted">
-                      <div className="w-3 h-3 border border-amber-500 border-t-transparent rounded-full animate-spin" />
-                      Buscando projetos...
-                    </div>
-                  ) : lotProjects.length === 0 ? (
-                    <p className="text-[9px] text-amber-400/70 font-bold px-1">
-                      Nenhum projeto com estoque dos produtos no carrinho.
-                    </p>
-                  ) : (
-                    <select
-                      className="w-full bg-brand-input border border-amber-500/40 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-amber-500"
-                      value={selectedProjectId}
-                      onChange={e => setSelectedProjectId(e.target.value)}
-                    >
-                      <option value="">Selecionar investidor...</option>
-                      {lotProjects.map(p => (
-                        <option key={p.id} value={p.id}>
-                          {p.investorName} — {p.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar">
               {cart.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center opacity-20 py-12">
                   <ShoppingBag size={36} />
@@ -345,6 +316,72 @@ export function SaleModal({ isOpen, onClose, customer, sellerId, onSuccess }: Sa
                           <Trash2 size={14} />
                         </button>
                       </div>
+                    </div>
+
+                    {/* Configuração de Lote Individual por Item */}
+                    <div className="pt-2 border-t border-brand-border/40 space-y-1.5">
+                      <div className="flex gap-1 p-0.5 bg-brand-bg rounded border border-brand-border">
+                        {(["AUTO", "PROPRIO", "INVESTIDOR"] as LotPreference[]).map(opt => (
+                          <button
+                            key={opt}
+                            onClick={() => {
+                              setCart(prev => prev.map(c => {
+                                if (c.id !== item.id) return c;
+                                return { ...c, lotPreference: opt, selectedProjectId: "", selectedSerials: [] };
+                              }));
+                              if (opt === "INVESTIDOR") {
+                                loadProjectsForProduct(item.id);
+                              }
+                            }}
+                            className={cn(
+                              "flex-1 py-1 rounded text-[8px] font-black uppercase tracking-wider transition-all",
+                              item.lotPreference === opt
+                                ? opt === "INVESTIDOR"
+                                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                  : opt === "PROPRIO"
+                                  ? "bg-blue-500/20 text-blue-400 border border-blue-500/30"
+                                  : "bg-brand-surface text-white border border-brand-border"
+                                : "text-brand-text-muted hover:text-white"
+                            )}
+                          >
+                            {opt === "AUTO" ? "Auto" : opt === "PROPRIO" ? "Próprio" : "Investidor"}
+                          </button>
+                        ))}
+                      </div>
+
+                      {item.lotPreference === "INVESTIDOR" && (
+                        <div>
+                          {loadingProjectsMap[item.id] ? (
+                            <div className="flex items-center gap-2 px-1 text-[8px] text-brand-text-muted">
+                              <div className="w-2.5 h-2.5 border border-amber-500 border-t-transparent rounded-full animate-spin" />
+                              Buscando projetos...
+                            </div>
+                          ) : !productProjectsMap[item.id] || productProjectsMap[item.id].length === 0 ? (
+                            <p className="text-[8px] text-amber-400/70 font-bold px-1">
+                              Nenhum projeto com estoque deste produto.
+                            </p>
+                          ) : (
+                            <select
+                              className="w-full bg-brand-input border border-amber-500/40 rounded px-2 py-1 text-[9px] text-white outline-none focus:border-amber-500"
+                              value={item.selectedProjectId || ""}
+                              onChange={e => {
+                                const projId = e.target.value;
+                                setCart(prev => prev.map(c => {
+                                  if (c.id !== item.id) return c;
+                                  return { ...c, selectedProjectId: projId, selectedSerials: [] };
+                                }));
+                              }}
+                            >
+                              <option value="">Selecionar investidor...</option>
+                              {productProjectsMap[item.id].map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.investorName} — {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Seletor de Números de Série */}

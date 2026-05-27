@@ -194,7 +194,15 @@ export async function getProjectById(id: string) {
         importLots: {
           include: {
             documents: true,
-            products: true
+            products: true,
+            weapons: {
+              select: {
+                id: true,
+                currentStatus: true,
+                saleValue: true,
+                unitCost: true
+              }
+            }
           }
         }
       }
@@ -225,6 +233,7 @@ export async function createCycle(data: any) {
         cycleNumber: data.cycleNumber,
         cycleName: data.cycleName,
         status: "COMPLETED",
+        importLotId: data.importLotId || null,
         quantity: data.quantity,
         salePricePerUnit: data.salePricePerUnit,
         exchangeRateUsd: data.exchangeRateUsd,
@@ -257,6 +266,13 @@ export async function createCycle(data: any) {
         reinvestmentShare: data.reinvestmentShare || data.nextCycleCapital
       }
     });
+
+    if (data.importLotId) {
+      await prisma.importLot.update({
+        where: { id: data.importLotId },
+        data: { status: "LIQUIDADO" }
+      });
+    }
 
     revalidatePath(`/admin/projetos/${data.projectId}`);
     return { success: true, cycle };

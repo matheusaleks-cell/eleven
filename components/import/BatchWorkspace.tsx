@@ -457,6 +457,14 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
         {activeTab === "overview" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-6">
+              {batch.investmentProject && (
+                <div className="p-4 bg-brand-accent/5 border border-brand-accent/20 rounded-[4px] space-y-1">
+                  <p className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Projeto do Investidor Vinculado</p>
+                  <p className="text-sm font-bold text-white uppercase">
+                    {batch.investmentProject.investor?.name || "N/A"} — {batch.investmentProject.name}
+                  </p>
+                </div>
+              )}
               <div className="space-y-4">
                 <h4 className="text-xs font-bold text-brand-accent uppercase tracking-widest border-b border-brand-border pb-2">Informações Gerais</h4>
                 <div className="grid grid-cols-2 gap-4">

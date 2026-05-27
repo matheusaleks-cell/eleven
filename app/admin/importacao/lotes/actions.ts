@@ -17,6 +17,11 @@ export async function getImportLots() {
             customer: true
           }
         },
+        investmentProject: {
+          include: {
+            investor: true
+          }
+        },
         _count: {
           select: { products: true }
         }

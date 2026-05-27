@@ -10,10 +10,12 @@ import {
   User, Building2, Mail, Phone, MapPin, ShoppingBag,
   Clock, FileText, Download, ExternalLink, ShieldCheck,
   TrendingUp, CreditCard, Calendar, Plus, Printer,
-  FileText as FileIcon, Trash2, Upload, AlertTriangle, Edit2, Save, Search
+  FileText as FileIcon, Trash2, Upload, AlertTriangle, Edit2, Save, Search,
+  Pencil, Layers, Package, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { uploadCustomerDocument, getDocumentContent, deleteCustomerDocument, updateCustomer } from "@/app/admin/crm/clientes/actions";
+import { updateSalesOrder, deleteSalesOrder } from "@/app/admin/crm/vendas/actions";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { generateAnexoP } from "./AnexoPGenerator";
@@ -246,6 +248,63 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
   const [activeTab, setActiveTab] = useState<"overview" | "orders" | "docs">("overview");
   const [isSaleModalOpen, setIsSaleModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Edição de pedido (vendas)
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [editStatus, setEditStatus] = useState("");
+  const [editPayment, setEditPayment] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editTotal, setEditTotal] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletingOrder, setDeletingOrder] = useState(false);
+
+  const openEditOrder = (order: any) => {
+    setEditingOrder(order);
+    setEditStatus(order.status);
+    setEditPayment(order.paymentMethod || "PIX");
+    setEditNotes(order.notes || "");
+    setEditTotal(String(order.totalValue || ""));
+    setConfirmDelete(false);
+  };
+
+  const closeEditOrder = () => {
+    setEditingOrder(null);
+    setConfirmDelete(false);
+  };
+
+  const handleSaveEditOrder = async () => {
+    if (!editingOrder) return;
+    setSavingEdit(true);
+    const res = await updateSalesOrder(editingOrder.id, {
+      status: editStatus,
+      paymentMethod: editPayment,
+      notes: editNotes,
+      totalValue: parseFloat(editTotal) || editingOrder.totalValue,
+    });
+    setSavingEdit(false);
+    if (res.success) {
+      toast.success("Pedido atualizado com sucesso.");
+      closeEditOrder();
+      if (onRefresh) onRefresh();
+    } else {
+      toast.error(res.error || "Erro ao atualizar pedido.");
+    }
+  };
+
+  const handleDeleteOrder = async () => {
+    if (!editingOrder) return;
+    setDeletingOrder(true);
+    const res = await deleteSalesOrder(editingOrder.id);
+    setDeletingOrder(false);
+    if (res.success) {
+      toast.success("Pedido excluído e estoque restaurado.");
+      closeEditOrder();
+      if (onRefresh) onRefresh();
+    } else {
+      toast.error(res.error || "Erro ao excluir pedido.");
+    }
+  };
   const [editForm, setEditForm] = useState<any>({
     name: "", 
     type: "B2C", 
@@ -1035,13 +1094,29 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
                                <p className="text-[10px] text-brand-text-muted font-bold uppercase">{new Date(order.createdAt).toLocaleDateString('pt-BR')}</p>
                             </div>
                          </div>
-                         <div className="text-right">
-                            <p className="text-sm font-mono font-black text-white">
-                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalValue)}
-                            </p>
-                            <span className="text-[9px] font-black px-1.5 py-0.5 bg-brand-success/10 text-brand-success rounded border border-brand-success/20 uppercase">
-                              {order.status}
-                            </span>
+                         <div className="flex items-center gap-4">
+                            <div className="text-right">
+                               <p className="text-sm font-mono font-black text-white">
+                                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.totalValue)}
+                               </p>
+                               <span className={cn(
+                                 "text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider",
+                                 order.status === "PAGO" ? "bg-brand-success/10 text-brand-success border-brand-success/20" :
+                                 order.status === "PENDENTE" ? "bg-brand-warning/10 text-brand-warning border-brand-warning/20" :
+                                 "bg-brand-text-muted/10 text-brand-text-muted border-brand-text-muted/20"
+                               )}>
+                                 {order.status}
+                               </span>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="w-8 h-8 rounded p-0 hover:bg-brand-accent/10 text-brand-text-muted hover:text-brand-accent border border-transparent hover:border-brand-accent/20 transition-all"
+                              onClick={() => openEditOrder(order)}
+                              title="Editar Pedido"
+                            >
+                              <Pencil size={14} />
+                            </Button>
                          </div>
                       </div>
                    ))
@@ -1103,6 +1178,274 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
           setActiveTab("orders");
         }}
       />
+
+      {/* Edit Order Modal */}
+      {editingOrder && (() => {
+        const products = (() => {
+          try { return JSON.parse(editingOrder.products || "[]"); } catch { return []; }
+        })();
+        const fmtBRL = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+        
+        const getLotInfoLocal = (order: any) => {
+          const weapons: any[] = order.weapons || [];
+          if (weapons.length === 0) return null;
+          const investorWeapons = weapons.filter((w: any) => w.importLot?.investmentProjectId);
+          const ownWeapons = weapons.filter((w: any) => !w.importLot?.investmentProjectId);
+          if (investorWeapons.length > 0 && ownWeapons.length === 0) {
+            const project = investorWeapons[0].importLot?.investmentProject;
+            return { type: "INVESTIDOR", label: `${project?.investor?.name ?? "Investidor"} — ${project?.name ?? ""}` };
+          }
+          if (ownWeapons.length > 0 && investorWeapons.length === 0) {
+            return { type: "PROPRIO", label: "Lote Próprio" };
+          }
+          const project = investorWeapons[0]?.importLot?.investmentProject;
+          return { type: "MISTO", label: `Misto — Inv: ${investorWeapons.length} / Próprio: ${ownWeapons.length}${project ? ` (${project.investor?.name})` : ""}` };
+        };
+
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeEditOrder} />
+            <div
+              className="relative w-full animate-fade-in flex flex-col"
+              style={{
+                maxWidth: 580,
+                maxHeight: "90vh",
+                background: "#1A1A1A",
+                border: "1px solid #333",
+                borderTop: "3px solid #F5C400",
+                borderRadius: 4,
+                boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border shrink-0">
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-widest font-rajdhani">DETALHES DO PEDIDO</h3>
+                  <p className="text-[10px] text-brand-text-muted mt-0.5 font-mono">
+                    {editingOrder.orderNumber} · {new Date(editingOrder.createdAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })}
+                  </p>
+                </div>
+                <button onClick={closeEditOrder} className="text-brand-text-muted hover:text-white transition-colors">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* Info do pedido */}
+                <div className="px-5 pt-4 pb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <FileText size={11} className="text-brand-accent" />
+                    <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Informações do Pedido</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 p-3 bg-brand-surface/30 rounded border border-brand-border">
+                    <div>
+                      <p className="text-[8px] font-bold text-brand-text-muted uppercase tracking-widest mb-0.5">Cliente</p>
+                      <p className="text-xs font-bold text-white uppercase truncate">{customer.name || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-bold text-brand-text-muted uppercase tracking-widest mb-0.5">Documento</p>
+                      <p className="text-xs font-mono text-white">{customer.document || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[8px] font-bold text-brand-text-muted uppercase tracking-widest mb-0.5">Tipo</p>
+                      <p className="text-xs font-bold text-brand-text-secondary uppercase">{customer.type || "—"}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Produtos */}
+                {products.length > 0 && (
+                  <div className="px-5 pb-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Package size={11} className="text-brand-accent" />
+                      <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Itens do Pedido</span>
+                    </div>
+                    <div className="border border-brand-border rounded overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-brand-surface/50">
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest">Produto</th>
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest text-center">Qtd</th>
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest text-right">Unit.</th>
+                            <th className="px-3 py-2 text-[8px] font-black text-brand-text-muted uppercase tracking-widest text-right">Subtotal</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand-border/30">
+                          {products.map((item: any, i: number) => (
+                            <tr key={i} className="hover:bg-brand-surface/20">
+                              <td className="px-3 py-2">
+                                <p className="text-[11px] font-bold text-white uppercase">{item.name}</p>
+                                <p className="text-[9px] font-mono text-brand-text-muted">{item.sku}</p>
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <span className="text-xs font-bold text-white">{item.quantity}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <span className="text-xs font-mono text-brand-text-secondary">{fmtBRL(item.price)}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <span className="text-xs font-mono font-black text-brand-accent">{fmtBRL(item.price * item.quantity)}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Origem do Lote */}
+                {(() => {
+                  const lotInfo = getLotInfoLocal(editingOrder);
+                  if (!lotInfo) return null;
+                  const colorMap: Record<string, string> = {
+                    INVESTIDOR: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+                    PROPRIO: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+                    MISTO: "bg-brand-surface/30 text-brand-text-muted border-brand-border",
+                  };
+                  return (
+                    <div className="px-5 pb-3">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Layers size={11} className="text-brand-accent" />
+                        <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Origem do Lote</span>
+                      </div>
+                      <div className={cn("flex items-center gap-2 px-3 py-2 rounded border text-[10px] font-bold uppercase", colorMap[lotInfo.type])}>
+                        {lotInfo.type === "INVESTIDOR" && <User size={11} />}
+                        {lotInfo.type === "PROPRIO" && <Building2 size={11} />}
+                        {lotInfo.type === "MISTO" && <Layers size={11} />}
+                        {lotInfo.label}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Campos editáveis */}
+                <div className="px-5 pb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <CreditCard size={11} className="text-brand-accent" />
+                    <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Editar Pedido</span>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Status</label>
+                        <select
+                          className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                          value={editStatus}
+                          onChange={e => setEditStatus(e.target.value)}
+                          style={{ background: "#1A1A1A" }}
+                        >
+                          <option value="PAGO">PAGO / FINALIZADO</option>
+                          <option value="PENDENTE">PENDENTE</option>
+                          <option value="RASCUNHO">RASCUNHO</option>
+                          <option value="CANCELADO">CANCELADO</option>
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Forma de Pagamento</label>
+                        <select
+                          className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                          value={editPayment}
+                          onChange={e => setEditPayment(e.target.value)}
+                          style={{ background: "#1A1A1A" }}
+                        >
+                          <option value="PIX">PIX</option>
+                          <option value="CARTÃO CRÉDITO">CARTÃO CRÉDITO</option>
+                          <option value="BOLETO">BOLETO</option>
+                          <option value="DINHEIRO">DINHEIRO</option>
+                          <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
+                          <option value="CHEQUE">CHEQUE</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Valor Total (R$)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-brand-accent font-mono font-black outline-none focus:border-brand-accent"
+                        value={editTotal}
+                        onChange={e => setEditTotal(e.target.value)}
+                        style={{ background: "#1A1A1A" }}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Observações</label>
+                      <textarea
+                        className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                        rows={3}
+                        style={{ resize: "none", background: "#1A1A1A" }}
+                        value={editNotes}
+                        onChange={e => setEditNotes(e.target.value)}
+                        placeholder="Notas adicionais sobre o pedido..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-4 border-t border-brand-border shrink-0">
+                {confirmDelete ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3 p-3 bg-brand-danger/10 border border-brand-danger/30 rounded">
+                      <AlertTriangle size={16} className="text-brand-danger shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-black text-brand-danger uppercase">Confirmar Exclusão</p>
+                        <p className="text-[10px] text-brand-text-muted mt-0.5">
+                          O pedido será excluído e as armas vinculadas voltarão ao estoque. Esta ação não pode ser desfeita.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-border text-brand-text-muted hover:text-white transition-all bg-transparent"
+                      >
+                        Não, Voltar
+                      </button>
+                      <button
+                        onClick={handleDeleteOrder}
+                        disabled={deletingOrder}
+                        className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest"
+                        style={{ background: deletingOrder ? "#333" : "#dc2626", color: deletingOrder ? "#606060" : "#fff" }}
+                      >
+                        {deletingOrder ? "Excluindo..." : "Sim, Excluir Pedido"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setConfirmDelete(true)}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-danger/40 text-brand-danger hover:bg-brand-danger/10 transition-all bg-transparent"
+                    >
+                      <Trash2 size={13} /> Excluir
+                    </button>
+                    <button
+                      onClick={closeEditOrder}
+                      className="flex-1 py-2.5 rounded text-[10px] font-black uppercase tracking-widest border border-brand-border text-brand-text-muted hover:text-white transition-all bg-transparent"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSaveEditOrder}
+                      disabled={savingEdit}
+                      className="flex-[2] py-2.5 rounded text-[10px] font-black uppercase tracking-widest"
+                      style={{ background: savingEdit ? "#333" : "#F5C400", color: savingEdit ? "#606060" : "#1A1A1A" }}
+                    >
+                      {savingEdit ? "Salvando..." : "★ Salvar Alterações"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </Dialog>
 
   );

@@ -226,7 +226,7 @@ export default function VendasPage() {
         </div>
 
         {/* Table */}
-        <Card className="border-brand-border bg-brand-surface/10 overflow-hidden shadow-2xl">
+        <Card className="border-brand-border bg-brand-surface/10 shadow-2xl">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-brand-surface/50 border-b border-brand-border">
@@ -255,11 +255,70 @@ export default function VendasPage() {
                     <td className="px-6 py-4">
                       <span className="text-xs font-mono font-black text-white">{order.orderNumber}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+                    <td className="px-6 py-4 relative group">
+                      <div className="flex items-center gap-2 cursor-pointer">
                         <User size={14} className="text-brand-accent" />
-                        <span className="text-xs font-bold text-white uppercase">{order.customer?.name || "—"}</span>
+                        <span className="text-xs font-bold text-white uppercase hover:text-brand-accent transition-colors">
+                          {order.customer?.name || "—"}
+                        </span>
                       </div>
+
+                      {/* Card de Informações do Cliente (Hover) */}
+                      {order.customer && (
+                        <div className="absolute left-0 bottom-full mb-2 z-50 hidden group-hover:block w-[350px] p-5 bg-[#161616] border border-brand-border rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.8)] border-t-2 border-t-brand-accent animate-fade-in text-left">
+                          <p className="text-[10px] font-black text-brand-accent uppercase tracking-widest mb-3 border-b border-brand-border/40 pb-1.5 flex items-center gap-1.5">
+                            <User size={12} /> Cadastro do Cliente
+                          </p>
+                          <div className="space-y-2.5 text-xs text-white">
+                            <div className="flex justify-between items-start gap-3">
+                              <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider mt-0.5">Nome:</span>
+                              <span className="font-bold uppercase text-right max-w-[220px] text-white leading-tight">{order.customer.name}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-3">
+                              <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider">Documento:</span>
+                              <span className="font-mono text-brand-text-primary bg-brand-surface px-1.5 py-0.5 rounded border border-brand-border/40">{order.customer.cpfCnpj}</span>
+                            </div>
+                            <div className="flex justify-between items-center gap-3">
+                              <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider">Tipo:</span>
+                              <span className="font-bold text-brand-text-secondary uppercase text-[10px]">
+                                {order.customer.type === "B2B" ? "B2B / Pessoa Jurídica" : "B2C / Pessoa Física"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center gap-3">
+                              <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider">Telefone:</span>
+                              <span className="font-semibold text-white">{order.customer.phone || "—"}</span>
+                            </div>
+                            {order.customer.email && (
+                              <div className="flex justify-between items-center gap-3">
+                                <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider">Email:</span>
+                                <span className="truncate max-w-[220px] text-white font-medium">{order.customer.email}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between items-start gap-3">
+                              <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider">Localidade:</span>
+                              <span className="text-right text-white font-medium leading-tight">
+                                {order.customer.city ? `${order.customer.city} - ${order.customer.state}` : order.customer.state || "—"}
+                              </span>
+                            </div>
+                            {order.customer.crNumber && (
+                              <div className="flex justify-between items-center gap-3 border-t border-brand-border/30 pt-2.5 mt-2">
+                                <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider">Nº CR:</span>
+                                <span className="font-mono text-brand-accent font-bold text-xs bg-brand-accent/5 px-2 py-0.5 rounded border border-brand-accent/20">
+                                  {order.customer.crNumber}
+                                </span>
+                              </div>
+                            )}
+                            {order.customer.category && (
+                              <div className="flex justify-between items-center gap-3">
+                                <span className="text-brand-text-secondary font-semibold shrink-0 uppercase text-[9px] tracking-wider">Categoria:</span>
+                                <span className="font-bold uppercase text-[9px] bg-brand-accent/10 border border-brand-accent/20 px-2.5 py-0.5 rounded text-brand-accent">
+                                  {order.customer.category}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 text-[10px] font-bold text-brand-text-muted uppercase">

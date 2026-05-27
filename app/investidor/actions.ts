@@ -220,7 +220,14 @@ export async function getInvestorProjectDetails(id: string, email: string) {
       include: {
         cycles: {
           orderBy: { cycleNumber: "desc" }
-        }
+        },
+        importLots: {
+          include: {
+            documents: true,
+            products: true
+          }
+        },
+        documents: true
       }
     });
 
@@ -254,7 +261,9 @@ export async function getInvestorProjectDetails(id: string, email: string) {
         totalInvestorShare: totalReceived,
         currentCycle: project.cycles.length,
         max_cycles: project.maxCycles,
-        cycles: mappedCycles
+        cycles: mappedCycles,
+        importLots: project.importLots,
+        documents: project.documents
       }
     };
   } catch (error) {
@@ -268,7 +277,13 @@ export async function getCycleSales(cycleId: string, email: string) {
     const cycle = await prisma.cycle.findFirst({
       where: { id: cycleId, project: { investor: { email } } },
       include: {
-        project: true,
+        project: {
+          include: {
+            importLots: {
+              orderBy: { createdAt: "asc" }
+            }
+          }
+        },
         importLot: {
           include: {
             weapons: {
@@ -284,14 +299,36 @@ export async function getCycleSales(cycleId: string, email: string) {
       } as any
     }) as any;
 
-    if (!cycle || !cycle.importLot) return { success: false, sales: [] };
+    let importLot = cycle?.importLot;
+    if (cycle && !importLot && cycle.project?.importLots) {
+      const sortedLots = cycle.project.importLots;
+      const lotIndex = cycle.cycleNumber - 1;
+      if (lotIndex >= 0 && lotIndex < sortedLots.length) {
+        const fallbackLot = sortedLots[lotIndex];
+        importLot = await prisma.importLot.findUnique({
+          where: { id: fallbackLot.id },
+          include: {
+            weapons: {
+              where: { currentStatus: "VENDIDA" },
+              include: {
+                product: true,
+                customer: true,
+                salesOrder: true
+              }
+            }
+          }
+        });
+      }
+    }
+
+    if (!cycle || !importLot) return { success: false, sales: [] };
 
     const splitPct = cycle.project?.profitSplitPct || 0.50;
     const grossRev = cycle.grossRevenue || 1;
     const totalDeductions = (cycle.salesTax || 0) + (cycle.salesOperationalCost || 0);
     const deductionRate = totalDeductions / grossRev;
 
-    const sales = cycle.importLot.weapons.map((w: any) => {
+    const sales = importLot.weapons.map((w: any) => {
       const uCost = w.unitCost || (cycle.totalInvestment / (cycle.quantity || 1));
       const sValue = w.saleValue || 0;
       

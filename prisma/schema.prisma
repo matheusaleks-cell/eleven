@@ -109,6 +109,8 @@ model ImportLot {
   createdAt               DateTime  @default(now()) @map("created_at")
   updatedAt               DateTime  @updatedAt @map("updated_at")
 
+  @@index([investmentProjectId])
+  @@index([status])
   @@map("import_lots")
 }
 
@@ -197,6 +199,11 @@ model WeaponMap {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
+  @@index([productId])
+  @@index([importLotId])
+  @@index([customerId])
+  @@index([salesOrderId])
+  @@index([currentStatus])
   @@map("weapons_map")
 }
 
@@ -257,6 +264,8 @@ model Cycle {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
+  @@index([projectId])
+  @@index([importLotId])
   @@map("cycles")
 }
 
@@ -324,6 +333,8 @@ model Customer {
   createdAt       DateTime     @default(now()) @map("created_at")
   updatedAt       DateTime     @updatedAt @map("updated_at")
 
+  @@index([sellerId])
+  @@index([status])
   @@map("customers")
 }
 
@@ -348,6 +359,9 @@ model SalesOrder {
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
+  @@index([customerId])
+  @@index([sellerId])
+  @@index([status])
   @@map("sales_orders")
 }
 
@@ -424,6 +438,8 @@ model Lead {
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
+  @@index([assignedSellerId])
+  @@index([status])
   @@map("leads")
 }
 
@@ -465,6 +481,10 @@ model Document {
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
 
+  @@index([projectId])
+  @@index([customerId])
+  @@index([lotId])
+  @@index([userId])
   @@map("documents")
 }
 

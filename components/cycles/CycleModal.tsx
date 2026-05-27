@@ -182,7 +182,10 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
                 setInsurance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedInsuranceUsd));
 
                 const firstProd = activeLot.products?.[0];
-                const suggestedPrice = firstProd?.priceB2C || 6000;
+                const weaponsSold = activeLot.weapons?.filter((w: any) => w.currentStatus === "VENDIDA") || [];
+                const realQtySold = weaponsSold.length;
+                const realGrossRevenue = weaponsSold.reduce((acc: number, w: any) => acc + (w.saleValue || 0), 0);
+                const suggestedPrice = realQtySold > 0 ? (realGrossRevenue / realQtySold) : (firstProd?.priceB2C || 6000);
                 setPrice(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(suggestedPrice));
 
                 if (activeLot.batchCode) setProcNum(activeLot.batchCode);
@@ -297,7 +300,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
               Cancelar
             </button>
             <button
-              onClick={() => onSave({ qty, price, rate, fob, freight, insurance, result })}
+              onClick={() => onSave({ qty, price, rate, fob, freight, insurance, result, importLotId: activeLot?.id })}
               disabled={!canSave}
               className="px-6 py-2.5 rounded-[2px] font-bold uppercase text-sm"
               style={{

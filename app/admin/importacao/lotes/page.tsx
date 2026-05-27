@@ -180,6 +180,11 @@ export default function ImportBatchesPage() {
                            <div className="flex flex-col">
                              <h3 className="font-bold font-mono text-white text-lg leading-none">{lot.id}</h3>
                              <span className="text-[10px] text-brand-text-muted font-bold uppercase tracking-wider mt-1">{lot.supplier}</span>
+                             {lot.investmentProject && (
+                                <span className="text-[9px] text-brand-accent font-bold uppercase tracking-wider mt-1.5 border border-brand-accent/20 bg-brand-accent/5 px-1.5 py-0.5 rounded w-fit">
+                                  Investidor: {lot.investmentProject.investor?.name || "N/A"} · {lot.investmentProject.name}
+                                </span>
+                              )}
                            </div>
                         </div>
                         <span className={cn(
