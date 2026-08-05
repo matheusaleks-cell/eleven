@@ -275,19 +275,33 @@ p, span, label, input, textarea, select, td {
 
 /* Print Styles */
 @media print {
-  aside, nav, header, button, .no-print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+
+  /* Ocultar elementos de navegação, modais, overlays, toasters e botões */
+  aside, nav, header, button, .no-print, [role="dialog"], .fixed, .overlay, [data-sonner-toaster] {
     display: none !important;
   }
-  
-  body, html, #__next, [data-nextjs-scroll-focus-boundary] {
-    background: white !important;
-    color: black !important;
+
+  /* Forçar fundo branco em absolutamente todos os wrappers do DOM no Next.js */
+  html, body, #__next, main, div, section, article, [data-nextjs-scroll-focus-boundary] {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    box-shadow: none !important;
+  }
+
+  body, html {
     height: auto !important;
     overflow: visible !important;
     position: static !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  /* Override fixed height layouts */
+  /* Reset de layout e margens */
   div[style*="height: 100vh"], 
   div[style*="height:100vh"],
   div[style*="overflow: hidden"],
@@ -300,7 +314,7 @@ p, span, label, input, textarea, select, td {
 
   main {
     margin: 0 !important;
-    padding: 20px !important;
+    padding: 0 !important;
     width: 100% !important;
     display: block !important;
     overflow: visible !important;
@@ -311,43 +325,20 @@ p, span, label, input, textarea, select, td {
     margin-left: 0 !important;
   }
 
-  .grid {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 20px !important;
-  }
-
-  /* Force scrollable areas to be fully visible */
   .overflow-y-auto, 
   [style*="overflow-y: auto"],
   [style*="overflowY: auto"],
-  #report-container-inner {
+  .custom-scrollbar {
     max-height: none !important;
     height: auto !important;
     overflow: visible !important;
-    display: block !important;
   }
 
-  .card {
-    border: 1px solid #ddd !important;
-    background: white !important;
-    color: black !important;
-    margin-bottom: 20px !important;
-    break-inside: avoid !important;
-    box-shadow: none !important;
-    width: 100% !important;
+  .print-avoid-break {
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
 
-  .text-brand-accent {
-    color: #b38f00 !important; 
-  }
-
-  .bg-brand-surface, .bg-brand-input {
-    background: #f5f5f5 !important;
-    border: 1px solid #eee !important;
-  }
-
-  /* Recharts/SVG Fixes */
   svg {
     max-width: 100% !important;
   }

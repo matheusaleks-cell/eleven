@@ -14,6 +14,7 @@ import {
   type BatchProjection,
 } from "@/lib/calculations";
 
+import { Dialog } from "@/components/ui/Dialog";
 import {
   TrendingUp,
   Package,
@@ -28,6 +29,9 @@ import {
   FileDown,
   ChevronDown,
   ChevronUp,
+  Eye,
+  Printer,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -192,6 +196,189 @@ function BatchRow({ b, isLast }: { b: BatchProjection; isLast: boolean }) {
   );
 }
 
+// ─── report content ─────────────────────────────────────────────────────────
+
+function ReportContent({
+  investorName,
+  sessionName,
+  initialAporte,
+  totalInvestorEarnings,
+  globalROI,
+  totalFaturamento,
+  inputs,
+  breakdown,
+  batches,
+  totalCompanyEarnings,
+}: {
+  investorName: string;
+  sessionName: string;
+  initialAporte: number;
+  totalInvestorEarnings: number;
+  globalROI: number;
+  totalFaturamento: number;
+  inputs: SimulatorInputs;
+  breakdown: any;
+  batches: BatchProjection[];
+  totalCompanyEarnings: number;
+}) {
+  return (
+    <div className="bg-white text-slate-900 font-sans text-xs p-6 leading-relaxed w-full max-w-4xl mx-auto border border-slate-200 rounded flex flex-col justify-between min-h-[260mm]">
+      <div>
+        {/* Header da Proposta */}
+        <div className="flex justify-between items-end border-b-2 border-amber-500 pb-4 mb-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="bg-slate-900 text-amber-400 font-extrabold text-xs px-2.5 py-1 tracking-widest uppercase rounded">
+                ELEVEN FIREARMS
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 tracking-wider uppercase">
+                Inteligência em Operações Internacionais
+              </span>
+            </div>
+            <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight mt-2">
+              Simulação de Escalada de Lotes & Aportes
+            </h1>
+            {investorName && (
+              <p className="text-xs font-bold text-amber-800 mt-1">
+                Investidor / Proposta: <span className="text-slate-900 font-extrabold">{investorName}</span>
+              </p>
+            )}
+          </div>
+          <div className="text-right text-[9px] text-slate-500 leading-tight">
+            <p className="font-bold text-slate-800 uppercase">PROJEÇÃO ESTRATÉGICA</p>
+            <p>Emissão: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+            <p>Responsável: {sessionName || "Administrador"}</p>
+          </div>
+        </div>
+
+        {/* 3 KPIs Principais */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="border border-slate-300 bg-slate-50/80 rounded-lg p-3 text-center">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 block mb-1">Aporte Inicial (Lote 1)</span>
+            <span className="text-base font-extrabold text-slate-900 font-mono">{fmtBRL(initialAporte)}</span>
+          </div>
+          <div className="border border-amber-300 bg-amber-50/80 rounded-lg p-3 text-center">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-amber-800 block mb-1">Lucro Acumulado Investidor</span>
+            <span className="text-base font-extrabold text-amber-700 font-mono">{fmtBRL(totalInvestorEarnings)}</span>
+          </div>
+          <div className="border border-emerald-300 bg-emerald-50/80 rounded-lg p-3 text-center">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-800 block mb-1">ROI Global Acumulado</span>
+            <span className="text-base font-extrabold text-emerald-700 font-mono">+{fmtPct(globalROI)}</span>
+          </div>
+        </div>
+
+        {/* Operação & Custo Aduaneiro (2 Colunas Spaced Out) */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* Dados da Operação */}
+          <div className="border border-slate-300 rounded-lg overflow-hidden">
+            <div className="bg-slate-900 text-amber-400 font-bold px-3 py-1.5 text-[10px] uppercase tracking-wider">
+              1. Dados da Operação
+            </div>
+            <table className="w-full text-[9.5px] border-collapse">
+              <tbody>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">Qtd Inicial / Preço Venda:</td><td className="py-1.5 px-3 font-bold text-right">{inputs.initialQuantity} un. @ {fmtBRL(inputs.salePricePerUnit)}</td></tr>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">FOB / Frete Unitário:</td><td className="py-1.5 px-3 font-mono text-right">US$ {inputs.fobUnitUSD.toFixed(2)} / US$ {inputs.freightUnitUSD.toFixed(2)}</td></tr>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">Câmbio BRL/USD:</td><td className="py-1.5 px-3 font-mono text-right">R$ {inputs.exchangeRate.toFixed(2)}</td></tr>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">Impostos Venda / OpEx:</td><td className="py-1.5 px-3 font-mono text-right">{(inputs.salesTaxRate * 100).toFixed(1)}% / {(inputs.opExRate * 100).toFixed(1)}%</td></tr>
+                <tr><td className="py-1.5 px-3 text-slate-600">Split Investidor / Lotes:</td><td className="py-1.5 px-3 font-bold text-amber-800 text-right">{(inputs.investorSplitPct * 100).toFixed(0)}% ({inputs.numBatches} lotes)</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Custo Aduaneiro Lote 1 */}
+          <div className="border border-slate-300 rounded-lg overflow-hidden">
+            <div className="bg-slate-900 text-amber-400 font-bold px-3 py-1.5 text-[10px] uppercase tracking-wider">
+              2. Custo Aduaneiro Lote 1 (Cálculo Real)
+            </div>
+            <table className="w-full text-[9.5px] border-collapse">
+              <tbody>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">Valor Aduaneiro (CIF):</td><td className="py-1.5 px-3 font-mono text-right">{fmtBRL2(breakdown.va)}</td></tr>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">II / IPI:</td><td className="py-1.5 px-3 font-mono text-right">{fmtBRL2(breakdown.ii)} / {fmtBRL2(breakdown.ipi)}</td></tr>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">PIS / COFINS / Siscomex / Op:</td><td className="py-1.5 px-3 font-mono text-right">{fmtBRL2(breakdown.pis + breakdown.cofins + breakdown.siscomex + breakdown.custoOp)}</td></tr>
+                <tr className="border-b border-slate-200"><td className="py-1.5 px-3 text-slate-600">ICMS Importação (Gross-up):</td><td className="py-1.5 px-3 font-mono text-right">{fmtBRL2(breakdown.icms)}</td></tr>
+                <tr className="bg-slate-100 font-bold"><td className="py-1.5 px-3 text-slate-900 uppercase">Custo Total Aporte Lote 1:</td><td className="py-1.5 px-3 font-mono text-slate-900 text-right">{fmtBRL2(breakdown.total)}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Projeção Detalhada Lote a Lote */}
+        <div className="border border-slate-300 rounded-lg overflow-hidden mb-6">
+          <div className="bg-slate-900 text-amber-400 font-bold px-3 py-1.5 text-[10px] uppercase tracking-wider flex justify-between items-center">
+            <span>3. Projeção de Escalada Lote a Lote</span>
+            <span className="text-[8.5px] text-slate-300 font-normal">Reaplicação dos lucros no próximo lote</span>
+          </div>
+          <table className="w-full text-[9.5px] text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-100 border-b border-slate-300 font-bold text-slate-700 uppercase tracking-wider text-[8.5px]">
+                <th className="py-1.5 px-3 text-center">Lote</th>
+                <th className="py-1.5 px-3 text-right">Qtd</th>
+                <th className="py-1.5 px-3 text-right">Aporte Lote</th>
+                <th className="py-1.5 px-3 text-right">Faturamento</th>
+                <th className="py-1.5 px-3 text-right">Lucro Líquido</th>
+                <th className="py-1.5 px-3 text-right text-amber-800">Lucro Investidor</th>
+                <th className="py-1.5 px-3 text-center text-emerald-800">ROI Lote</th>
+                <th className="py-1.5 px-3 text-right">Cap. Próx. Lote</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batches.map((b) => (
+                <tr key={b.batchNumber} className={`border-b border-slate-200 ${b.batchNumber === 1 ? "bg-amber-50/70 font-bold" : ""}`}>
+                  <td className="py-1 px-3 text-center font-bold font-mono">#{b.batchNumber}</td>
+                  <td className="py-1 px-3 text-right font-mono">{b.quantity} un</td>
+                  <td className="py-1 px-3 text-right font-mono">{fmtBRL(b.totalImportCostBRL)}</td>
+                  <td className="py-1 px-3 text-right font-mono">{fmtBRL(b.grossRevenue)}</td>
+                  <td className="py-1 px-3 text-right font-mono">{fmtBRL(b.netLiquidProfit)}</td>
+                  <td className="py-1 px-3 text-right font-mono font-bold text-amber-800">{fmtBRL(b.investorShare)}</td>
+                  <td className="py-1 px-3 text-center font-mono font-bold text-emerald-700">{fmtPct(b.investorROI)}</td>
+                  <td className="py-1 px-3 text-right font-mono text-slate-600">{fmtBRL(b.nextBatchCapital)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Resumo Final Totais */}
+        <div className="border border-slate-300 bg-slate-50/80 rounded-lg p-3.5 mb-6">
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div>
+              <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Total Aporte L1</span>
+              <span className="text-sm font-bold font-mono text-slate-900">{fmtBRL(initialAporte)}</span>
+            </div>
+            <div>
+              <span className="text-[8.5px] font-bold uppercase tracking-wider text-amber-800 block mb-0.5">Lucro Acumulado Investidor</span>
+              <span className="text-sm font-extrabold font-mono text-amber-700">{fmtBRL(totalInvestorEarnings)} ({fmtPct(globalROI)} ROI)</span>
+            </div>
+            <div>
+              <span className="text-[8.5px] font-bold uppercase tracking-wider text-slate-500 block mb-0.5">Faturamento Bruto Projetado</span>
+              <span className="text-sm font-bold font-mono text-slate-900">{fmtBRL(totalFaturamento)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Rodapé com Assinaturas e Isenção */}
+      <div className="border-t border-slate-300 pt-3 mt-auto">
+        <p className="text-[8px] text-slate-500 text-justify leading-tight mb-4">
+          <strong>AVISO LEGAL:</strong> Projeção financeira estimativa baseada em parâmetros operacionais e tributários informados nesta data. Variações nas alíquotas de impostos, alterações cambiais (BRL/USD) e custos aduaneiros pontuais poderão alterar os resultados efetivos.
+        </p>
+
+        <div className="grid grid-cols-2 gap-12 pt-2">
+          <div className="text-center border-t border-slate-400 pt-1">
+            <p className="text-[9px] font-bold text-slate-800 uppercase">{investorName || "Investidor / Cliente"}</p>
+            <p className="text-[7.5px] text-slate-500">De acordo / Aceite da Proposta</p>
+          </div>
+          <div className="text-center border-t border-slate-400 pt-1">
+            <p className="text-[9px] font-bold text-slate-800 uppercase">Eleven Firearms</p>
+            <p className="text-[7.5px] text-slate-500">Diretoria de Operações e Investimentos</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
 // ─── page ──────────────────────────────────────────────────────────────────
 
 export default function SimuladorPage() {
@@ -205,6 +392,8 @@ export default function SimuladorPage() {
 
   const [inputs, setInputs] = useState<SimulatorInputs>(VR12_PUMP_PRESET);
   const [showTaxes, setShowTaxes] = useState(false);
+  const [investorName, setInvestorName] = useState("");
+  const [showReportModal, setShowReportModal] = useState(false);
 
   const set = useCallback(
     (key: keyof SimulatorInputs) => (v: number) =>
@@ -221,7 +410,16 @@ export default function SimuladorPage() {
   );
 
   const [isExporting, setIsExporting] = useState(false);
-  const handleExportPDF = () => window.print();
+
+  // Função direta e limpa para exportar PDF sem abrir modais sobrepostos
+  const handleExportPDF = () => {
+    setIsExporting(true);
+    toast.info("Gerando PDF da proposta...");
+    setTimeout(() => {
+      window.print();
+      setIsExporting(false);
+    }, 200);
+  };
 
   const totalInvestorEarnings = batches[batches.length - 1]?.cumulativeInvestorEarnings ?? 0;
   const totalCompanyEarnings = batches.reduce((acc, b) => acc + b.companyShare, 0);
@@ -237,7 +435,8 @@ export default function SimuladorPage() {
       userEmail={session.email}
       pageTitle="Simulador de Investimento"
     >
-      <div className="flex flex-col gap-8 pb-10 animate-fade-in">
+      {/* ── TELA PRINCIPAL DO SISTEMA (OCULTA NA IMPRESSÃO) ── */}
+      <div className="flex flex-col gap-8 pb-10 animate-fade-in no-print">
 
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -249,15 +448,23 @@ export default function SimuladorPage() {
               Projeção com cálculo real de importação (II · IPI · PIS · COFINS · ICMS gross-up).
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             <Button
               variant="secondary"
-              className="gap-2 text-xs border-brand-accent/20 text-brand-accent hover:bg-brand-accent/10"
+              className="gap-2 text-xs border-brand-accent/40 text-brand-accent hover:bg-brand-accent/10 font-bold"
+              onClick={() => setShowReportModal(true)}
+            >
+              <Eye size={14} />
+              VISUALIZAR RELATÓRIO PDF
+            </Button>
+            <Button
+              variant="primary"
+              className="gap-2 text-xs font-bold"
               onClick={handleExportPDF}
               disabled={isExporting}
             >
-              <FileDown size={14} />
-              EXPORTAR PDF
+              <Printer size={14} />
+              IMPRIMIR / EXPORTAR PDF
             </Button>
             <Button
               variant="secondary"
@@ -283,6 +490,26 @@ export default function SimuladorPage() {
 
               <div className="flex flex-col gap-4">
                 <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-brand-accent border-b border-brand-border pb-2">
+                  Dados da Proposta
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="invName" className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text-muted">
+                    Nome do Investidor / Proposta
+                  </label>
+                  <div className="flex items-center gap-2 bg-brand-input border border-brand-border rounded px-3 py-2 focus-within:border-brand-accent transition-all">
+                    <input
+                      id="invName"
+                      type="text"
+                      placeholder="Ex: Francisco Fiuza"
+                      value={investorName}
+                      onChange={(e) => setInvestorName(e.target.value)}
+                      className="bg-transparent text-white text-sm w-full outline-none"
+                    />
+                  </div>
+                  <p className="text-[10px] text-brand-text-muted leading-tight">Exibido no cabeçalho do relatório em PDF</p>
+                </div>
+
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-brand-accent border-b border-brand-border pb-2 mt-2">
                   Dados do Lote
                 </p>
                 <Field id="qty" label="Quantidade Inicial" value={inputs.initialQuantity}
@@ -372,10 +599,10 @@ export default function SimuladorPage() {
             </Card>
           </div>
 
-          {/* ── Resultados ── */}
+          {/* ── Resultados na Tela ── */}
           <div className="flex flex-col gap-6">
 
-            <div className="flex items-start gap-4 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 no-print">
+            <div className="flex items-start gap-4 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5">
               <div className="bg-yellow-500/10 p-2 rounded-full text-yellow-500 shrink-0">
                 <AlertTriangle size={20} />
               </div>
@@ -493,17 +720,72 @@ export default function SimuladorPage() {
               </div>
             </Card>
 
-            <div className="hidden print:block mt-10 border-t border-gray-200 pt-8 text-center">
-              <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-bold mb-2">
-                Eleven Firearms — Inteligência em Operações Internacionais
-              </p>
-              <p className="text-[9px] text-gray-400 italic leading-relaxed max-w-2xl mx-auto">
-                Este documento é uma projeção financeira. Os valores são estimativas — não representam promessa de lucro.
-                Gerado em {new Date().toLocaleDateString('pt-BR')} às {new Date().toLocaleTimeString('pt-BR')}.
-              </p>
-            </div>
           </div>
         </div>
+      </div>
+
+      {/* ── MODAL DE VISUALIZAÇÃO DO RELATÓRIO PDF NA TELA ── */}
+      <Dialog
+        isOpen={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        title="Visualização da Proposta (Relatório PDF)"
+        className="max-w-4xl bg-brand-surface border-brand-accent"
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between border-b border-brand-border pb-3 no-print">
+            <p className="text-xs text-brand-text-secondary">
+              Relatório executivo formatado para apresentação e exportação em PDF.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="primary"
+                className="gap-2 text-xs font-bold"
+                onClick={() => window.print()}
+              >
+                <Printer size={14} />
+                IMPRIMIR / SALVAR PDF
+              </Button>
+              <Button
+                variant="secondary"
+                className="text-xs"
+                onClick={() => setShowReportModal(false)}
+              >
+                FECHAR
+              </Button>
+            </div>
+          </div>
+
+          <div className="bg-white text-slate-900 rounded-md shadow-2xl p-4 overflow-y-auto max-h-[75vh] custom-scrollbar border border-slate-200">
+            <ReportContent
+              investorName={investorName}
+              sessionName={session.name}
+              initialAporte={initialAporte}
+              totalInvestorEarnings={totalInvestorEarnings}
+              globalROI={globalROI}
+              totalFaturamento={totalFaturamento}
+              inputs={inputs}
+              breakdown={breakdown}
+              batches={batches}
+              totalCompanyEarnings={totalCompanyEarnings}
+            />
+          </div>
+        </div>
+      </Dialog>
+
+      {/* ── SEÇÃO EXCLUSIVA PARA IMPRESSÃO IMPERCEPTÍVEL NA TELA ── */}
+      <div className="hidden print:block">
+        <ReportContent
+          investorName={investorName}
+          sessionName={session.name}
+          initialAporte={initialAporte}
+          totalInvestorEarnings={totalInvestorEarnings}
+          globalROI={globalROI}
+          totalFaturamento={totalFaturamento}
+          inputs={inputs}
+          breakdown={breakdown}
+          batches={batches}
+          totalCompanyEarnings={totalCompanyEarnings}
+        />
       </div>
     </DashboardLayout>
   );
