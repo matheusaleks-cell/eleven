@@ -275,6 +275,11 @@ p, span, label, input, textarea, select, td {
 
 /* Print Styles */
 @media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
   @page {
     size: A4 portrait;
     margin: 10mm 12mm 10mm 12mm;
@@ -285,8 +290,8 @@ p, span, label, input, textarea, select, td {
     display: none !important;
   }
 
-  /* Forçar fundo branco em absolutamente todos os wrappers do DOM no Next.js */
-  html, body, #__next, main, div, section, article, [data-nextjs-scroll-focus-boundary] {
+  /* Forçar fundo branco no documento base, sem zerar as cores dos componentes internos */
+  html, body, #__next, main {
     background: #ffffff !important;
     background-color: #ffffff !important;
     color: #111111 !important;
@@ -297,8 +302,6 @@ p, span, label, input, textarea, select, td {
     height: auto !important;
     overflow: visible !important;
     position: static !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
   }
 
   /* Reset de layout e margens */
