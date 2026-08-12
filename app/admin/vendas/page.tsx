@@ -53,10 +53,8 @@ export default function VendasPage() {
   const [session, setSession] = useState({ userName: "Administrador", userEmail: "", userId: "" });
   const [profileCustomer, setProfileCustomer] = useState<any>(null);
 
-  // Picker de cliente
-  const [showPicker, setShowPicker] = useState(false);
-  const [pickerSearch, setPickerSearch] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  // Modal de venda (estilo PDV: abre direto, cliente é escolhido dentro dele)
+  const [showSaleModal, setShowSaleModal] = useState(false);
 
   // Edição de pedido
   const [editingOrder, setEditingOrder] = useState<any>(null);
@@ -97,17 +95,6 @@ export default function VendasPage() {
     o.orderNumber.toLowerCase().includes(search.toLowerCase()) ||
     o.customer?.name?.toLowerCase().includes(search.toLowerCase())
   );
-
-  const filteredCustomers = customers.filter(c =>
-    c.name.toLowerCase().includes(pickerSearch.toLowerCase()) ||
-    c.cpfCnpj?.includes(pickerSearch)
-  );
-
-  const handlePickCustomer = (customer: any) => {
-    setSelectedCustomer(customer);
-    setShowPicker(false);
-    setPickerSearch("");
-  };
 
   const openEdit = (order: any) => {
     setEditingOrder(order);
@@ -208,7 +195,7 @@ export default function VendasPage() {
               <p className="text-[10px] text-brand-text-muted font-bold uppercase tracking-wider">Histórico centralizado de transações e pedidos diretos.</p>
             </div>
           </div>
-          <Button className="gap-2" onClick={() => setShowPicker(true)}>
+          <Button className="gap-2" onClick={() => setShowSaleModal(true)}>
             <Plus size={18} />
             NOVA VENDA
           </Button>
@@ -408,89 +395,13 @@ export default function VendasPage() {
         </Card>
       </div>
 
-      {/* Customer Picker Modal */}
-      {showPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setShowPicker(false); setPickerSearch(""); }} />
-          <div
-            className="relative w-full animate-fade-in"
-            style={{
-              maxWidth: 520,
-              maxHeight: "80vh",
-              background: "#1A1A1A",
-              border: "1px solid #333",
-              borderTop: "3px solid #F5C400",
-              borderRadius: 4,
-              display: "flex",
-              flexDirection: "column",
-              boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-            }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-brand-border shrink-0">
-              <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-widest font-rajdhani">SELECIONAR CLIENTE</h3>
-                <p className="text-[10px] text-brand-text-muted mt-0.5">Escolha o cliente para registrar a venda</p>
-              </div>
-              <button onClick={() => { setShowPicker(false); setPickerSearch(""); }} className="text-brand-text-muted hover:text-white transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Search */}
-            <div className="px-5 py-3 border-b border-brand-border shrink-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" size={15} />
-                <Input className="pl-9 h-10 text-sm" placeholder="Buscar por nome ou documento..." value={pickerSearch} onChange={e => setPickerSearch(e.target.value)} autoFocus />
-              </div>
-            </div>
-
-            {/* List */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1.5">
-              {filteredCustomers.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-[10px] font-bold text-brand-text-muted uppercase">
-                    {customers.length === 0 ? "Nenhum cliente cadastrado." : "Nenhum cliente encontrado."}
-                  </p>
-                </div>
-              ) : filteredCustomers.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => handlePickCustomer(c)}
-                  className="w-full text-left p-3 rounded border border-brand-border hover:border-brand-accent hover:bg-brand-accent/5 transition-all group"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center shrink-0">
-                      {c.type === "B2B" ? <Building2 size={14} className="text-brand-accent" /> : <User size={14} className="text-brand-accent" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-black text-white uppercase truncate group-hover:text-brand-accent transition-colors">{c.name}</p>
-                      <p className="text-[9px] text-brand-text-muted font-bold uppercase">
-                        {c.type === "B2B" ? "Pessoa Jurídica" : "Pessoa Física"} · {c.state || "—"}
-                      </p>
-                    </div>
-                    <span className="text-[9px] font-mono text-brand-text-muted shrink-0">{c.cpfCnpj}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            <div className="px-5 py-3 border-t border-brand-border shrink-0">
-              <p className="text-[10px] text-brand-text-muted text-center">
-                {filteredCustomers.length} cliente{filteredCustomers.length !== 1 ? "s" : ""} · <a href="/admin/crm/clientes" className="text-brand-accent hover:underline">Cadastrar novo cliente</a>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sale Modal */}
+      {/* Sale Modal (estilo PDV: abre sem cliente, seleção acontece dentro do modal) */}
       <SaleModal
-        isOpen={!!selectedCustomer}
-        onClose={() => setSelectedCustomer(null)}
-        customer={selectedCustomer}
+        isOpen={showSaleModal}
+        onClose={() => setShowSaleModal(false)}
+        customers={customers}
         sellerId={session.userId}
-        onSuccess={() => { setSelectedCustomer(null); loadData(); }}
+        onSuccess={() => { setShowSaleModal(false); loadData(); }}
       />
 
       {/* Edit Order Modal */}
