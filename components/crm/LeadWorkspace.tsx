@@ -332,9 +332,9 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
         }
       });
 
-      // O bloco fixo abaixo (fornecedor + anexos + declaracoes + assinatura) precisa de ~155mm;
-      // garante espaco suficiente antes de comecar, senao pula para uma nova pagina.
-      if (y > 297 - 155) {
+      // O bloco fixo abaixo (fornecedor + anexos + declaracoes + assinatura) consome
+      // exatamente 141mm de y (offsets fixos, texto das declaracoes nao varia) + margem de seguranca.
+      if (y > 297 - 141 - 10) {
         doc.addPage();
         y = 20;
       }
