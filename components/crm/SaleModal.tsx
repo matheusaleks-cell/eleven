@@ -9,7 +9,7 @@ import { jsPDF } from "jspdf";
 import { ShoppingBag, Plus, Trash2, DollarSign, Building2, User, FileText, Search, X } from "lucide-react";
 import { getProductsForSale, createDirectSale, getLotOptionsForCart, getAvailableSerialsForProduct } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
-import { fmtDate, loadImageAsDataURL } from "@/lib/pdf-helpers";
+import { fmtDate, loadImageAsDataURL, getMissingAnexoPSpecs } from "@/lib/pdf-helpers";
 import { toast } from "sonner";
 
 interface SaleModalProps {
@@ -258,6 +258,16 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
     if (cart.length === 0) {
       toast.error("Adicione itens ao carrinho para gerar o Anexo P.");
       return;
+    }
+
+    const itemsComSpecsFaltando = cart
+      .map(item => ({ item, faltando: getMissingAnexoPSpecs(products.find(p => p.id === item.id)) }))
+      .filter(({ faltando }) => faltando.length > 0);
+    if (itemsComSpecsFaltando.length > 0) {
+      const resumo = itemsComSpecsFaltando
+        .map(({ item, faltando }) => `${item.name}: ${faltando.join(", ")}`)
+        .join(" · ");
+      toast.warning(`Cadastro incompleto — sairá como "N/A" no Anexo P: ${resumo}`, { duration: 8000 });
     }
 
     setIsGeneratingAnexoP(true);

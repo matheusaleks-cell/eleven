@@ -18,3 +18,19 @@ export const loadImageAsDataURL = async (src: string): Promise<string> => {
     reader.readAsDataURL(blob);
   });
 };
+
+// Campos do Product usados no corpo do Anexo P — quando ausentes, o documento sai com "N/A".
+const ANEXO_P_SPEC_FIELDS: { key: string; label: string }[] = [
+  { key: "species", label: "Espécie" },
+  { key: "caliber", label: "Calibre" },
+  { key: "actionType", label: "Sistema de Ação" },
+  { key: "barrelLength", label: "Comprimento do Cano" },
+  { key: "finish", label: "Acabamento" },
+  { key: "originCountry", label: "País de Origem" },
+];
+
+// Retorna os rótulos das specs do produto que estão vazias/zeradas e por isso sairão como "N/A" no Anexo P.
+export const getMissingAnexoPSpecs = (product: Record<string, unknown> | undefined): string[] => {
+  if (!product) return ANEXO_P_SPEC_FIELDS.map(f => f.label);
+  return ANEXO_P_SPEC_FIELDS.filter(f => !product[f.key]).map(f => f.label);
+};

@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { jsPDF } from "jspdf";
-import { loadImageAsDataURL } from "@/lib/pdf-helpers";
+import { loadImageAsDataURL, getMissingAnexoPSpecs } from "@/lib/pdf-helpers";
 import { convertToOrder, convertToCustomer, addLeadLog } from "@/app/admin/crm/funil/actions";
 
 interface LeadWorkspaceProps {
@@ -254,6 +254,16 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
   };
 
   const handleGenerateAnexoP = async () => {
+    const itemsComSpecsFaltando = dealItems
+      .map(item => ({ item, faltando: getMissingAnexoPSpecs(products.find(p => p.id === item.product.id)) }))
+      .filter(({ faltando }) => faltando.length > 0);
+    if (itemsComSpecsFaltando.length > 0) {
+      const resumo = itemsComSpecsFaltando
+        .map(({ item, faltando }) => `${item.product.name}: ${faltando.join(", ")}`)
+        .join(" · ");
+      toast.warning(`Cadastro incompleto — sairá como "N/A" no Anexo P: ${resumo}`, { duration: 8000 });
+    }
+
     setIsGenerating(true);
     toast.info("Gerando Anexo P Oficial (PCE)...");
     
