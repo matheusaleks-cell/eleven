@@ -6,7 +6,17 @@ import { revalidatePath } from "next/cache";
 export async function getCustomersForSale() {
   try {
     const customers = await prisma.customer.findMany({
-      select: { id: true, name: true, type: true, cpfCnpj: true, state: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        cpfCnpj: true,
+        state: true,
+        crNumber: true,
+        crValidityDate: true,
+        phone: true,
+        email: true,
+      },
       orderBy: { name: "asc" },
     });
     return customers;
@@ -29,6 +39,12 @@ export async function getProductsForSale() {
         brand: true,
         model: true,
         stockAvailable: true,
+        species: true,
+        caliber: true,
+        actionType: true,
+        barrelLength: true,
+        finish: true,
+        originCountry: true,
       },
       orderBy: { commercialName: "asc" },
     });

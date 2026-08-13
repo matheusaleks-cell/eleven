@@ -18,7 +18,6 @@ import { uploadCustomerDocument, getDocumentContent, deleteCustomerDocument, upd
 import { updateSalesOrder, deleteSalesOrder } from "@/app/admin/crm/vendas/actions";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
-import { generateAnexoP } from "./AnexoPGenerator";
 import { SaleModal } from "./SaleModal";
 import { maskCPF, maskCNPJ, maskPhone } from "@/lib/masks";
 
