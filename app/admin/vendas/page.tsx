@@ -27,9 +27,10 @@ import {
   CreditCard,
   Layers,
 } from "lucide-react";
-import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder } from "@/app/admin/crm/vendas/actions";
+import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder, getSalesOrderPdfData } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { generateAnexoPPdf, generatePedidoPdf } from "@/lib/pdf-helpers";
 
 const cleanMoney = (val: string) => {
   const num = Number(val.replace(/\D/g, "")) / 100;
@@ -65,6 +66,9 @@ export default function VendasPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletingOrder, setDeletingOrder] = useState(false);
+
+  // Emissão de Anexo P / Pedido para um pedido já concluído (id do pedido + tipo em geração no momento)
+  const [generatingDoc, setGeneratingDoc] = useState<{ orderId: string; type: "anexo" | "pedido" } | null>(null);
 
   useEffect(() => {
     try {
@@ -145,6 +149,32 @@ export default function VendasPage() {
       loadData();
     } else {
       toast.error(res.error || "Erro ao excluir pedido.");
+    }
+  };
+
+  const handleGenerateOrderDoc = async (order: any, type: "anexo" | "pedido") => {
+    setGeneratingDoc({ orderId: order.id, type });
+    const loadToast = toast.loading(type === "anexo" ? "Gerando Anexo P..." : "Gerando Pedido...");
+    try {
+      const data = await getSalesOrderPdfData(order.id);
+      if (!data) {
+        toast.error("Erro ao carregar dados do pedido.");
+        return;
+      }
+      const fileNameBase = data.buyer.name || order.customer?.name || "Cliente";
+      if (type === "anexo") {
+        generateAnexoPPdf(data.buyer, data.items, fileNameBase);
+        toast.success("Anexo P gerado!");
+      } else {
+        await generatePedidoPdf(data.buyer, data.items, fileNameBase, "/logos/logo-alta-a.png");
+        toast.success("Pedido gerado!");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao gerar documento.");
+    } finally {
+      toast.dismiss(loadToast);
+      setGeneratingDoc(null);
     }
   };
 
@@ -372,12 +402,30 @@ export default function VendasPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => openEdit(order)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-wider border border-brand-border text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-all"
-                      >
-                        <Pencil size={11} /> Editar
-                      </button>
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleGenerateOrderDoc(order, "anexo")}
+                          disabled={!!generatingDoc}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-wider border border-brand-border text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-all disabled:opacity-50"
+                        >
+                          <FileText size={11} />
+                          {generatingDoc && generatingDoc.orderId === order.id && generatingDoc.type === "anexo" ? "Gerando..." : "Anexo P"}
+                        </button>
+                        <button
+                          onClick={() => handleGenerateOrderDoc(order, "pedido")}
+                          disabled={!!generatingDoc}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-wider border border-brand-border text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-all disabled:opacity-50"
+                        >
+                          <FileText size={11} />
+                          {generatingDoc && generatingDoc.orderId === order.id && generatingDoc.type === "pedido" ? "Gerando..." : "Pedido"}
+                        </button>
+                        <button
+                          onClick={() => openEdit(order)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[9px] font-black uppercase tracking-wider border border-brand-border text-brand-text-muted hover:text-brand-accent hover:border-brand-accent transition-all"
+                        >
+                          <Pencil size={11} /> Editar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))

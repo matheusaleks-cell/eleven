@@ -28,7 +28,7 @@ import { toast } from "sonner";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { jsPDF } from "jspdf";
-import { loadImageAsDataURL, getMissingAnexoPSpecs } from "@/lib/pdf-helpers";
+import { getMissingAnexoPSpecs, generateAnexoPPdf, generatePedidoPdf, AnexoPBuyer, AnexoPItemSpec } from "@/lib/pdf-helpers";
 import { convertToOrder, convertToCustomer, addLeadLog } from "@/app/admin/crm/funil/actions";
 
 interface LeadWorkspaceProps {
@@ -97,6 +97,7 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingPedido, setIsGeneratingPedido] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
 
@@ -253,7 +254,33 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
     }
   };
 
-  const handleGenerateAnexoP = async () => {
+  const buildAnexoPBuyer = (): AnexoPBuyer => ({
+    name: lead.name,
+    document: lead.taxId,
+    crNumber: lead.crNumber,
+    crValidity: lead.crValidity,
+    phone: lead.phone,
+    email: lead.email,
+  });
+
+  const buildAnexoPItems = (): AnexoPItemSpec[] =>
+    dealItems.map(item => {
+      const fullProduct = products.find(p => p.id === item.product.id) || {};
+      return {
+        quantity: item.quantity,
+        name: item.product.name,
+        species: fullProduct.species,
+        brand: fullProduct.brand,
+        model: fullProduct.model,
+        caliber: fullProduct.caliber || item.product.caliber,
+        actionType: fullProduct.actionType,
+        finish: fullProduct.finish,
+        originCountry: fullProduct.originCountry,
+        barrelLength: fullProduct.barrelLength,
+      };
+    });
+
+  const checkMissingSpecs = () => {
     const itemsComSpecsFaltando = dealItems
       .map(item => ({ item, faltando: getMissingAnexoPSpecs(products.find(p => p.id === item.product.id)) }))
       .filter(({ faltando }) => faltando.length > 0);
@@ -261,138 +288,19 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
       const resumo = itemsComSpecsFaltando
         .map(({ item, faltando }) => `${item.product.name}: ${faltando.join(", ")}`)
         .join(" · ");
-      toast.warning(`Cadastro incompleto — sairá como "N/A" no Anexo P: ${resumo}`, { duration: 8000 });
+      toast.warning(`Cadastro incompleto — sairá como "N/A" no documento: ${resumo}`, { duration: 8000 });
     }
+  };
+
+  const handleGenerateAnexoP = async () => {
+    checkMissingSpecs();
 
     setIsGenerating(true);
     toast.info("Gerando Anexo P Oficial (PCE)...");
-    
+
     try {
-      const doc = new jsPDF();
-      const timestamp = new Date().toLocaleDateString('pt-BR');
-      
-      // LOGO / CABEÇALHO ELEVEN
-      doc.setFillColor(15, 15, 15);
-      doc.rect(0, 0, 210, 35, 'F');
+      generateAnexoPPdf(buildAnexoPBuyer(), buildAnexoPItems(), lead.name);
 
-      // Centralizando o logo no cabeçalho (35mm de altura)
-      // Ajustamos a largura e altura para não ficar "apertado" (proporção sugerida 60x20 ou similar)
-      const logoW = 60;
-      const logoH = 25;
-      const logoData = await loadImageAsDataURL("/logos/logo-alta-branco.png");
-      doc.addImage(logoData, 'PNG', (210 - logoW) / 2, 5, logoW, logoH, undefined, 'MEDIUM');
-      
-      // TÍTULO DO DOCUMENTO
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.text("ANEXO P", 105, 45, { align: 'center' });
-      doc.setFontSize(9);
-      const title = "PEDIDO DE AQUISIÇÃO DE PCE (tipo arma de fogo e munição) NA INDÚSTRIA PELO COMÉRCIO VAREJISTA DE ARMAS E MUNIÇÕES";
-      const splitTitle = doc.splitTextToSize(title, 180);
-      doc.text(splitTitle, 105, 52, { align: 'center' });
-
-      // ADQUIRENTE
-      doc.setFillColor(240, 240, 240);
-      doc.rect(10, 65, 190, 7, 'F');
-      doc.text("ADQUIRENTE", 12, 70);
-      
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(`Razão social: ${lead.name.toUpperCase()}`, 10, 78);
-      doc.text(`CNPJ: ${lead.taxId || "N/A"}`, 130, 78);
-      doc.text(`Nº CR: ${lead.crNumber || "N/A"}`, 10, 85);
-      doc.text(`Validade do CR: ${lead.crValidity || "N/A"}`, 130, 85);
-      doc.text(`Telefone/e-mail: ${lead.phone || "N/A"} / ${lead.email || "N/A"}`, 10, 92);
-
-      // PRODUTOS E QUANTIDADES
-      doc.setFont("helvetica", "bold");
-      doc.setFillColor(240, 240, 240);
-      doc.rect(10, 100, 190, 7, 'F');
-      doc.text("PRODUTOS E QUANTIDADES A SEREM ADQUIRIDOS", 12, 105);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "italic");
-      doc.text("(conforme lista de PCE Port 118-COLOG/2019)", 198, 105, { align: 'right' });
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-
-      let y = 112;
-      dealItems.forEach((item, index) => {
-        const fullProduct = products.find(p => p.id === item.product.id) || {};
-        const especie = fullProduct.species || "N/A";
-        const marca = fullProduct.brand || item.product.name.split(' ')[0] || "N/A";
-        const modelo = fullProduct.model || item.product.name.split(' ').slice(1).join(' ') || "N/A";
-        const calibre = fullProduct.caliber || item.product.caliber || "N/A";
-        const acao = fullProduct.actionType || "N/A";
-        const acabamento = fullProduct.finish || "N/A";
-        const origem = fullProduct.originCountry || "N/A";
-        const cano = fullProduct.barrelLength
-          ? `${fullProduct.barrelLength}" (${(fullProduct.barrelLength * 25.4).toFixed(2)}mm)`
-          : "N/A";
-
-        const productText = `(${index + 1}.1.0020) ${item.quantity.toString().padStart(2, '0')} (unidades) Espécie: ${especie} - Marca: ${marca} - Modelo: ${modelo} - Calibre: ${calibre} - Comprimento do Cano: ${cano} - Quantidade de cano: 01 - Tipo de alma: Lisa - Funcionamento: Repetição - Sistema de Ação: ${acao} - Quantidade de carregadores: N/A - Acabamento: ${acabamento} - País de Origem: ${origem} - Arma de repetição de uso permitido.`;
-        const splitProduct = doc.splitTextToSize(productText, 185);
-        doc.setFont("helvetica", "normal");
-        doc.text(splitProduct, 10, y);
-        y += (splitProduct.length * 4) + 5;
-
-        if (y > 260 && index < dealItems.length - 1) {
-          doc.addPage();
-          y = 20;
-        }
-      });
-
-      // O bloco fixo abaixo (fornecedor + anexos + declaracoes + assinatura) consome
-      // exatamente 141mm de y (offsets fixos, texto das declaracoes nao varia) + margem de seguranca.
-      if (y > 297 - 141 - 10) {
-        doc.addPage();
-        y = 20;
-      }
-
-      // FORNECEDOR
-      doc.setFont("helvetica", "bold");
-      doc.setFillColor(240, 240, 240);
-      doc.rect(10, y, 190, 7, 'F');
-      doc.text("FORNECEDOR", 12, y + 5);
-      y += 12;
-      doc.setFont("helvetica", "normal");
-      doc.text("Razão social: ELEVEN FIREARMS REPRESENTAÇÃO LTDA", 10, y);
-      doc.text("CNPJ: 36.312.424/0001-39", 130, y);
-      y += 7;
-      doc.text("Nº CR: 550771", 10, y);
-      doc.text("Validade do CR: 13/07/2027", 130, y);
-
-      // ANEXOS E DECLARAÇÕES
-      y += 15;
-      doc.setFont("helvetica", "bold");
-      doc.text("ANEXOS", 10, y);
-      doc.setFont("helvetica", "normal");
-      doc.text("- cópia de Registro no Exército e suas apostilas", 15, y + 6);
-      doc.text("- comprovante de pagamento da taxa de aquisição de PCE", 15, y + 12);
-      doc.text("- outros:", 15, y + 18);
-
-      y += 35;
-      const dec1 = "DECLARO que a aquisição solicitada não ultrapassa os quantitativos máximos autorizados para depósito previstos na apostila ao meu Registro no Exército.";
-      const splitDec1 = doc.splitTextToSize(dec1, 185);
-      doc.text(splitDec1, 10, y);
-      
-      y += 12;
-      const dec2 = "DECLARO, ainda, sob as penas da lei, a veracidade das informações prestadas e responsabilizo-me pela destinação do produto adquirido, sem prejuízo das possíveis sanções administrativas.";
-      const splitDec2 = doc.splitTextToSize(dec2, 185);
-      doc.text(splitDec2, 10, y);
-
-      // ASSINATURA
-      y += 30;
-      doc.text(`SÃO PAULO/ SP, ${timestamp}`, 105, y, { align: 'center' });
-      
-      y += 25;
-      doc.line(60, y, 150, y);
-      y += 5;
-      doc.setFont("helvetica", "bold");
-      doc.text(lead.name.toUpperCase(), 105, y, { align: 'center' });
-      
-      doc.save(`Anexo_P_${lead.name.replace(/\s+/g, '_')}.pdf`);
-      
       await addLeadLog(lead.id, "Anexo P Oficial (PCE) gerado via sistema", lead.assignedTo || "Admin Eleven");
 
       setTimeout(() => {
@@ -403,6 +311,28 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
       console.error(error);
       setIsGenerating(false);
       toast.error("Erro ao gerar Anexo P.");
+    }
+  };
+
+  const handleGeneratePedido = async () => {
+    checkMissingSpecs();
+
+    setIsGeneratingPedido(true);
+    toast.info("Gerando Pedido...");
+
+    try {
+      await generatePedidoPdf(buildAnexoPBuyer(), buildAnexoPItems(), lead.name, "/logos/logo-alta-branco.png");
+
+      await addLeadLog(lead.id, "Pedido gerado via sistema", lead.assignedTo || "Admin Eleven");
+
+      setTimeout(() => {
+        setIsGeneratingPedido(false);
+        toast.success("Pedido gerado!");
+      }, 1000);
+    } catch (error) {
+      console.error(error);
+      setIsGeneratingPedido(false);
+      toast.error("Erro ao gerar Pedido.");
     }
   };
 
@@ -636,12 +566,20 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
                  >
                     {isGenerating ? "PROCESSANDO..." : <><FileText size={16} /> GERAR PROPOSTA (B2C)</>}
                  </Button>
-                 <Button 
-                  className="h-auto py-3 px-6 gap-3 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl border border-brand-accent/50 bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/40" 
+                 <Button
+                  className="h-auto py-3 px-6 gap-3 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl border border-brand-accent/50 bg-brand-accent/20 text-brand-accent hover:bg-brand-accent/40"
                   onClick={handleGenerateAnexoP}
                   disabled={isGenerating}
                  >
                     {isGenerating ? "PROCESSANDO..." : <><FileText size={16} /> GERAR ANEXO P (B2B)</>}
+                 </Button>
+                 <Button
+                  variant="secondary"
+                  className="h-auto py-3 px-6 gap-3 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl"
+                  onClick={handleGeneratePedido}
+                  disabled={isGeneratingPedido}
+                 >
+                    {isGeneratingPedido ? "PROCESSANDO..." : <><FileText size={16} /> GERAR PEDIDO</>}
                  </Button>
                </div>
             </div>

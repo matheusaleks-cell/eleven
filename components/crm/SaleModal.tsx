@@ -5,11 +5,10 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import { jsPDF } from "jspdf";
 import { ShoppingBag, Plus, Trash2, DollarSign, Building2, User, FileText, Search, X } from "lucide-react";
 import { getProductsForSale, createDirectSale, getLotOptionsForCart, getAvailableSerialsForProduct } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
-import { fmtDate, loadImageAsDataURL, getMissingAnexoPSpecs } from "@/lib/pdf-helpers";
+import { fmtDate, getMissingAnexoPSpecs, generateAnexoPPdf, generatePedidoPdf, AnexoPBuyer, AnexoPItemSpec } from "@/lib/pdf-helpers";
 import { toast } from "sonner";
 
 interface SaleModalProps {
@@ -71,6 +70,7 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [isGeneratingAnexoP, setIsGeneratingAnexoP] = useState(false);
+  const [isGeneratingPedido, setIsGeneratingPedido] = useState(false);
   const [search, setSearch] = useState("");
 
   // Cliente: travado quando `fixedCustomer` é informado (venda a partir do perfil do cliente);
@@ -250,6 +250,44 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
     }
   };
 
+  const buildAnexoPBuyer = (): AnexoPBuyer => ({
+    name: customer?.name,
+    document: customer?.document || customer?.cpfCnpj,
+    crNumber: customer?.crNumber || customer?.cr,
+    crValidity: fmtDate(customer?.crValidityDate),
+    phone: customer?.phone,
+    email: customer?.email,
+  });
+
+  const buildAnexoPItems = (): AnexoPItemSpec[] =>
+    cart.map(item => {
+      const fullProduct = products.find(p => p.id === item.id) || {};
+      return {
+        quantity: item.quantity,
+        name: item.name,
+        species: fullProduct.species,
+        brand: fullProduct.brand,
+        model: fullProduct.model,
+        caliber: fullProduct.caliber,
+        actionType: fullProduct.actionType,
+        finish: fullProduct.finish,
+        originCountry: fullProduct.originCountry,
+        barrelLength: fullProduct.barrelLength,
+      };
+    });
+
+  const checkMissingSpecs = () => {
+    const itemsComSpecsFaltando = cart
+      .map(item => ({ item, faltando: getMissingAnexoPSpecs(products.find(p => p.id === item.id)) }))
+      .filter(({ faltando }) => faltando.length > 0);
+    if (itemsComSpecsFaltando.length > 0) {
+      const resumo = itemsComSpecsFaltando
+        .map(({ item, faltando }) => `${item.name}: ${faltando.join(", ")}`)
+        .join(" · ");
+      toast.warning(`Cadastro incompleto — sairá como "N/A" no documento: ${resumo}`, { duration: 8000 });
+    }
+  };
+
   const handleGenerateAnexoP = async () => {
     if (!customer) {
       toast.error("Selecione um cliente antes de gerar o Anexo P.");
@@ -260,136 +298,14 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
       return;
     }
 
-    const itemsComSpecsFaltando = cart
-      .map(item => ({ item, faltando: getMissingAnexoPSpecs(products.find(p => p.id === item.id)) }))
-      .filter(({ faltando }) => faltando.length > 0);
-    if (itemsComSpecsFaltando.length > 0) {
-      const resumo = itemsComSpecsFaltando
-        .map(({ item, faltando }) => `${item.name}: ${faltando.join(", ")}`)
-        .join(" · ");
-      toast.warning(`Cadastro incompleto — sairá como "N/A" no Anexo P: ${resumo}`, { duration: 8000 });
-    }
+    checkMissingSpecs();
 
     setIsGeneratingAnexoP(true);
     toast.info("Gerando Anexo P Oficial (PCE)...");
-    
+
     try {
-      const doc = new jsPDF();
-      const timestamp = new Date().toLocaleDateString('pt-BR');
-      
-      doc.setFillColor(15, 15, 15);
-      doc.rect(0, 0, 210, 35, 'F');
+      generateAnexoPPdf(buildAnexoPBuyer(), buildAnexoPItems(), customer?.name || "Cliente");
 
-      const logoW = 60;
-      const logoH = 25;
-      const logoData = await loadImageAsDataURL("/logos/logo-alta-a.png");
-      doc.addImage(logoData, 'PNG', (210 - logoW) / 2, 5, logoW, logoH, undefined, 'MEDIUM');
-
-      doc.setTextColor(0, 0, 0);
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "bold");
-      doc.text("ANEXO P", 105, 45, { align: 'center' });
-      doc.setFontSize(9);
-      const title = "PEDIDO DE AQUISIÇÃO DE PCE (tipo arma de fogo e munição) NA INDÚSTRIA PELO COMÉRCIO VAREJISTA DE ARMAS E MUNIÇÕES";
-      const splitTitle = doc.splitTextToSize(title, 180);
-      doc.text(splitTitle, 105, 52, { align: 'center' });
-
-      doc.setFillColor(240, 240, 240);
-      doc.rect(10, 65, 190, 7, 'F');
-      doc.text("ADQUIRENTE", 12, 70);
-      
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(`Razão social: ${(customer?.name || "CLIENTE NÃO INFORMADO").toUpperCase()}`, 10, 78);
-      doc.text(`CNPJ: ${customer?.document || customer?.cpfCnpj || "N/A"}`, 130, 78);
-      doc.text(`Nº CR: ${customer?.crNumber || customer?.cr || "N/A"}`, 10, 85);
-      doc.text(`Validade do CR: ${fmtDate(customer?.crValidityDate)}`, 130, 85);
-      doc.text(`Telefone/e-mail: ${customer?.phone || "N/A"} / ${customer?.email || "N/A"}`, 10, 92);
-
-      doc.setFont("helvetica", "bold");
-      doc.setFillColor(240, 240, 240);
-      doc.rect(10, 100, 190, 7, 'F');
-      doc.text("PRODUTOS E QUANTIDADES A SEREM ADQUIRIDOS", 12, 105);
-      doc.setFontSize(7);
-      doc.setFont("helvetica", "italic");
-      doc.text("(conforme lista de PCE Port 118-COLOG/2019)", 198, 105, { align: 'right' });
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "bold");
-
-      let y = 112;
-      cart.forEach((item, index) => {
-        const fullProduct = products.find(p => p.id === item.id) || {};
-        const especie = fullProduct.species || "N/A";
-        const marca = fullProduct.brand || item.name.split(' ')[0] || "N/A";
-        const modelo = fullProduct.model || item.name.split(' ').slice(1).join(' ') || "N/A";
-        const calibre = fullProduct.caliber || "N/A";
-        const acao = fullProduct.actionType || "N/A";
-        const acabamento = fullProduct.finish || "N/A";
-        const origem = fullProduct.originCountry || "N/A";
-        const cano = fullProduct.barrelLength
-          ? `${fullProduct.barrelLength}" (${(fullProduct.barrelLength * 25.4).toFixed(2)}mm)`
-          : "N/A";
-
-        const productText = `(${index + 1}.1.0020) ${item.quantity.toString().padStart(2, '0')} (unidades) Espécie: ${especie} - Marca: ${marca} - Modelo: ${modelo} - Calibre: ${calibre} - Comprimento do Cano: ${cano} - Quantidade de cano: 01 - Tipo de alma: Lisa - Funcionamento: Repetição - Sistema de Ação: ${acao} - Quantidade de carregadores: N/A - Acabamento: ${acabamento} - País de Origem: ${origem} - Arma de repetição de uso permitido.`;
-        const splitProduct = doc.splitTextToSize(productText, 185);
-        doc.setFont("helvetica", "normal");
-        doc.text(splitProduct, 10, y);
-        y += (splitProduct.length * 4) + 5;
-
-        if (y > 260 && index < cart.length - 1) {
-          doc.addPage();
-          y = 20;
-        }
-      });
-
-      // O bloco fixo abaixo (fornecedor + anexos + declaracoes + assinatura) consome
-      // exatamente 141mm de y (offsets fixos, texto das declaracoes nao varia) + margem de seguranca.
-      if (y > 297 - 141 - 10) {
-        doc.addPage();
-        y = 20;
-      }
-
-      doc.setFont("helvetica", "bold");
-      doc.setFillColor(240, 240, 240);
-      doc.rect(10, y, 190, 7, 'F');
-      doc.text("FORNECEDOR", 12, y + 5);
-      y += 12;
-      doc.setFont("helvetica", "normal");
-      doc.text("Razão social: ELEVEN FIREARMS REPRESENTAÇÃO LTDA", 10, y);
-      doc.text("CNPJ: 36.312.424/0001-39", 130, y);
-      y += 7;
-      doc.text("Nº CR: 550771", 10, y);
-      doc.text("Validade do CR: 13/07/2027", 130, y);
-
-      y += 15;
-      doc.setFont("helvetica", "bold");
-      doc.text("ANEXOS", 10, y);
-      doc.setFont("helvetica", "normal");
-      doc.text("- cópia de Registro no Exército e suas apostilas", 15, y + 6);
-      doc.text("- comprovante de pagamento da taxa de aquisição de PCE", 15, y + 12);
-      doc.text("- outros:", 15, y + 18);
-
-      y += 35;
-      const dec1 = "DECLARO que a aquisição solicitada não ultrapassa os quantitativos máximos autorizados para depósito previstos na apostila ao meu Registro no Exército.";
-      const splitDec1 = doc.splitTextToSize(dec1, 185);
-      doc.text(splitDec1, 10, y);
-      
-      y += 12;
-      const dec2 = "DECLARO, ainda, sob as penas da lei, a veracidade das informações prestadas e responsabilizo-me pela destinação do produto adquirido, sem prejuízo das possíveis sanções administrativas.";
-      const splitDec2 = doc.splitTextToSize(dec2, 185);
-      doc.text(splitDec2, 10, y);
-
-      y += 30;
-      doc.text(`SÃO PAULO/ SP, ${timestamp}`, 105, y, { align: 'center' });
-      
-      y += 25;
-      doc.line(60, y, 150, y);
-      y += 5;
-      doc.setFont("helvetica", "bold");
-      doc.text((customer?.name || "CLIENTE NÃO INFORMADO").toUpperCase(), 105, y, { align: 'center' });
-      
-      doc.save(`Anexo_P_${(customer?.name || "Cliente").replace(/\s+/g, '_')}.pdf`);
-      
       setTimeout(() => {
         setIsGeneratingAnexoP(false);
         toast.success("Anexo P Oficial gerado!");
@@ -398,6 +314,35 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
       console.error(error);
       setIsGeneratingAnexoP(false);
       toast.error("Erro ao gerar Anexo P.");
+    }
+  };
+
+  const handleGeneratePedido = async () => {
+    if (!customer) {
+      toast.error("Selecione um cliente antes de gerar o Pedido.");
+      return;
+    }
+    if (cart.length === 0) {
+      toast.error("Adicione itens ao carrinho para gerar o Pedido.");
+      return;
+    }
+
+    checkMissingSpecs();
+
+    setIsGeneratingPedido(true);
+    toast.info("Gerando Pedido...");
+
+    try {
+      await generatePedidoPdf(buildAnexoPBuyer(), buildAnexoPItems(), customer?.name || "Cliente", "/logos/logo-alta-a.png");
+
+      setTimeout(() => {
+        setIsGeneratingPedido(false);
+        toast.success("Pedido gerado!");
+      }, 1000);
+    } catch (error) {
+      console.error(error);
+      setIsGeneratingPedido(false);
+      toast.error("Erro ao gerar Pedido.");
     }
   };
 
@@ -747,6 +692,14 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
               className="flex-1 gap-2 text-[10px] font-black tracking-widest border-brand-accent/30 text-brand-accent hover:bg-brand-accent hover:text-white"
             >
               {isGeneratingAnexoP ? "GERANDO..." : <><FileText size={14} /> ANEXO P</>}
+            </Button>
+            <Button
+              onClick={handleGeneratePedido}
+              disabled={isGeneratingPedido || cart.length === 0 || !customer}
+              variant="secondary"
+              className="flex-1 gap-2 text-[10px] font-black tracking-widest border-brand-accent/30 text-brand-accent hover:bg-brand-accent hover:text-white"
+            >
+              {isGeneratingPedido ? "GERANDO..." : <><FileText size={14} /> PEDIDO</>}
             </Button>
             <Button
               onClick={handleSave}

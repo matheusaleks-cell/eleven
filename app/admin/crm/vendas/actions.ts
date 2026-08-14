@@ -123,6 +123,66 @@ export async function getSalesOrders() {
   }
 }
 
+// Dados para gerar o Anexo P / Pedido de um pedido JÁ CONCLUÍDO. O snapshot salvo em `products`
+// (SalesOrder.products) só tem nome/sku/preço/quantidade — as specs técnicas (espécie, calibre etc.)
+// usadas no documento vêm sempre do cadastro atual do Product, buscado aqui por id.
+export async function getSalesOrderPdfData(orderId: string) {
+  try {
+    const order = await prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      include: { customer: true },
+    });
+    if (!order) return null;
+
+    const items: { id: string; name: string; quantity: number }[] = JSON.parse(order.products || "[]");
+    const productIds = items.map(i => i.id);
+    const productSpecs = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: {
+        id: true,
+        species: true,
+        brand: true,
+        model: true,
+        caliber: true,
+        actionType: true,
+        finish: true,
+        originCountry: true,
+        barrelLength: true,
+      },
+    });
+    const specsById = new Map(productSpecs.map(p => [p.id, p]));
+
+    return {
+      buyer: {
+        name: order.customer.name,
+        document: order.customer.cpfCnpj,
+        crNumber: order.customer.crNumber,
+        crValidity: order.customer.crValidityDate ? order.customer.crValidityDate.toLocaleDateString("pt-BR") : null,
+        phone: order.customer.phone,
+        email: order.customer.email,
+      },
+      items: items.map(item => {
+        const specs = specsById.get(item.id);
+        return {
+          quantity: item.quantity,
+          name: item.name,
+          species: specs?.species,
+          brand: specs?.brand,
+          model: specs?.model,
+          caliber: specs?.caliber,
+          actionType: specs?.actionType,
+          finish: specs?.finish,
+          originCountry: specs?.originCountry,
+          barrelLength: specs?.barrelLength,
+        };
+      }),
+    };
+  } catch (error) {
+    console.error("Erro ao buscar dados do pedido para o PDF:", error);
+    return null;
+  }
+}
+
 export async function getLotOptionsForCart(productIds: string[]) {
   try {
     if (productIds.length === 0) return [];
