@@ -1,53 +1,22 @@
-"use client";
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
-  const [authorized, setAuthorized] = useState(false);
+  const headersList = await headers();
+  const pathname = headersList.get("x-pathname") || "";
 
-  useEffect(() => {
-    // Se estivermos na página de login, não precisamos validar
-    if (window.location.pathname === "/admin/login") {
-      setAuthorized(true);
-      return;
+  // A própria página de login não deve exigir sessão (evita loop de redirecionamento).
+  if (!pathname.includes("/admin/login")) {
+    const session = await auth();
+
+    if (!session?.user || session.user.role !== "ADMIN") {
+      redirect("/admin/login");
     }
-
-    const sessionStr = localStorage.getItem("eleven_session");
-    
-    if (!sessionStr) {
-      window.location.href = "/admin/login";
-      return;
-    }
-
-    try {
-      const session = JSON.parse(sessionStr);
-      if (session.role !== "ADMIN") {
-        window.location.href = "/admin/login";
-        return;
-      }
-      setAuthorized(true);
-    } catch (e) {
-      window.location.href = "/admin/login";
-    }
-  }, []);
-
-  if (!authorized) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#111111]">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-[#F5C400] border-t-transparent rounded-full animate-spin" />
-          <p className="text-[#F5C400] font-bold uppercase tracking-widest text-[10px] animate-pulse">
-            Verificando Credenciais...
-          </p>
-        </div>
-      </div>
-    );
   }
 
   return <>{children}</>;

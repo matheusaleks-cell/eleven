@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
-import { loginUser } from "@/app/actions/auth";
+import { signIn, getSession } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,25 +20,27 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await loginUser(email, password);
+      const result = await signIn("credentials", { email, password, redirect: false });
 
-      if (!result.success) {
-        setError(result.error);
+      if (!result || result.error) {
+        setError("Credenciais inválidas.");
         setLoading(false);
         return;
       }
 
-      if (result.user.role !== "INVESTOR") {
+      const session = await getSession();
+
+      if (!session?.user || session.user.role !== "INVESTOR") {
         setError("Esta área é exclusiva para investidores.");
         setLoading(false);
         return;
       }
 
       localStorage.setItem("eleven_session", JSON.stringify({
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-        role: result.user.role,
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: session.user.role,
       }));
 
       window.location.href = "/investidor";
@@ -277,23 +279,6 @@ export default function LoginPage() {
                 {loading ? "Processando..." : "Entrar no Dashboard"}
               </button>
             </form>
-
-            {/* Quick Demo Access */}
-            <div className="mt-8 pt-8 border-t border-white/5">
-              <p className="text-[10px] text-[#444] uppercase tracking-widest font-bold mb-4 text-center">Acessos de Demonstração</p>
-              <div 
-                className="p-3 rounded bg-white/[0.02] border border-white/5 cursor-pointer hover:bg-white/[0.05] transition-colors group"
-                onClick={() => {
-                  setEmail("francisco@email.com");
-                  setPassword("password123");
-                }}
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-[11px] text-[#888] font-rajdhani uppercase font-bold group-hover:text-[#F5C400]">Investidor Demo</span>
-                  <span className="text-[9px] text-[#444] font-mono">francisco@email.com</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 

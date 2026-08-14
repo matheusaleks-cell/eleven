@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Toaster } from "sonner";
+import SessionProviderWrapper from "@/components/providers/SessionProviderWrapper";
 
 export const metadata: Metadata = {
   title: "Eleven Firearms · Sistema de Investimentos",
@@ -23,8 +24,10 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased" style={{ background: "#1A1A1A", color: "#FFFFFF", margin: 0 }}>
-        {children}
-        <Toaster position="top-right" richColors theme="dark" />
+        <SessionProviderWrapper>
+          {children}
+          <Toaster position="top-right" richColors theme="dark" />
+        </SessionProviderWrapper>
       </body>
     </html>
   );

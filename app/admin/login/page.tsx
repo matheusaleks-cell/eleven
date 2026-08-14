@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, ShieldCheck, ShieldAlert } from "lucide-react";
-import { loginUser } from "@/app/actions/auth";
+import { signIn, getSession } from "next-auth/react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -20,25 +20,27 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const result = await loginUser(email, password);
+      const result = await signIn("credentials", { email, password, redirect: false });
 
-      if (!result.success) {
-        setError(result.error);
+      if (!result || result.error) {
+        setError("Credenciais administrativas inválidas.");
         setLoading(false);
         return;
       }
 
-      if (result.user.role !== "ADMIN") {
+      const session = await getSession();
+
+      if (!session?.user || session.user.role !== "ADMIN") {
         setError("Credenciais administrativas inválidas.");
         setLoading(false);
         return;
       }
 
       localStorage.setItem("eleven_session", JSON.stringify({
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-        role: result.user.role,
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        role: session.user.role,
       }));
 
       window.location.href = "/admin";
@@ -283,23 +285,6 @@ export default function AdminLoginPage() {
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
               </button>
             </form>
-
-            {/* Quick Demo Access */}
-            <div className="mt-8 pt-8 border-t border-white/5">
-              <p className="text-[10px] text-[#222] uppercase tracking-widest font-bold mb-4 text-center">Protocolo de Demonstração</p>
-              <div 
-                className="p-3 rounded bg-white/[0.01] border border-white/5 cursor-pointer hover:bg-white/[0.03] transition-colors group"
-                onClick={() => {
-                  setEmail("admin@elevenfirearms.com.br");
-                  setPassword("password123");
-                }}
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-[11px] text-[#444] font-rajdhani uppercase font-bold group-hover:text-[#F5C400]">Acesso Master Demo</span>
-                  <span className="text-[9px] text-[#222] font-mono">admin@elevenfirearms.com.br</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
