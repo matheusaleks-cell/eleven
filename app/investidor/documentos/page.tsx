@@ -21,7 +21,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getInvestorDocuments } from "@/app/admin/investidores/actions";
+import { getMyDocuments } from "../actions";
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -130,7 +130,7 @@ export default function DocumentosPage() {
       setSession(parsed);
 
       // Buscar documentos do banco de dados
-      getInvestorDocuments(parsed.id).then((res) => {
+      getMyDocuments().then((res) => {
         if (res.success) {
           setDocuments(
             res.documents.map((d: any) => ({

@@ -21,7 +21,7 @@ export default function InvestorProjectsPage() {
     if (parsed.role !== "INVESTOR") { router.push("/admin"); return; }
     setSession(parsed);
     
-    getInvestorProjects(parsed.email).then(res => {
+    getInvestorProjects().then(res => {
       if (res.success) setMyProjects(res.projects);
       setLoading(false);
     });

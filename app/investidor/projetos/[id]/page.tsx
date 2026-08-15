@@ -320,10 +320,8 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
   const [activeTab, setActiveTab] = useState<"cycles" | "import" | "docs">("cycles");
   const [updatingLotDoc, setUpdatingLotDoc] = useState(false);
 
-  async function fetchProject(emailOverride?: string) {
-    const email = emailOverride ?? session?.email;
-    if (!email) return;
-    const res = await getInvestorProjectDetails(id, email);
+  async function fetchProject() {
+    const res = await getInvestorProjectDetails(id);
     if (res.success && res.project) {
       setProject(res.project);
     }
@@ -335,13 +333,13 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
     const parsed = JSON.parse(s);
     setSession(parsed);
 
-    getInvestorProjectDetails(id, parsed.email).then(res => {
+    getInvestorProjectDetails(id).then(res => {
       if (res.success && res.project) {
         setProject(res.project);
         // Expand current cycle if available
         if (res.project.cycles.length > 0) {
           const latestCycle = res.project.cycles[0];
-          handleExpandCycle(latestCycle.id, parsed.email);
+          handleExpandCycle(latestCycle.id);
         }
       } else {
         router.push("/investidor/projetos");
@@ -350,7 +348,7 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
     });
   }, []);
 
-  const handleExpandCycle = async (cycleId: string, emailOverride?: string) => {
+  const handleExpandCycle = async (cycleId: string) => {
     if (expandedCycle === cycleId) {
       setExpandedCycle(null);
       return;
@@ -359,8 +357,7 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
     setExpandedCycle(cycleId);
     setSalesLoading(true);
     try {
-      const email = emailOverride ?? session?.email ?? "";
-      const res = await getCycleSales(cycleId, email);
+      const res = await getCycleSales(cycleId);
       if (res.success) {
         setCycleSales(res.sales);
         setTotalSoldValue(res.totalSoldValue || 0);

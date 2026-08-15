@@ -50,7 +50,7 @@ export default function InvestorDashboard() {
     if (s) {
       const parsed = JSON.parse(s);
       setSession(parsed);
-      getInvestorDashboardData(parsed.email).then(res => {
+      getInvestorDashboardData().then(res => {
         if (res.success) setDashboardData(res.data);
         setLoading(false);
       });

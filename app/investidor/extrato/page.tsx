@@ -19,7 +19,7 @@ export default function ExtratoPage() {
     if (s) {
       const parsed = JSON.parse(s);
       setSession(parsed);
-      getInvestorStatement(parsed.email).then((res) => {
+      getInvestorStatement().then((res) => {
         if (res.success) setStatement(res.statement);
         setLoading(false);
       });

@@ -14,6 +14,7 @@ export default function PerfilPage() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showPassModal, setShowPassModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [updating, setUpdating] = useState(false);
 
@@ -26,7 +27,7 @@ export default function PerfilPage() {
     if (s) {
       const parsed = JSON.parse(s);
       setSession(parsed);
-      getInvestorProfile(parsed.email).then((res) => {
+      getInvestorProfile().then((res) => {
         if (res.success) setProfile(res.data);
         setLoading(false);
       });
@@ -36,16 +37,21 @@ export default function PerfilPage() {
   };
 
   const handleUpdatePassword = async () => {
+    if (!currentPassword) {
+      toast.error("Informe sua senha atual.");
+      return;
+    }
     if (!newPassword || newPassword.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres.");
       return;
     }
     setUpdating(true);
     try {
-      const res = await import("../actions").then(m => m.updateMyPassword(session.email, newPassword));
+      const res = await import("../actions").then(m => m.updateMyPassword(currentPassword, newPassword));
       if (res.success) {
         toast.success("Senha atualizada com sucesso!");
         setShowPassModal(false);
+        setCurrentPassword("");
         setNewPassword("");
       } else {
         toast.error(res.error || "Erro ao atualizar senha.");
@@ -213,9 +219,19 @@ export default function PerfilPage() {
             <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-4">Redefinir Senha</h3>
             <div className="space-y-4">
               <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Senha Atual</label>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  className="w-full bg-brand-input border border-brand-border rounded px-4 py-2.5 text-white text-sm outline-none focus:border-brand-accent/50 transition-all"
+                  placeholder="Sua senha atual"
+                />
+              </div>
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Nova Senha</label>
-                <input 
-                  type="password" 
+                <input
+                  type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   className="w-full bg-brand-input border border-brand-border rounded px-4 py-2.5 text-white text-sm outline-none focus:border-brand-accent/50 transition-all"
@@ -223,7 +239,7 @@ export default function PerfilPage() {
                 />
               </div>
               <div className="flex gap-3 pt-2">
-                <Button variant="secondary" className="flex-1 text-[10px] font-bold" onClick={() => setShowPassModal(false)}>CANCELAR</Button>
+                <Button variant="secondary" className="flex-1 text-[10px] font-bold" onClick={() => { setShowPassModal(false); setCurrentPassword(""); }}>CANCELAR</Button>
                 <Button 
                   className="flex-1 text-[10px] font-bold" 
                   onClick={handleUpdatePassword}

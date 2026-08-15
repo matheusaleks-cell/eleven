@@ -2,9 +2,54 @@
 
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { requireSession } from "@/lib/auth-guard";
 
-export async function getInvestorDashboardData(email: string) {
+// Fonte única de verdade para "quanto o investidor já recebeu" de um projeto: ciclos COMPLETED
+// usam o valor oficial já gravado (Cycle.investorShare, fechado pelo admin), o lote ainda não
+// liquidado é recalculado ao vivo a partir das armas vendidas. Mesma regra usada em
+// getInvestorDashboardData — mantém Dashboard, Extrato, Projetos e detalhe do Projeto consistentes
+// entre si (antes cada função recalculava do zero, inclusive lotes já liquidados, e podia divergir
+// do valor oficial do ciclo fechado).
+function computeProjectYield(project: any) {
+  const completedCyclesYield = (project.cycles || [])
+    .filter((c: any) => c.status === "COMPLETED")
+    .reduce((acc: number, c: any) => acc + (c.investorShare || 0), 0);
+
+  const splitPct = project.profitSplitPct || 0.50;
+  let activeRealizedProfit = 0;
+
+  (project.importLots || []).forEach((lot: any) => {
+    if (lot.status === "LIQUIDADO") return; // já contabilizado acima via Cycle.investorShare
+
+    const lotCycle = (project.cycles || []).find((c: any) => c.importLotId === lot.id);
+    let deductionRate = 0.23;
+    const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+    if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
+      deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
+    }
+
+    (lot.weapons || []).forEach((w: any) => {
+      if (w.currentStatus !== "VENDIDA") return;
+      const uCost = w.unitCost || uCostAvg;
+      const sValue = w.saleValue || 0;
+      const netProfit = sValue - uCost - (sValue * deductionRate);
+      activeRealizedProfit += netProfit > 0 ? netProfit * splitPct : 0;
+    });
+  });
+
+  return {
+    completedCyclesYield,
+    activeRealizedProfit,
+    totalReceived: completedCyclesYield + activeRealizedProfit,
+  };
+}
+
+export async function getInvestorDashboardData() {
   try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.email) return { success: false, error: "Não autorizado." };
+    const email = session.user.email;
+
     const investor = await prisma.user.findUnique({
       where: { email },
       include: {
@@ -219,8 +264,12 @@ export async function getInvestorDashboardData(email: string) {
   }
 }
 
-export async function getInvestorStatement(email: string) {
+export async function getInvestorStatement() {
   try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.email) return { success: false, statement: [] };
+    const email = session.user.email;
+
     const investor = await prisma.user.findUnique({
       where: { email },
       include: {
@@ -259,9 +308,27 @@ export async function getInvestorStatement(email: string) {
 
 
 
-    // Rendimentos das Vendas Proporcionais (Todos os lotes que possuem armas, sejam ativos ou liquidados)
+    // Rendimentos: ciclos já fechados usam o valor oficial gravado (mesma fonte da Dashboard),
+    // um lançamento por ciclo. O lote ainda ativo (não liquidado) é lançado venda a venda, em
+    // tempo real — evita recalcular (e possivelmente divergir de) ciclos já encerrados.
     investor.investedProjects.forEach(project => {
+      project.cycles
+        .filter(c => c.status === "COMPLETED")
+        .forEach(c => {
+          if ((c.investorShare || 0) > 0) {
+            statement.push({
+              id: `CI-${c.id.substring(0,6)}`,
+              dataStr: c.createdAt.toLocaleDateString("pt-BR"),
+              dateObj: c.createdAt,
+              descricao: `Distribuição de Lucro - ${c.cycleName} - ${project.name}`,
+              tipo: "RENDIMENTO",
+              valor: c.investorShare || 0
+            });
+          }
+        });
+
       project.importLots.forEach(lot => {
+        if (lot.status === "LIQUIDADO") return; // já contabilizado acima via ciclo fechado
         if (lot.weapons && lot.weapons.length > 0) {
           const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
           let deductionRate = 0.23;
@@ -270,7 +337,7 @@ export async function getInvestorStatement(email: string) {
           }
           let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
           let splitPct = project.profitSplitPct || 0.50;
-          
+
           lot.weapons.forEach(w => {
             if (w.currentStatus === "VENDIDA") {
               const uCost = w.unitCost || uCostAvg;
@@ -320,8 +387,12 @@ export async function getInvestorStatement(email: string) {
   }
 }
 
-export async function getInvestorProjects(email: string) {
+export async function getInvestorProjects() {
   try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.email) return { success: false, projects: [] };
+    const email = session.user.email;
+
     const investor = await prisma.user.findUnique({
       where: { email },
       include: {
@@ -341,31 +412,7 @@ export async function getInvestorProjects(email: string) {
     if (!investor) return { success: false, projects: [] };
 
     const mapped = investor.investedProjects.map(p => {
-      let totalReceived = 0;
-      
-      // Contabilizar de forma unificada baseada nas armas vendidas
-      p.importLots.forEach(lot => {
-        const lotCycle = p.cycles.find(c => c.importLotId === lot.id);
-        let deductionRate = 0.23;
-        let splitPct = p.profitSplitPct || 0.50;
-        let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-
-        if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
-          deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
-        }
-
-        if (lot.weapons && lot.weapons.length > 0) {
-          lot.weapons.forEach(w => {
-            if (w.currentStatus === "VENDIDA") {
-              const uCost = w.unitCost || uCostAvg;
-              const sValue = w.saleValue || 0;
-              const netProfit = sValue - uCost - (sValue * deductionRate);
-              const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
-              totalReceived += investorProfit;
-            }
-          });
-        }
-      });
+      const { totalReceived } = computeProjectYield(p);
 
       return {
         id: p.id,
@@ -387,8 +434,12 @@ export async function getInvestorProjects(email: string) {
   }
 }
 
-export async function getInvestorProjectDetails(id: string, email: string) {
+export async function getInvestorProjectDetails(id: string) {
   try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.email) return { success: false, project: null };
+    const email = session.user.email;
+
     const project = await prisma.investmentProject.findFirst({
       where: { id, investor: { email } },
       include: {
@@ -412,36 +463,28 @@ export async function getInvestorProjectDetails(id: string, email: string) {
 
     if (!project) return { success: false, project: null };
 
-    let totalReceived = 0;
-    
-    // Contabilizar de forma unificada baseada nas armas vendidas
-    project.importLots.forEach(lot => {
-      const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
-      let deductionRate = 0.23;
-      let splitPct = project.profitSplitPct || 0.50;
-      let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-
-      if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
-        deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
-      }
-
-      if (lot.weapons && lot.weapons.length > 0) {
-        lot.weapons.forEach(w => {
-          if (w.currentStatus === "VENDIDA") {
-            const uCost = w.unitCost || uCostAvg;
-            const sValue = w.saleValue || 0;
-            const netProfit = sValue - uCost - (sValue * deductionRate);
-            const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
-            totalReceived += investorProfit;
-          }
-        });
-      }
-    });
+    const { totalReceived } = computeProjectYield(project);
 
     const mappedCycles = project.cycles.map(c => {
+      // Ciclo fechado: usa o valor oficial gravado pelo admin (mesma fonte da Dashboard).
+      if (c.status === "COMPLETED") {
+        return {
+          id: c.id,
+          cycleName: c.cycleName,
+          quantity: c.quantity,
+          startDate: c.createdAt.toLocaleDateString("pt-BR"),
+          investor_profit_share: c.investorShare || 0,
+          total_investment: c.totalInvestment,
+          gross_revenue: c.grossRevenue || 0,
+          next_cycle_capital: c.reinvestmentShare,
+          status: c.status
+        };
+      }
+
+      // Ciclo ainda ativo: recalcula ao vivo a partir das armas do lote vinculado.
       let investorProfitShare = 0;
       let grossRevenue = 0;
-      
+
       const lot = project.importLots.find(l => l.id === c.importLotId);
       if (lot && lot.weapons && lot.weapons.length > 0) {
         let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
@@ -449,7 +492,7 @@ export async function getInvestorProjectDetails(id: string, email: string) {
         if (c.grossRevenue && c.grossRevenue > 0) {
           deductionRate = ((c.salesTax || 0) + (c.salesOperationalCost || 0)) / c.grossRevenue;
         }
-        
+
         lot.weapons.forEach(w => {
           if (w.currentStatus === "VENDIDA") {
             const uCost = w.unitCost || uCostAvg;
@@ -469,7 +512,7 @@ export async function getInvestorProjectDetails(id: string, email: string) {
         investor_profit_share: investorProfitShare,
         total_investment: c.totalInvestment,
         gross_revenue: grossRevenue,
-        next_cycle_capital: c.status === "COMPLETED" ? c.reinvestmentShare : 0,
+        next_cycle_capital: 0,
         status: c.status
       };
     });
@@ -497,8 +540,12 @@ export async function getInvestorProjectDetails(id: string, email: string) {
   }
 }
 
-export async function getCycleSales(cycleId: string, email: string) {
+export async function getCycleSales(cycleId: string) {
   try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.email) return { success: false, sales: [] };
+    const email = session.user.email;
+
     const cycle = await prisma.cycle.findFirst({
       where: { id: cycleId, project: { investor: { email } } },
       include: {
@@ -586,8 +633,12 @@ export async function getCycleSales(cycleId: string, email: string) {
   }
 }
 
-export async function getInvestorProfile(email: string) {
+export async function getInvestorProfile() {
   try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.email) return { success: false, error: "Não autorizado." };
+    const email = session.user.email;
+
     const investor = await prisma.user.findUnique({
       where: { email },
       select: {
@@ -615,14 +666,21 @@ export async function getInvestorProfile(email: string) {
   }
 }
 
-export async function updateMyPassword(email: string, newPassword: string) {
+export async function updateMyPassword(currentPassword: string, newPassword: string) {
   try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.email) return { success: false, error: "Não autorizado." };
+    const email = session.user.email;
+
     if (!newPassword || newPassword.length < 6) {
       return { success: false, error: "A senha deve ter pelo menos 6 caracteres." };
     }
-    
+
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return { success: false, error: "Usuário não encontrado." };
+
+    const validCurrent = await bcrypt.compare(currentPassword || "", user.password);
+    if (!validCurrent) return { success: false, error: "Senha atual incorreta." };
 
     const hashed = await bcrypt.hash(newPassword, 12);
     await prisma.user.update({
@@ -634,6 +692,22 @@ export async function updateMyPassword(email: string, newPassword: string) {
   } catch (error) {
     console.error("Erro ao atualizar própria senha:", error);
     return { success: false, error: "Falha ao atualizar senha." };
+  }
+}
+
+export async function getMyDocuments() {
+  try {
+    const session = await requireSession("INVESTOR");
+    if (!session?.user?.id) return { success: false, documents: [] };
+
+    const documents = await prisma.document.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+    });
+    return { success: true, documents };
+  } catch (error) {
+    console.error("Erro ao buscar documentos:", error);
+    return { success: false, documents: [] };
   }
 }
 
