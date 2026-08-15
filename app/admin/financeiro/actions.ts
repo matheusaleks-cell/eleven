@@ -15,31 +15,23 @@ export async function getFinancialStats() {
       _sum: { totalCostNationalized: true }
     });
 
+    // "Distribuído", "reinvestimento" e "impostos" refletem os ciclos REALMENTE fechados
+    // (mesmos valores que aparecem no projeto/dashboard de cada investidor), em vez de uma
+    // estimativa sobre o faturamento bruto total com um percentual global — que não tinha
+    // nenhuma relação com o que de fato foi apurado e distribuído por projeto.
+    const closedCycles = await prisma.cycle.aggregate({
+      where: { status: "COMPLETED" },
+      _sum: { investorShare: true, reinvestmentShare: true, salesTax: true },
+    });
+
     const totalRevenue = Number(totalSales._sum.totalValue) || 0;
     const transitCapital = Number(batchesInTransit._sum.totalCostNationalized) || 0;
 
-    // Read split percentages from FinancialDistributionRule
-    let investorPct = 0.50;
-    let companyPct = 0.35;
-    let taxPct = 0.05;
-
-    try {
-      const rule = await prisma.financialDistributionRule.findFirst({
-        where: { isActive: true },
-      });
-      if (rule) {
-        investorPct = Number(rule.investorPct) / 100;
-        companyPct = Number(rule.companyPct) / 100;
-      }
-    } catch {
-      // Table may not exist yet; fall back to defaults above
-    }
-
     return {
       custody: totalRevenue,
-      distributed: totalRevenue * investorPct,
-      reinvestment: totalRevenue * companyPct,
-      taxes: totalRevenue * taxPct,
+      distributed: Number(closedCycles._sum.investorShare) || 0,
+      reinvestment: Number(closedCycles._sum.reinvestmentShare) || 0,
+      taxes: Number(closedCycles._sum.salesTax) || 0,
       transitCapital,
     };
   } catch (error) {
