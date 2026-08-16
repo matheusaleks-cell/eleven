@@ -1,8 +1,12 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getInventoryReportData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const products = await prisma.product.findMany({ include: { weapons: true } });
     const data = products.map(p => ({
@@ -24,6 +28,9 @@ export async function getInventoryReportData() {
 }
 
 export async function getFinancialReportData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const orders = await prisma.salesOrder.findMany({ include: { customer: true, seller: true } });
     const data = orders.map(o => ({
@@ -44,6 +51,9 @@ export async function getFinancialReportData() {
 }
 
 export async function getWeaponsMapReportData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const weapons = await prisma.weaponMap.findMany({ include: { product: true, customer: true } });
     const data = weapons.map(w => ({
@@ -64,6 +74,9 @@ export async function getWeaponsMapReportData() {
 }
 
 export async function getLotTraceabilityData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const lots = await prisma.importLot.findMany({
       include: { supplier: true, weapons: true },
@@ -87,6 +100,9 @@ export async function getLotTraceabilityData() {
 }
 
 export async function getInventoryConferenceData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const weapons = await prisma.weaponMap.findMany({
       include: { product: true, importLot: true },
@@ -110,6 +126,9 @@ export async function getInventoryConferenceData() {
 }
 
 export async function getSellerPerformanceData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const orders = await prisma.salesOrder.findMany({ include: { seller: true } });
     const map = new Map<string, { Vendedor: string; Total_Pedidos: number; Valor_Total: number }>();
@@ -132,6 +151,9 @@ export async function getSellerPerformanceData() {
 }
 
 export async function getDefaultersData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const orders = await prisma.salesOrder.findMany({
       where: { status: { notIn: ["PAGO", "CANCELADO"] } },
@@ -154,6 +176,9 @@ export async function getDefaultersData() {
 }
 
 export async function getReinvestmentProjectionData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const cycles = await prisma.cycle.findMany({
       include: { project: { include: { investor: true } } },
@@ -178,6 +203,9 @@ export async function getReinvestmentProjectionData() {
 }
 
 export async function getMovementHistoryData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const weapons = await prisma.weaponMap.findMany({
       include: { product: true, customer: true },
@@ -200,6 +228,9 @@ export async function getMovementHistoryData() {
 }
 
 export async function getAccessLogsData() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, data: [] };
+
   try {
     const logs = await prisma.leadLog.findMany({
       include: { lead: true },

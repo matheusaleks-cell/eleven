@@ -1,8 +1,19 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getDashboardStats(filters?: { investorId?: string; startDate?: string; endDate?: string }) {
+  const session = await requireSession("ADMIN");
+  if (!session) {
+    return {
+      activeProjects: 0, completedProjects: 0, totalRevenue: 0, totalInvestorShare: 0,
+      totalCompanyShare: 0, totalTaxes: 0, totalOperationalCosts: 0, totalUnitCosts: 0,
+      weaponsSold: 0, weaponsInStock: 0, weaponsReserved: 0, weaponsImported: 0,
+      activeLotsProgress: [] as any[], dataMode: "LEGACY",
+    };
+  }
+
   let projects: any[] = [];
   let projectsWhere: any = {};
   if (filters?.investorId && filters.investorId !== "ALL") {
@@ -216,6 +227,9 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
 }
 
 export async function getRecentProjects(investorId?: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     let projectsWhere: any = {};
     if (investorId && investorId !== "ALL") {
@@ -249,6 +263,9 @@ export async function getRecentProjects(investorId?: string) {
   }
 }
 export async function getGlobalHeaderStats() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { monthlySales: 0, inventoryValue: 0, averageMargin: 0, lastUsdRate: 5.82 };
+
   try {
     const now = new Date();
     const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1);

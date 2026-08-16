@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getImportLots() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const lots = await prisma.importLot.findMany({
       orderBy: { createdAt: 'desc' },
@@ -68,6 +72,9 @@ export async function addLotDocument(
   realizedValue?: number | null,
   realizedDate?: string | null
 ) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false };
+
   try {
     const lot = (await prisma.importLot.findUnique({
       where: { id: lotId },
@@ -110,6 +117,9 @@ export async function updateDocumentRealizedFields(
   realizedValue: number | null,
   realizedDate: string | null
 ) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const doc = await prisma.document.update({
       where: { id: docId },
@@ -136,6 +146,9 @@ export async function updateDocumentRealizedFields(
 }
 
 export async function deleteLotDocument(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false };
+
   try {
     await prisma.document.delete({
       where: { id }
@@ -149,6 +162,9 @@ export async function deleteLotDocument(id: string) {
 }
 
 export async function getSuppliers() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     return await prisma.supplier.findMany({
       where: { status: "ACTIVE" },
@@ -161,6 +177,9 @@ export async function getSuppliers() {
 }
 
 export async function createImportLot(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     // Buscar um fornecedor padrão se não houver ID
     let supplierId = data.supplierId;
@@ -238,6 +257,9 @@ export async function createImportLot(data: any) {
 }
 
 export async function updateLotStatus(id: string, newStatus: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false };
+
   try {
     const lot = await prisma.importLot.update({
       where: { id },
@@ -252,6 +274,9 @@ export async function updateLotStatus(id: string, newStatus: string) {
 }
 
 export async function deleteImportLot(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const weaponCount = await prisma.weaponMap.count({ where: { importLotId: id } });
     if (weaponCount > 0) {
@@ -274,6 +299,9 @@ export async function deleteImportLot(id: string) {
 }
 
 export async function registerLotSerials(lotId: string, productId: string, serials: string[]) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const lot = await prisma.importLot.findUnique({
       where: { id: lotId }

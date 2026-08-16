@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getTaxConfigs() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, configs: [] };
+
   try {
     const configs = await prisma.taxConfig.findMany({
       orderBy: { name: "asc" }
@@ -16,6 +20,9 @@ export async function getTaxConfigs() {
 }
 
 export async function createTaxConfig(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     // Se for o primeiro "default", desmarca os outros
     if (data.isDefault) {
@@ -50,6 +57,9 @@ export async function createTaxConfig(data: any) {
 }
 
 export async function updateTaxConfig(id: string, data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     if (data.isDefault) {
       await prisma.taxConfig.updateMany({

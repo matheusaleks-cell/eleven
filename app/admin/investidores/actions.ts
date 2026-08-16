@@ -4,10 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { requireSession } from "@/lib/auth-guard";
 
 // ─── LISTAGEM ───────────────────────────────────────────────────────────────
 
 export async function getInvestors() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const investors = await prisma.user.findMany({
       where: { role: "INVESTOR" },
@@ -52,6 +56,9 @@ export async function getInvestors() {
 // ─── DETALHES ────────────────────────────────────────────────────────────────
 
 export async function getInvestorDetails(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return null;
+
   try {
     const investor = await prisma.user.findUnique({
       where: { id },
@@ -153,6 +160,9 @@ export async function createInvestor(data: {
   bankReferences?: string;
   commercialRefs?: string;
 }) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const hashedPassword = await bcrypt.hash(data.password, 12);
     const investor = await prisma.user.create({
@@ -190,6 +200,9 @@ export async function createInvestor(data: {
 // ─── ATUALIZAÇÃO ─────────────────────────────────────────────────────────────
 
 export async function updateInvestor(id: string, data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.user.update({
       where: { id },
@@ -224,6 +237,9 @@ export async function uploadInvestorDocument(data: {
   size: string;
   base64Data: string;
 }) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const document = await prisma.document.create({
       data: {
@@ -249,6 +265,9 @@ export async function deleteInvestorDocument(
   documentId: string,
   userId: string
 ) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.document.delete({ where: { id: documentId } });
     revalidatePath(`/admin/investidores/${userId}`);
@@ -262,6 +281,9 @@ export async function deleteInvestorDocument(
 // ─── BUSCAR DOCUMENTOS DO INVESTIDOR ─────────────────────────────────────────
 
 export async function getInvestorDocuments(userId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, documents: [] };
+
   try {
     const documents = await prisma.document.findMany({
       where: { userId },
@@ -277,6 +299,9 @@ export async function getInvestorDocuments(userId: string) {
 // ─── DELETAR PROJETO ─────────────────────────────────────────────────────────
 
 export async function deleteInvestorProject(projectId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const project = await prisma.investmentProject.findUnique({
       where: { id: projectId },
@@ -301,6 +326,9 @@ export async function deleteInvestorProject(projectId: string) {
 // ─── ATUALIZAR SENHA ──────────────────────────────────────────────────────────
 
 export async function updateInvestorPassword(userId: string, newPassword: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     if (!newPassword || newPassword.length < 6) {
       return { success: false, error: "A senha deve ter pelo menos 6 caracteres." };
@@ -320,6 +348,9 @@ export async function updateInvestorPassword(userId: string, newPassword: string
 
 // ─── DELETAR INVESTIDOR ────────────────────────────────────────────────────────
 export async function deleteInvestor(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const projectsCount = await prisma.investmentProject.count({
       where: { investorId: id }

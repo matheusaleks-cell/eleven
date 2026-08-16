@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getCustomersForSale() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const customers = await prisma.customer.findMany({
       select: {
@@ -27,6 +31,9 @@ export async function getCustomersForSale() {
 }
 
 export async function getProductsForSale() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const products = await prisma.product.findMany({
       where: { status: "ACTIVE", stockAvailable: { gt: 0 } },
@@ -94,6 +101,9 @@ export async function getProductsForSale() {
 }
 
 export async function getSalesOrders() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const orders = await prisma.salesOrder.findMany({
       include: {
@@ -127,6 +137,9 @@ export async function getSalesOrders() {
 // (SalesOrder.products) só tem nome/sku/preço/quantidade — as specs técnicas (espécie, calibre etc.)
 // usadas no documento vêm sempre do cadastro atual do Product, buscado aqui por id.
 export async function getSalesOrderPdfData(orderId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return null;
+
   try {
     const order = await prisma.salesOrder.findUnique({
       where: { id: orderId },
@@ -184,6 +197,9 @@ export async function getSalesOrderPdfData(orderId: string) {
 }
 
 export async function getLotOptionsForCart(productIds: string[]) {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     if (productIds.length === 0) return [];
 
@@ -240,6 +256,9 @@ export async function createDirectSale(data: {
   lotPreference?: "AUTO" | "PROPRIO" | "INVESTIDOR";
   investmentProjectId?: string;
 }) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const orderNumber = `ORD-${Date.now()}`;
     const discount = data.discount || 0;
@@ -370,6 +389,9 @@ export async function createDirectSale(data: {
 }
 
 export async function deleteSalesOrder(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     // Encontra armas vinculadas ao pedido
     const weapons = await prisma.weaponMap.findMany({
@@ -420,6 +442,9 @@ export async function updateSalesOrder(
   id: string,
   data: { status?: string; paymentMethod?: string; notes?: string; totalValue?: number }
 ) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const currentOrder = await prisma.salesOrder.findUnique({
       where: { id },
@@ -566,6 +591,9 @@ export async function getAvailableSerialsForProduct(
   lotPreference: "AUTO" | "PROPRIO" | "INVESTIDOR",
   investmentProjectId?: string
 ) {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     let lotFilter: any = {};
     if (lotPreference === "PROPRIO") {

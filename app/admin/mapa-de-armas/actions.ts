@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getWeapons() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const weapons = await prisma.weaponMap.findMany({
       include: {
@@ -36,6 +40,9 @@ export async function getWeapons() {
 }
 
 export async function getWeaponStats() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { total: 0, available: 0, reserved: 0, sold: 0, divergence: 0 };
+
   try {
     const total = await prisma.weaponMap.count();
     const available = await prisma.weaponMap.count({ where: { currentStatus: "ESTOQUE" } });
@@ -57,6 +64,9 @@ export async function getWeaponStats() {
 }
 
 export async function updateWeaponStatus(id: string, status: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) throw new Error("Não autorizado");
+
   try {
     const weapon = await prisma.weaponMap.update({
       where: { id },
@@ -74,6 +84,9 @@ export async function updateWeaponStatus(id: string, status: string) {
 }
 
 export async function createWeapon(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     let supplierId = data.supplierId;
     if (!supplierId) {
@@ -113,6 +126,9 @@ export async function createWeapon(data: any) {
 }
 
 export async function deleteWeapon(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.weaponMap.delete({
       where: { id }
@@ -126,6 +142,9 @@ export async function deleteWeapon(id: string) {
 }
 
 export async function getProducts() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     return await prisma.product.findMany({
       orderBy: { commercialName: "asc" }

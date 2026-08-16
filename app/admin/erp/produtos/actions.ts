@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getProducts() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     return await prisma.product.findMany({
       orderBy: { commercialName: "asc" }
@@ -15,6 +19,9 @@ export async function getProducts() {
 }
 
 export async function createProduct(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     // Validação de SKU único
     const existing = await prisma.product.findUnique({
@@ -57,6 +64,9 @@ export async function createProduct(data: any) {
 }
 
 export async function updateProduct(id: string, data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const product = await prisma.product.update({
       where: { id },
@@ -90,6 +100,9 @@ export async function updateProduct(id: string, data: any) {
 }
 
 export async function deleteProduct(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.product.delete({
       where: { id }

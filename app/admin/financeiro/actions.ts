@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getFinancialStats() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { custody: 0, distributed: 0, reinvestment: 0, taxes: 0, transitCapital: 0 };
+
   try {
     const totalSales = await prisma.salesOrder.aggregate({
       where: { status: "PAGO" },
@@ -41,6 +45,9 @@ export async function getFinancialStats() {
 }
 
 export async function getSplitRules() {
+  const session = await requireSession("ADMIN");
+  if (!session) return null;
+
   try {
     const rule = await prisma.financialDistributionRule.findFirst({
       where: { isActive: true },
@@ -64,6 +71,9 @@ export async function saveSplitRules(data: {
   reserve: number;
   reinvest: number;
 }) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const existing = await prisma.financialDistributionRule.findFirst({
       where: { isActive: true },
@@ -103,6 +113,9 @@ export async function saveSplitRules(data: {
 }
 
 export async function getMonthlyRevenue(year: number) {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const start = new Date(year, 0, 1);
     const end = new Date(year + 1, 0, 1);
@@ -120,6 +133,9 @@ export async function getMonthlyRevenue(year: number) {
 }
 
 export async function getRecentTransactions(filters?: { type?: string; month?: number; year?: number }) {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const where: any = {};
 

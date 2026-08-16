@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getProjects() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     const projects = await prisma.investmentProject.findMany({
       include: {
@@ -39,6 +43,9 @@ export async function getProjects() {
 }
 
 export async function createProject(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     // 1. Atualizar os dados do investidor
     if (data.investorId) {
@@ -183,6 +190,9 @@ export async function createProject(data: any) {
 
 
 export async function getProjectById(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return null;
+
   try {
     const project = await prisma.investmentProject.findUnique({
       where: { id },
@@ -226,6 +236,9 @@ export async function getProjectById(id: string) {
 }
 
 export async function createCycle(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const cycle = await prisma.cycle.create({
       data: {
@@ -283,6 +296,9 @@ export async function createCycle(data: any) {
 }
 
 export async function deleteProject(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     // Delete cycles and documents linked to this project
     await prisma.cycle.deleteMany({ where: { projectId: id } });

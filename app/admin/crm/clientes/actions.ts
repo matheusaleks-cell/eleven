@@ -3,8 +3,12 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function getCustomers(page = 1, limit = 20, search = "", searchField = "ALL", filterType = "ALL", filterState = "ALL") {
+  const session = await requireSession("ADMIN");
+  if (!session) return { customers: [], total: 0 };
+
   try {
     const skip = (page - 1) * limit;
 
@@ -148,6 +152,9 @@ export async function getCustomers(page = 1, limit = 20, search = "", searchFiel
 
 
 export async function getCustomerStats() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { totalCustomers: 0, totalSales: 0, retentionRate: 0 };
+
   try {
     const customers = await prisma.customer.count();
     const orders = await prisma.salesOrder.findMany();
@@ -176,6 +183,9 @@ export async function getCustomerStats() {
 }
 
 export async function createCustomer(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     console.log("[createCustomer] Iniciando criação com dados:", JSON.stringify(data, null, 2));
 
@@ -240,6 +250,9 @@ export async function createCustomer(data: any) {
 }
 
 export async function updateCustomer(id: string, data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.customer.update({
       where: { id },
@@ -288,6 +301,9 @@ export async function updateCustomer(id: string, data: any) {
 }
 
 export async function deleteCustomer(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.customer.delete({
       where: { id }
@@ -301,6 +317,9 @@ export async function deleteCustomer(id: string) {
 }
 
 export async function uploadCustomerDocument(customerId: string, data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const document = await prisma.document.create({
       data: {
@@ -322,6 +341,9 @@ export async function uploadCustomerDocument(customerId: string, data: any) {
 }
 
 export async function getDocumentContent(documentId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return null;
+
   try {
     const document = await prisma.document.findUnique({
       where: { id: documentId },
@@ -335,6 +357,9 @@ export async function getDocumentContent(documentId: string) {
 }
 
 export async function deleteCustomerDocument(documentId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.document.delete({ where: { id: documentId } });
     revalidatePath("/admin/crm/clientes");
@@ -346,6 +371,9 @@ export async function deleteCustomerDocument(documentId: string) {
 }
 
 export async function getCustomerById(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return null;
+
   try {
     const c = await prisma.customer.findUnique({
       where: { id },

@@ -2,8 +2,12 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { requireSession } from "@/lib/auth-guard";
 
 export async function searchCustomersForLead(query: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
   try {
     if (query.length < 2) return [];
     const customers = await prisma.customer.findMany({
@@ -48,6 +52,9 @@ export async function searchCustomersForLead(query: string) {
 }
 
 export async function getLeads(page = 1, limit = 20, search = "", priority = "ALL", source = "ALL", showArchived = false) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { leads: [], total: 0 };
+
   try {
     const skip = (page - 1) * limit;
     const where: any = {
@@ -91,6 +98,9 @@ export async function getLeads(page = 1, limit = 20, search = "", priority = "AL
 
 
 export async function createLead(data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) throw new Error("Não autorizado");
+
   try {
     const lead = await prisma.lead.create({
       data: {
@@ -128,6 +138,9 @@ export async function createLead(data: any) {
 }
 
 export async function updateLead(id: string, data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) throw new Error("Não autorizado");
+
   try {
     // Se vier interests como array, converter para string
     const updateData = { ...data };
@@ -153,6 +166,9 @@ export async function updateLead(id: string, data: any) {
 }
 
 export async function deleteLead(id: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.lead.delete({
       where: { id },
@@ -166,6 +182,9 @@ export async function deleteLead(id: string) {
 }
 
 export async function archiveLead(id: string, isArchived: boolean = true) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     await prisma.lead.update({
       where: { id },
@@ -180,6 +199,9 @@ export async function archiveLead(id: string, isArchived: boolean = true) {
 }
 
 export async function convertToOrder(leadId: string, data: any) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     // 1. Criar ou encontrar o cliente (Customer)
     const customer = await prisma.customer.upsert({
@@ -284,6 +306,9 @@ export async function convertToOrder(leadId: string, data: any) {
 }
 
 export async function convertToCustomer(leadId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
   try {
     const lead = await prisma.lead.findUnique({
       where: { id: leadId }
@@ -330,6 +355,9 @@ export async function convertToCustomer(leadId: string) {
 }
 
 export async function addLeadLog(leadId: string, action: string, user: string = "Admin Eleven") {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false };
+
   try {
     await prisma.leadLog.create({
       data: {
