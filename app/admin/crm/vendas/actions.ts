@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { weaponStatusForOrder } from "@/lib/order-status";
+import { logWeaponMovements } from "@/lib/weapon-movement";
 
 // Lista de administradores que podem ser selecionados como vendedor responsável
 // por uma venda (ao inves de assumir sempre quem esta logado no momento).
@@ -506,6 +507,8 @@ export async function createDirectSale(data: {
             lastMovementDate: saleDate,
           },
         });
+        const movType = weaponStatusForOrder(data.status) === "VENDIDA" ? "VENDA" : "RESERVA";
+        await logWeaponMovements(weaponsToSell.map(w => w.id), movType, `Pedido ${orderNumber}`);
       }
     }
 
@@ -550,6 +553,7 @@ export async function deleteSalesOrder(id: string) {
           lastMovementDate: new Date(),
         },
       });
+      await logWeaponMovements(weapons.map(w => w.id), "DEVOLUCAO_ESTOQUE", "Pedido excluído — arma devolvida ao estoque");
 
       // Restaura estoque por produto
       const byProduct: Record<string, number> = {};
@@ -616,6 +620,7 @@ export async function updateSalesOrder(
             lastMovementDate: new Date(),
           },
         });
+        await logWeaponMovements(weapons.map(w => w.id), "DEVOLUCAO_ESTOQUE", `Pedido ${currentOrder.orderNumber} cancelado — arma devolvida ao estoque`);
 
         // Restaura estoque
         const byProduct: Record<string, number> = {};
@@ -671,6 +676,8 @@ export async function updateSalesOrder(
               lastMovementDate: saleDate,
             },
           });
+          const movType = weaponStatusForOrder(data.status) === "VENDIDA" ? "VENDA" : "RESERVA";
+          await logWeaponMovements(weaponsToSell.map(w => w.id), movType, `Pedido ${currentOrder.orderNumber} reativado`);
         }
       }
     }
@@ -679,10 +686,18 @@ export async function updateSalesOrder(
     // (ex: pedido PENDENTE com armas reservadas vira PAGO ao confirmar o pagamento, ou vice-versa).
     if (!isCancelling && !wasCancelled && data.status !== undefined && data.status !== currentOrder.status) {
       const targetWeaponStatus = weaponStatusForOrder(data.status);
+      const transitioningWeapons = await prisma.weaponMap.findMany({
+        where: { salesOrderId: id, currentStatus: { in: ["RESERVADA", "VENDIDA"] } },
+        select: { id: true },
+      });
       await prisma.weaponMap.updateMany({
         where: { salesOrderId: id, currentStatus: { in: ["RESERVADA", "VENDIDA"] } },
         data: { currentStatus: targetWeaponStatus, lastMovementDate: new Date() },
       });
+      if (transitioningWeapons.length > 0) {
+        const movType = targetWeaponStatus === "VENDIDA" ? "VENDA" : "RESERVA";
+        await logWeaponMovements(transitioningWeapons.map(w => w.id), movType, `Pedido ${currentOrder.orderNumber} — status alterado para ${data.status}`);
+      }
     }
 
     // 3. Se o valor total do pedido mudou e o pedido continua ativo, devemos recalcular e atualizar o saleValue das armas

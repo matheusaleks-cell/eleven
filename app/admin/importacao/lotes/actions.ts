@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
+import { CATEGORY_TO_STAGE } from "@/lib/import-stages";
+import { logWeaponMovements } from "@/lib/weapon-movement";
 
 export async function getImportLots() {
   const session = await requireSession("ADMIN");
@@ -91,6 +93,7 @@ export async function addLotDocument(
         name,
         type: name.toUpperCase().endsWith(".PDF") ? "PDF" : "IMAGE",
         category,
+        stage: CATEGORY_TO_STAGE[category] || null,
         size: `${(base64.length / 1024 / 1.33).toFixed(1)} KB`,
         base64Data: base64,
         lotId,
@@ -348,7 +351,8 @@ export async function registerLotSerials(lotId: string, productId: string, seria
       });
     });
 
-    await prisma.$transaction(creations);
+    const created = await prisma.$transaction(creations);
+    await logWeaponMovements(created.map(w => w.id), "ENTRADA", `Entrada em estoque via lote ${lot.batchCode}`);
 
     // As séries recém-cadastradas entram como estoque disponível de verdade —
     // sem isso o ERP ficava defasado (mostrava o estoque cadastrado manualmente,

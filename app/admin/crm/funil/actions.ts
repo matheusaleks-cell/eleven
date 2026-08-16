@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { weaponStatusForOrder } from "@/lib/order-status";
 import { generateAndSendAnexoP } from "@/app/admin/crm/vendas/actions";
+import { logWeaponMovements } from "@/lib/weapon-movement";
 
 export async function searchCustomersForLead(query: string) {
   const session = await requireSession("ADMIN");
@@ -285,6 +286,8 @@ export async function convertToOrder(leadId: string, data: any) {
             lastMovementDate: saleDate,
           },
         });
+        const movType = weaponStatusForOrder(order.status) === "VENDIDA" ? "VENDA" : "RESERVA";
+        await logWeaponMovements(weaponsToSell.map(w => w.id), movType, `Pedido ${order.orderNumber} (convertido de lead)`);
       }
     }
 

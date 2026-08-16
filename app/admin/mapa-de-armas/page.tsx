@@ -11,7 +11,9 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/Dialog";
 import { useEffect, useCallback } from "react";
-import { getWeapons, updateWeaponStatus, getWeaponStats, createWeapon, deleteWeapon, getProducts } from "./actions";
+import { getWeapons, updateWeaponStatus, getWeaponStats, createWeapon, deleteWeapon, getProducts, getWeaponMovements, exportWeaponMovementsPdf } from "./actions";
+
+const MONTH_NAMES_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 // Dados agora vêm do banco de dados via Server Actions
 
@@ -34,6 +36,57 @@ export default function WeaponsMapPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
+
+  // Extrato de movimentação (entrada/reserva/venda/devolução) + exportação real em PDF mensal/anual
+  const [showMovementsModal, setShowMovementsModal] = useState(false);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [loadingMovements, setLoadingMovements] = useState(false);
+  const now = new Date();
+  const [movementMonth, setMovementMonth] = useState(now.getMonth() + 1);
+  const [movementYear, setMovementYear] = useState(now.getFullYear());
+  const [movementScope, setMovementScope] = useState<"month" | "year">("month");
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  const loadMovements = async (month: number, year: number) => {
+    setLoadingMovements(true);
+    try {
+      const data = await getWeaponMovements(movementScope === "month" ? { month, year } : { year });
+      setMovements(data);
+    } finally {
+      setLoadingMovements(false);
+    }
+  };
+
+  const handleExportMovementsPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const periodLabel = movementScope === "month"
+        ? `${MONTH_NAMES_PT[movementMonth - 1]}/${movementYear}`
+        : `Ano de ${movementYear}`;
+      const res = await exportWeaponMovementsPdf(
+        movementScope === "month" ? { month: movementMonth, year: movementYear, periodLabel } : { year: movementYear, periodLabel }
+      );
+      if (!res.success || !res.base64) {
+        toast.error(res.error || "Erro ao gerar PDF.");
+        return;
+      }
+      const byteChars = atob(res.base64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `movimentacoes_${movementScope === "month" ? `${movementYear}-${String(movementMonth).padStart(2, "0")}` : movementYear}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("PDF gerado com sucesso!");
+    } finally {
+      setExportingPdf(false);
+    }
+  };
   const [newWeapon, setNewWeapon] = useState({
     serialNumber: "",
     productId: "",
@@ -321,6 +374,9 @@ export default function WeaponsMapPage() {
               </span>
             </p>
             <div className="flex gap-2">
+               <Button variant="secondary" size="sm" className="text-[10px] font-bold uppercase h-8 px-4" onClick={() => { setShowMovementsModal(true); loadMovements(movementMonth, movementYear); }}>
+                 <History size={12} className="mr-1.5" /> Movimentações
+               </Button>
                <Button variant="secondary" size="sm" className="text-[10px] font-bold uppercase h-8 px-4" onClick={handleExportCSV}>Exportar CSV</Button>
             </div>
           </div>
@@ -491,6 +547,84 @@ export default function WeaponsMapPage() {
             <Button onClick={handleAddWeapon} className="gap-2 text-[10px] font-bold uppercase tracking-widest shadow-[0_0_20px_rgba(245,196,0,0.15)]">
               <Save size={16} /> FINALIZAR REGISTRO
             </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Modal de Movimentações (extrato real de entrada/saída) */}
+      <Dialog
+        isOpen={showMovementsModal}
+        onClose={() => setShowMovementsModal(false)}
+        title="MOVIMENTAÇÃO DE ARMAS"
+        className="max-w-3xl"
+      >
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Período</label>
+              <select
+                className="bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                value={movementScope}
+                onChange={e => { const v = e.target.value as "month" | "year"; setMovementScope(v); loadMovements(movementMonth, movementYear); }}
+              >
+                <option value="month">Mensal</option>
+                <option value="year">Anual</option>
+              </select>
+            </div>
+            {movementScope === "month" && (
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Mês</label>
+                <select
+                  className="bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                  value={movementMonth}
+                  onChange={e => { const v = parseInt(e.target.value); setMovementMonth(v); loadMovements(v, movementYear); }}
+                >
+                  {MONTH_NAMES_PT.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="space-y-1">
+              <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Ano</label>
+              <select
+                className="bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                value={movementYear}
+                onChange={e => { const v = parseInt(e.target.value); setMovementYear(v); loadMovements(movementMonth, v); }}
+              >
+                {Array.from({ length: 5 }, (_, i) => now.getFullYear() - i).map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <Button size="sm" className="gap-2 text-[10px] font-bold uppercase tracking-widest ml-auto" onClick={handleExportMovementsPdf} disabled={exportingPdf}>
+              {exportingPdf ? "Gerando..." : <><History size={13} /> Exportar PDF</>}
+            </Button>
+          </div>
+
+          <div className="max-h-[50vh] overflow-y-auto border border-brand-border rounded">
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0 bg-brand-surface">
+                <tr>
+                  <th className="px-3 py-2 text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Data</th>
+                  <th className="px-3 py-2 text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Tipo</th>
+                  <th className="px-3 py-2 text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Série</th>
+                  <th className="px-3 py-2 text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Descrição</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border/30">
+                {loadingMovements ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-[10px] text-brand-text-muted uppercase font-bold">Carregando...</td></tr>
+                ) : movements.length === 0 ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-[10px] text-brand-text-muted uppercase font-bold">Nenhuma movimentação neste período.</td></tr>
+                ) : (
+                  movements.map(m => (
+                    <tr key={m.id}>
+                      <td className="px-3 py-2 text-[10px] text-brand-text-secondary font-mono">{m.occurredAt}</td>
+                      <td className="px-3 py-2 text-[10px] font-bold uppercase text-white">{m.type}</td>
+                      <td className="px-3 py-2 text-[10px] font-mono text-brand-accent">{m.serial}</td>
+                      <td className="px-3 py-2 text-[10px] text-brand-text-secondary">{m.description}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </Dialog>

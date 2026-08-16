@@ -27,63 +27,17 @@ import { updateLotStatus, addLotDocument, deleteLotDocument, deleteImportLot, re
 import { deleteWeapon } from "@/app/admin/mapa-de-armas/actions";
 import Link from "next/link";
 
-const REQUIRED_DOCUMENTS = [
-  "INVOICE",
-  "PACKING LIST",
-  "LICENÇA DE IMPORTAÇÃO / LPCO",
-  "SWIFT – COMPROVANTE DE PAGTO/CÂMBIO",
-  "AWB EMBARQUE",
-  "TERMO DE VISTORIA EXÉRCITO BRASILEIRO",
-  "PAGTO TRIBUTOS FEDERAIS",
-  "PAGTO GARE ICMS",
-  "PGTO ARMAZENAGEM",
-  "NFe ENTRADA"
-];
+import { REQUIRED_DOCUMENTS, DOCUMENT_STAGES } from "@/lib/import-stages";
 
-const DOCUMENT_GROUPS = [
-  {
-    id: "pagamento",
-    title: "1. PAGAMENTO & INÍCIO (FOB)",
-    description: "Invoice, Packing List e Swift de Câmbio",
-    icon: <DollarSign size={14} />,
-    items: [
-      "INVOICE",
-      "PACKING LIST",
-      "SWIFT – COMPROVANTE DE PAGTO/CÂMBIO"
-    ]
-  },
-  {
-    id: "embarque",
-    title: "2. EMBARQUE & TRÂNSITO",
-    description: "Conhecimento de embarque internacional",
-    icon: <Ship size={14} />,
-    items: [
-      "AWB EMBARQUE"
-    ]
-  },
-  {
-    id: "aduana",
-    title: "3. ADUANA & DESEMBARAÇO",
-    description: "Licenças, vistorias e recolhimento de impostos federais/estaduais",
-    icon: <Globe size={14} />,
-    items: [
-      "LICENÇA DE IMPORTAÇÃO / LPCO",
-      "TERMO DE VISTORIA EXÉRCITO BRASILEIRO",
-      "PAGTO TRIBUTOS FEDERAIS",
-      "PAGTO GARE ICMS",
-      "PGTO ARMAZENAGEM"
-    ]
-  },
-  {
-    id: "recebido",
-    title: "4. RECEBIDO & ESTOQUE",
-    description: "NFe de entrada no depósito nacional",
-    icon: <CheckCircle2 size={14} />,
-    items: [
-      "NFe ENTRADA"
-    ]
-  }
-];
+// Ícones exibidos por etapa (a lista/agrupamento em si vem de lib/import-stages.ts,
+// compartilhada com o servidor — isso evitava que a etapa de cada documento existisse
+// só como comparação de string aqui no client).
+const STAGE_ICONS: Record<string, React.ReactNode> = {
+  pagamento: <DollarSign size={14} />,
+  embarque: <Ship size={14} />,
+  aduana: <Globe size={14} />,
+  recebido: <CheckCircle2 size={14} />,
+};
 
 interface DocumentCardProps {
   requiredCat: string;
@@ -835,7 +789,7 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
             </div>
             
             <div className="space-y-8">
-              {DOCUMENT_GROUPS.map((group) => {
+              {DOCUMENT_STAGES.map((group) => {
                 const groupAttachedCount = group.items.filter(requiredCat => 
                   batch.documents?.some((d: any) => d.category === requiredCat)
                 ).length;
@@ -853,7 +807,7 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                             ? "bg-brand-success/10 border-brand-success/20 text-brand-success" 
                             : "bg-brand-bg border-brand-border text-brand-accent"
                         )}>
-                          {group.icon}
+                          {STAGE_ICONS[group.id]}
                         </div>
                         <div>
                           <h5 className="text-[11px] font-black text-white uppercase tracking-wider">{group.title}</h5>

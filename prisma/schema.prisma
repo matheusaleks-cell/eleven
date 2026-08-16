@@ -107,7 +107,7 @@ model ImportLot {
   customsFees             Float     @map("customs_fees")
   totalCostNationalized   Float     @map("total_cost_nationalized")
   quantityItems           Int       @map("quantity_items")
-  status                  String    @default("CAPTACAO") // CAPTACAO, TRANSITO, NACIONALIZADO, ESTOQUE
+  status                  String    @default("PEDIDO_FEITO") // PEDIDO_FEITO, TRANSITO, NACIONALIZANDO, DISPONIVEL, LIQUIDADO
   expectedMarginPct       Float     @map("expected_margin_pct")
   realizedMarginPct       Float?    @map("realized_margin_pct")
   
@@ -210,6 +210,7 @@ model WeaponMap {
   checker               User?      @relation("CheckerUser", fields: [checkedById], references: [id])
   seller                User?      @relation("SellerUser", fields: [sellingUserId], references: [id])
   salesOrder            SalesOrder? @relation(fields: [salesOrderId], references: [id])
+  movements             WeaponMovement[]
 
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
@@ -220,6 +221,23 @@ model WeaponMap {
   @@index([salesOrderId])
   @@index([currentStatus])
   @@map("weapons_map")
+}
+
+// Extrato de movimentação de cada arma (entrada em estoque, reserva, venda confirmada,
+// devolução ao estoque) — antes o Mapa de Armas só guardava o status ATUAL de cada peça,
+// sem nenhum registro histórico real de entrada/saída (o "histórico" que existia era
+// data calculada artificialmente, não um evento realmente ocorrido).
+model WeaponMovement {
+  id          String   @id @default(uuid())
+  weaponId    String   @map("weapon_id")
+  weapon      WeaponMap @relation(fields: [weaponId], references: [id], onDelete: Cascade)
+  type        String   // ENTRADA, RESERVA, VENDA, DEVOLUCAO_ESTOQUE
+  description String
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+
+  @@index([weaponId])
+  @@index([occurredAt])
+  @@map("weapon_movements")
 }
 
 model Cycle {
@@ -493,6 +511,10 @@ model Document {
 
   salesOrderId    String?            @map("sales_order_id")
   salesOrder      SalesOrder?        @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+
+  // Etapa do processo de importação a que este documento pertence (pagamento, embarque,
+  // aduana, recebido — ver lib/import-stages.ts). Só se aplica a documentos de lote (lotId).
+  stage           String?
 
   realizedValue   Float?             @map("realized_value")
   realizedDate    DateTime?          @map("realized_date")

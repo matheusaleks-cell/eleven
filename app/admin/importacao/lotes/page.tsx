@@ -39,6 +39,9 @@ export default function ImportBatchesPage() {
   const refreshLots = useCallback(async () => {
     setLoading(true);
     const data = await getImportLots();
+    // progress já vem calculado do servidor (getImportLots) — antes essa linha recalculava
+    // com percentuais diferentes (ex: DISPONIVEL caía no "else 15%" em vez de 90%), fazendo a
+    // barra de progresso divergir do que o próprio backend considerava correto.
     const mapped = data.map(l => ({
       ...l,
       id: l.lotId,
@@ -46,7 +49,6 @@ export default function ImportBatchesPage() {
       origin: l.originCountry,
       items: l.items_count || 0,
       value: l.fobTotal,
-      progress: l.status === "LIQUIDADO" ? 100 : l.status === "NACIONALIZANDO" ? 90 : l.status === "TRANSITO" ? 60 : 15
     }));
     setLots(mapped);
     setLoading(false);
