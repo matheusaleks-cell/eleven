@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
+import { calcImportBreakdown, SimulatorInputs } from "@/lib/calculations";
 
 export async function getProjects() {
   const session = await requireSession("ADMIN");
@@ -188,6 +189,128 @@ export async function createProject(data: any) {
   }
 }
 
+
+// Cria o projeto + produto + lote de importação direto a partir dos números já
+// calculados no Simulador (câmbio real, impostos reais por alíquota) — em vez do
+// wizard manual, que faz o admin "adivinhar" um custo unitário sem essa base.
+// Recalcula o breakdown aqui (mesma calcImportBreakdown que a tela do Simulador usa)
+// em vez de confiar em totais vindos do client.
+export async function createProjectFromSimulation(data: {
+  investorId: string;
+  createdById: string;
+  projectName: string;
+  productName: string;
+  manufacturer?: string;
+  payoutRule: "REINVEST" | "WITHDRAW";
+  taxProfile: "PF" | "PJ";
+  simulatorInputs: SimulatorInputs;
+}) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    const inp = data.simulatorInputs;
+    const qty = inp.initialQuantity;
+    const breakdown = calcImportBreakdown(qty, inp);
+
+    const grossRevenue = inp.salePricePerUnit * qty;
+    const expectedMarginPct = grossRevenue > 0 ? (grossRevenue - breakdown.total) / grossRevenue : 0;
+
+    // 1. Projeto
+    const project = await prisma.investmentProject.create({
+      data: {
+        name: data.projectName,
+        productName: data.productName,
+        investorId: data.investorId,
+        initialCapital: breakdown.total,
+        maxCycles: inp.numBatches,
+        profitSplitPct: inp.investorSplitPct,
+        createdById: data.createdById,
+        status: "ACTIVE",
+        payoutRule: data.payoutRule,
+        taxProfile: data.taxProfile,
+        notes: "Projeto gerado a partir do Simulador de Investimento.",
+      },
+    });
+
+    // 2. Produto (mesmo padrão de busca/criação de createProject)
+    let product = await prisma.product.findFirst({
+      where: {
+        OR: [
+          { sku: data.productName.toUpperCase() },
+          { commercialName: { equals: data.productName } },
+        ],
+      },
+    });
+
+    if (!product) {
+      const brand = data.manufacturer || "Desconhecido";
+      const cleanedProduct = data.productName.toUpperCase().replace(/[^A-Z0-9]/g, "-");
+      const sku = `SKU-${cleanedProduct}-${Math.floor(100 + Math.random() * 900)}`;
+
+      product = await prisma.product.create({
+        data: {
+          sku,
+          commercialName: data.productName,
+          brand,
+          model: data.productName,
+          caliber: "9mm",
+          species: "Pistola",
+          actionType: "Semiautomática",
+          capacity: 15,
+          barrelLength: 4.0,
+          finish: "Preto",
+          originCountry: "Turquia",
+          ncm: "9303.20.00",
+          priceB2C: inp.salePricePerUnit,
+          priceB2B: breakdown.total / qty,
+          stockAvailable: qty,
+          status: "ACTIVE",
+        },
+      });
+    }
+
+    // 3. Fornecedor (mesmo padrão de createProject)
+    let supplier = await prisma.supplier.findFirst({ where: { status: "ACTIVE" } });
+    if (!supplier) {
+      supplier = await prisma.supplier.create({
+        data: { name: data.manufacturer || "Fornecedor Turquia", country: "Turquia", status: "ACTIVE" },
+      });
+    }
+
+    // 4. Lote de Importação com os valores reais simulados
+    const batchCode = `LOT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    await prisma.importLot.create({
+      data: {
+        batchCode,
+        supplierId: supplier.id,
+        countryOrigin: "Turquia",
+        purchaseDate: new Date(),
+        currency: "USD",
+        exchangeRate: inp.exchangeRate,
+        fobValue: inp.fobUnitUSD * qty,
+        freight: inp.freightUnitUSD * qty,
+        insurance: 0,
+        customsTaxes: breakdown.ii + breakdown.ipi + breakdown.pis + breakdown.cofins + breakdown.icms,
+        customsFees: breakdown.siscomex + breakdown.custoOp,
+        totalCostNationalized: breakdown.total,
+        quantityItems: qty,
+        status: "PEDIDO_FEITO",
+        expectedMarginPct,
+        investmentProjectId: project.id,
+        products: { connect: [{ id: product.id }] },
+      },
+    });
+
+    revalidatePath("/admin/projetos");
+    revalidatePath("/admin/importacao/lotes");
+    revalidatePath(`/admin/investidores/${data.investorId}`);
+    return { success: true, project };
+  } catch (error) {
+    console.error("Erro ao gerar projeto a partir do simulador:", error);
+    return { success: false, error: "Falha ao gerar projeto a partir da simulação." };
+  }
+}
 
 export async function getProjectById(id: string) {
   const session = await requireSession("ADMIN");

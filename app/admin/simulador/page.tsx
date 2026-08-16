@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +14,8 @@ import {
   type SimulatorInputs,
   type BatchProjection,
 } from "@/lib/calculations";
+import { getInvestors } from "../investidores/actions";
+import { createProjectFromSimulation } from "../projetos/actions";
 
 import { Dialog } from "@/components/ui/Dialog";
 import {
@@ -32,6 +35,7 @@ import {
   Eye,
   Printer,
   FileText,
+  Rocket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -590,10 +594,55 @@ export default function SimuladorPage() {
     return { name: "Admin", email: "admin@eleven.com" };
   });
 
+  const router = useRouter();
   const [inputs, setInputs] = useState<SimulatorInputs>(VR12_PUMP_PRESET);
   const [showTaxes, setShowTaxes] = useState(false);
   const [investorName, setInvestorName] = useState("");
   const [showReportModal, setShowReportModal] = useState(false);
+
+  // ── Gerar Projeto a partir da simulação ──────────────────────────────────
+  const [investors, setInvestors] = useState<any[]>([]);
+  const [genInvestorId, setGenInvestorId] = useState("");
+  const [genProductName, setGenProductName] = useState("");
+  const [genManufacturer, setGenManufacturer] = useState("");
+  const [genProjectName, setGenProjectName] = useState("");
+  const [genPayoutRule, setGenPayoutRule] = useState<"REINVEST" | "WITHDRAW">("REINVEST");
+  const [genTaxProfile, setGenTaxProfile] = useState<"PF" | "PJ">("PF");
+  const [generatingProject, setGeneratingProject] = useState(false);
+
+  useEffect(() => {
+    getInvestors().then(setInvestors);
+  }, []);
+
+  const handleGenerateProject = async () => {
+    if (!genInvestorId || !genProductName || !genProjectName) {
+      toast.error("Preencha investidor, produto e nome do projeto.");
+      return;
+    }
+    setGeneratingProject(true);
+    try {
+      const result = await createProjectFromSimulation({
+        investorId: genInvestorId,
+        createdById: session.id,
+        projectName: genProjectName,
+        productName: genProductName,
+        manufacturer: genManufacturer || undefined,
+        payoutRule: genPayoutRule,
+        taxProfile: genTaxProfile,
+        simulatorInputs: inputs,
+      });
+      if (result.success && result.project) {
+        toast.success(`Projeto "${genProjectName}" gerado com sucesso!`);
+        router.push(`/admin/projetos/${result.project.id}`);
+      } else {
+        toast.error(result.error || "Falha ao gerar projeto.");
+      }
+    } catch {
+      toast.error("Erro interno ao gerar projeto.");
+    } finally {
+      setGeneratingProject(false);
+    }
+  };
 
   const set = useCallback(
     (key: keyof SimulatorInputs) => (v: number) =>
@@ -750,6 +799,76 @@ export default function SimuladorPage() {
                   <span className="text-brand-accent uppercase tracking-wider">TOTAL APORTE LOTE 1</span>
                   <span className="font-mono text-brand-accent">{fmtBRL2(breakdown.total)}</span>
                 </div>
+              </div>
+
+              {/* Gerar Projeto a partir desta simulação */}
+              <div className="rounded-lg bg-brand-success/5 border border-brand-success/20 p-4 space-y-3">
+                <p className="text-[9px] font-black text-brand-success uppercase tracking-widest flex items-center gap-1.5">
+                  <Rocket size={12} /> Virar Projeto Real
+                </p>
+                <div className="flex flex-col gap-2">
+                  <select
+                    className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                    value={genInvestorId}
+                    onChange={(e) => setGenInvestorId(e.target.value)}
+                  >
+                    <option value="">Selecionar investidor...</option>
+                    {investors.map((inv) => (
+                      <option key={inv.id} value={inv.id}>{inv.name}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    placeholder="Produto / Modelo *"
+                    value={genProductName}
+                    onChange={(e) => setGenProductName(e.target.value)}
+                    className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Fabricante (opcional)"
+                    value={genManufacturer}
+                    onChange={(e) => setGenManufacturer(e.target.value)}
+                    className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Nome do Projeto *"
+                    value={genProjectName}
+                    onChange={(e) => setGenProjectName(e.target.value)}
+                    className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <select
+                      className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                      value={genPayoutRule}
+                      onChange={(e) => setGenPayoutRule(e.target.value as "REINVEST" | "WITHDRAW")}
+                    >
+                      <option value="REINVEST">Reinvestimento Automático</option>
+                      <option value="WITHDRAW">Saque de Lucros</option>
+                    </select>
+                    <select
+                      className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                      value={genTaxProfile}
+                      onChange={(e) => setGenTaxProfile(e.target.value as "PF" | "PJ")}
+                    >
+                      <option value="PF">Pessoa Física</option>
+                      <option value="PJ">Pessoa Jurídica</option>
+                    </select>
+                  </div>
+                </div>
+                <Button
+                  variant="primary"
+                  className="w-full gap-2 text-xs font-bold"
+                  onClick={handleGenerateProject}
+                  disabled={generatingProject}
+                >
+                  <Rocket size={14} />
+                  {generatingProject ? "GERANDO..." : "GERAR PROJETO"}
+                </Button>
+                <p className="text-[9px] text-brand-text-muted leading-tight">
+                  Cria o projeto, o produto e o lote de importação com os valores desta simulação (câmbio, impostos e custos reais acima) — nenhum dado é recalculado depois.
+                </p>
               </div>
 
               <div className="flex flex-col gap-4">
