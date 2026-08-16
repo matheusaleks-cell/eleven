@@ -4,7 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, ShieldAlert } from "lucide-react";
-import { signIn, getSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
+import { loginUser } from "@/app/actions/auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,28 +21,31 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", { email, password, redirect: false });
+      const authRes = await loginUser(email, password);
 
-      if (!result || result.error) {
-        setError("Credenciais inválidas.");
+      if (!authRes.success) {
+        setError(authRes.error || "Credenciais inválidas.");
         setLoading(false);
         return;
       }
 
-      const session = await getSession();
-
-      if (!session?.user || session.user.role !== "INVESTOR") {
+      if (authRes.user.role !== "INVESTOR") {
         setError("Esta área é exclusiva para investidores.");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("eleven_session", JSON.stringify({
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        role: session.user.role,
-      }));
+      await signIn("credentials", { email, password, redirect: false });
+
+      localStorage.setItem(
+        "eleven_session",
+        JSON.stringify({
+          id: authRes.user.id,
+          email: authRes.user.email,
+          name: authRes.user.name,
+          role: authRes.user.role,
+        })
+      );
 
       window.location.href = "/investidor";
     } catch {
@@ -86,23 +90,19 @@ export default function LoginPage() {
               priority
             />
           </div>
-          <div className="flex items-center gap-4">
-             <div className="h-[1px] w-10 bg-gradient-to-r from-transparent to-[#F5C400]/40" />
-             <p
-               style={{
-                 color: "#F5C400",
-                 fontSize: "10px",
-                 letterSpacing: "0.5em",
-                 textTransform: "uppercase",
-                 fontFamily: "'Rajdhani', sans-serif",
-                 fontWeight: 700,
-                 opacity: 0.9
-               }}
-             >
-               Área do Investidor
-             </p>
-             <div className="h-[1px] w-10 bg-gradient-to-l from-transparent to-[#F5C400]/40" />
-          </div>
+          <p
+            style={{
+              color: "#F5C400",
+              fontSize: "10px",
+              letterSpacing: "0.5em",
+              textTransform: "uppercase",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontWeight: 700,
+              opacity: 0.9
+            }}
+          >
+            Área do Investidor
+          </p>
         </div>
 
         {/* Card */}
@@ -133,7 +133,7 @@ export default function LoginPage() {
                   fontFamily: "'Rajdhani', sans-serif",
                 }}
               >
-                Autenticação
+                Entrar
               </h1>
             </div>
 
@@ -152,7 +152,7 @@ export default function LoginPage() {
                     marginLeft: "2px"
                   }}
                 >
-                  E-mail institucional
+                  E-mail
                 </label>
                 <div className="relative group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
@@ -205,7 +205,7 @@ export default function LoginPage() {
                     marginLeft: "2px"
                   }}
                 >
-                  Chave de acesso
+                  Senha
                 </label>
                 <div className="relative group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
@@ -249,6 +249,14 @@ export default function LoginPage() {
                     {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                <div className="flex justify-end">
+                  <a
+                    href="/esqueci-senha"
+                    className="text-[10px] text-[#555] hover:text-[#F5C400] uppercase tracking-[0.15em] font-bold transition-colors"
+                  >
+                    Esqueci minha senha
+                  </a>
+                </div>
               </div>
 
               {error && (
@@ -276,7 +284,7 @@ export default function LoginPage() {
                   cursor: loading ? 'not-allowed' : 'pointer'
                 }}
               >
-                {loading ? "Processando..." : "Entrar no Dashboard"}
+                {loading ? "Entrando..." : "Entrar"}
               </button>
             </form>
           </div>
@@ -294,7 +302,7 @@ export default function LoginPage() {
               fontWeight: 700
             }}
           >
-            Eleven Firearms Group · Autenticação Protegida
+            Eleven Firearms Group
           </p>
 
           <a 

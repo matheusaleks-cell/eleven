@@ -4,7 +4,8 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Lock, Mail, ShieldCheck, ShieldAlert } from "lucide-react";
-import { signIn, getSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
+import { loginUser } from "@/app/actions/auth";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -20,28 +21,32 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const result = await signIn("credentials", { email, password, redirect: false });
+      const authRes = await loginUser(email, password);
 
-      if (!result || result.error) {
-        setError("Credenciais administrativas inválidas.");
+      if (!authRes.success) {
+        setError(authRes.error || "Credenciais administrativas inválidas.");
         setLoading(false);
         return;
       }
 
-      const session = await getSession();
-
-      if (!session?.user || session.user.role !== "ADMIN") {
-        setError("Credenciais administrativas inválidas.");
+      if (authRes.user.role !== "ADMIN") {
+        setError("Esta área é exclusiva para administradores.");
         setLoading(false);
         return;
       }
 
-      localStorage.setItem("eleven_session", JSON.stringify({
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        role: session.user.role,
-      }));
+      // Autentica na sessão do NextAuth (cookies para middleware/layouts)
+      await signIn("credentials", { email, password, redirect: false });
+
+      localStorage.setItem(
+        "eleven_session",
+        JSON.stringify({
+          id: authRes.user.id,
+          email: authRes.user.email,
+          name: authRes.user.name,
+          role: authRes.user.role,
+        })
+      );
 
       window.location.href = "/admin";
     } catch {
@@ -53,7 +58,7 @@ export default function AdminLoginPage() {
   return (
     <div
       className="min-h-screen flex items-center justify-center relative overflow-hidden px-4"
-      style={{ background: "#050505" }}
+      style={{ background: "#080808" }}
     >
       {/* Background pattern - refined grid for admin */}
       <div
@@ -76,7 +81,7 @@ export default function AdminLoginPage() {
       >
         {/* Logo Section */}
         <div className="flex flex-col items-center mb-10">
-          <div className="mb-6 transform hover:scale-105 transition-transform duration-700">
+          <div className="mb-6">
             <Image
               src="/logos/logo-vertical-white.png"
               alt="Eleven Firearms"
@@ -86,22 +91,19 @@ export default function AdminLoginPage() {
               priority
             />
           </div>
-          <div className="flex items-center gap-4">
-             <div className="h-[1px] w-12 bg-gradient-to-r from-transparent via-[#F5C400]/40 to-[#F5C400]/60" />
-             <p
-               style={{
-                 color: "#F5C400",
-                 fontSize: "11px",
-                 letterSpacing: "0.6em",
-                 textTransform: "uppercase",
-                 fontFamily: "'Rajdhani', sans-serif",
-                 fontWeight: 700,
-               }}
-             >
-               Painel Master
-             </p>
-             <div className="h-[1px] w-12 bg-gradient-to-l from-transparent via-[#F5C400]/40 to-[#F5C400]/60" />
-          </div>
+          <p
+            style={{
+              color: "#F5C400",
+              fontSize: "10px",
+              letterSpacing: "0.5em",
+              textTransform: "uppercase",
+              fontFamily: "'Rajdhani', sans-serif",
+              fontWeight: 700,
+              opacity: 0.9,
+            }}
+          >
+            Painel Administrativo
+          </p>
         </div>
 
         {/* Card */}
@@ -109,35 +111,31 @@ export default function AdminLoginPage() {
           className="rounded-xl overflow-hidden"
           style={{
             background: "rgba(20, 20, 20, 0.9)",
-            backdropFilter: "blur(25px)",
+            backdropFilter: "blur(20px)",
             border: "1px solid rgba(245, 196, 0, 0.15)",
-            boxShadow: "0 50px 100px -30px rgba(0, 0, 0, 0.9)",
+            boxShadow: "0 40px 100px -20px rgba(0, 0, 0, 0.8)",
           }}
         >
           {/* Card Header Top Border - Dual color for Master */}
-          <div className="bg-gradient-to-r from-[#D4A900] via-[#F5C400] to-[#D4A900] h-[3px] w-full" />
+          <div className="bg-gradient-to-r from-[#D4A900] via-[#F5C400] to-[#D4A900] h-[2px] w-full" />
           
           <div className="p-10">
             <div className="flex items-center gap-4 mb-10">
-              <div className="w-12 h-12 rounded-xl bg-[#F5C400]/10 flex items-center justify-center border border-[#F5C400]/30 shadow-[0_0_20px_rgba(245,196,0,0.1)]">
-                <ShieldCheck size={24} className="text-[#F5C400]" />
+              <div className="w-10 h-10 rounded-lg bg-[#F5C400]/10 flex items-center justify-center border border-[#F5C400]/20">
+                <ShieldCheck size={18} className="text-[#F5C400]" />
               </div>
-              <div>
-                <h1
-                  style={{
-                    color: "#FFFFFF",
-                    fontSize: "22px",
-                    fontWeight: 700,
-                    letterSpacing: "0.2em",
-                    textTransform: "uppercase",
-                    fontFamily: "'Rajdhani', sans-serif",
-                    lineHeight: 1
-                  }}
-                >
-                  Acesso Master
-                </h1>
-                <p style={{ color: '#444', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '4px', fontWeight: 600 }}>Nível de Segurança: Máximo</p>
-              </div>
+              <h1
+                style={{
+                  color: "#FFFFFF",
+                  fontSize: "20px",
+                  fontWeight: 700,
+                  letterSpacing: "0.15em",
+                  textTransform: "uppercase",
+                  fontFamily: "'Rajdhani', sans-serif",
+                }}
+              >
+                Entrar
+              </h1>
             </div>
 
             <form onSubmit={handleLogin} className="space-y-8">
@@ -147,14 +145,14 @@ export default function AdminLoginPage() {
                   style={{
                     color: "#555",
                     fontSize: "11px",
-                    letterSpacing: "0.3em",
+                    letterSpacing: "0.25em",
                     textTransform: "uppercase",
                     fontFamily: "'Rajdhani', sans-serif",
                     fontWeight: 700,
                     display: "block",
                   }}
                 >
-                  Identificador Admin
+                  E-mail
                 </label>
                 <div className="relative group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
@@ -167,16 +165,16 @@ export default function AdminLoginPage() {
                     required
                     placeholder="admin@elevenfirearms.com.br"
                     style={{
-                        paddingLeft: '56px',
+                        paddingLeft: '52px',
                         paddingRight: '16px',
-                        paddingTop: '16px',
-                        paddingBottom: '16px',
-                        background: '#080808',
-                        border: '1px solid #222',
-                        borderRadius: '8px',
+                        paddingTop: '14px',
+                        paddingBottom: '14px',
+                        background: '#0A0A0A',
+                        border: '1px solid #1A1A1A',
+                        borderRadius: '6px',
                         color: '#FFF',
                         width: '100%',
-                        fontSize: '15px',
+                        fontSize: '14px',
                         fontFamily: "'Rajdhani', sans-serif",
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                         outline: 'none'
@@ -187,9 +185,9 @@ export default function AdminLoginPage() {
                         e.currentTarget.style.background = '#0C0C0C';
                     }}
                     onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#222';
+                        e.currentTarget.style.borderColor = '#1A1A1A';
                         e.currentTarget.style.boxShadow = 'none';
-                        e.currentTarget.style.background = '#080808';
+                        e.currentTarget.style.background = '#0A0A0A';
                     }}
                   />
                 </div>
@@ -201,14 +199,14 @@ export default function AdminLoginPage() {
                   style={{
                     color: "#555",
                     fontSize: "11px",
-                    letterSpacing: "0.3em",
+                    letterSpacing: "0.25em",
                     textTransform: "uppercase",
                     fontFamily: "'Rajdhani', sans-serif",
                     fontWeight: 700,
                     display: "block",
                   }}
                 >
-                  Assinatura Digital
+                  Senha
                 </label>
                 <div className="relative group">
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
@@ -221,16 +219,16 @@ export default function AdminLoginPage() {
                     required
                     placeholder="••••••••"
                     style={{
-                        paddingLeft: '56px',
-                        paddingRight: '56px',
-                        paddingTop: '16px',
-                        paddingBottom: '16px',
-                        background: '#080808',
-                        border: '1px solid #222',
-                        borderRadius: '8px',
+                        paddingLeft: '52px',
+                        paddingRight: '52px',
+                        paddingTop: '14px',
+                        paddingBottom: '14px',
+                        background: '#0A0A0A',
+                        border: '1px solid #1A1A1A',
+                        borderRadius: '6px',
                         color: '#FFF',
                         width: '100%',
-                        fontSize: '15px',
+                        fontSize: '14px',
                         fontFamily: "'Rajdhani', sans-serif",
                         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                         outline: 'none'
@@ -241,9 +239,9 @@ export default function AdminLoginPage() {
                         e.currentTarget.style.background = '#0C0C0C';
                     }}
                     onBlur={(e) => {
-                        e.currentTarget.style.borderColor = '#222';
+                        e.currentTarget.style.borderColor = '#1A1A1A';
                         e.currentTarget.style.boxShadow = 'none';
-                        e.currentTarget.style.background = '#080808';
+                        e.currentTarget.style.background = '#0A0A0A';
                     }}
                   />
                   <button
@@ -253,6 +251,14 @@ export default function AdminLoginPage() {
                   >
                     {showPw ? <EyeOff size={20} /> : <Eye size={20} />}
                   </button>
+                </div>
+                <div className="flex justify-end">
+                  <a
+                    href="/esqueci-senha"
+                    className="text-[10px] text-[#444] hover:text-[#F5C400] uppercase tracking-[0.15em] font-bold transition-colors"
+                  >
+                    Esqueci minha senha
+                  </a>
                 </div>
               </div>
 
@@ -270,7 +276,7 @@ export default function AdminLoginPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-5 rounded-lg font-bold uppercase tracking-[0.3em] transition-all duration-500 active:scale-[0.97] disabled:opacity-50 relative overflow-hidden group"
+                className="w-full py-4 rounded-lg font-bold uppercase tracking-[0.25em] transition-all duration-300 active:scale-[0.98] disabled:opacity-50 relative overflow-hidden group"
                 style={{
                   background: loading ? "#D4A900" : "#F5C400",
                   color: "#000000",
@@ -281,7 +287,7 @@ export default function AdminLoginPage() {
                   cursor: loading ? 'not-allowed' : 'pointer'
                 }}
               >
-                <span className="relative z-10">{loading ? "Processando Protocolo..." : "★ Entrar no Sistema"}</span>
+                <span className="relative z-10">{loading ? "Entrando..." : "Entrar"}</span>
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
               </button>
             </form>
@@ -302,7 +308,7 @@ export default function AdminLoginPage() {
                 fontWeight: 700
               }}
             >
-              Eleven Firearms Group · Protocolo de Acesso Master
+              Eleven Firearms Group
             </p>
           </div>
 
