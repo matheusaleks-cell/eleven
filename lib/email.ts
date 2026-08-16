@@ -1,8 +1,18 @@
 import "server-only";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "Eleven Firearms <onboarding@resend.dev>";
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
+
+const transporter =
+  GMAIL_USER && GMAIL_APP_PASSWORD
+    ? nodemailer.createTransport({
+        service: "gmail",
+        auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD },
+      })
+    : null;
+
+const FROM_EMAIL = GMAIL_USER ? `Eleven Firearms <${GMAIL_USER}>` : "";
 
 function baseEmailHtml(title: string, bodyHtml: string, ctaLabel: string, ctaUrl: string) {
   return `
@@ -46,8 +56,8 @@ function baseEmailHtml(title: string, bodyHtml: string, ctaLabel: string, ctaUrl
 }
 
 export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string) {
-  if (!resend) {
-    console.error("[email] RESEND_API_KEY não configurada — e-mail de redefinição não enviado.");
+  if (!transporter) {
+    console.error("[email] GMAIL_USER/GMAIL_APP_PASSWORD não configurados — e-mail de redefinição não enviado.");
     return { success: false, error: "Serviço de e-mail não configurado." };
   }
 
@@ -59,17 +69,13 @@ export async function sendPasswordResetEmail(to: string, name: string, resetUrl:
       resetUrl
     );
 
-    const { error } = await resend.emails.send({
+    await transporter.sendMail({
       from: FROM_EMAIL,
       to,
       subject: "Redefinição de senha — Eleven Firearms",
       html,
     });
 
-    if (error) {
-      console.error("[email] Erro ao enviar e-mail de redefinição:", error);
-      return { success: false, error: error.message };
-    }
     return { success: true };
   } catch (err) {
     console.error("[email] Erro ao enviar e-mail de redefinição:", err);

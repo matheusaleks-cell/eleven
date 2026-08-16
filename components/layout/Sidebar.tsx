@@ -26,6 +26,7 @@ import {
   UserPlus,
   UsersRound,
   DollarSign,
+  ShieldCheck,
 } from "lucide-react";
 
 
@@ -171,6 +172,8 @@ function SidebarContent({ role, userName, userEmail, onMobileClose, pathname, se
                 ))}
               </div>
             )}
+            {/* Usuários */}
+            <NavLink item={{ label: "Usuários", href: "/admin/usuarios", icon: <ShieldCheck size={18} /> }} />
             {/* Submenu Configurações */}
             <button
               onClick={() => setSettingsOpen(!settingsOpen)}
