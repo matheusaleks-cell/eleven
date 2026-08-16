@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { weaponStatusForOrder } from "@/lib/order-status";
+import { generateAndSendAnexoP } from "@/app/admin/crm/vendas/actions";
 
 export async function searchCustomersForLead(query: string) {
   const session = await requireSession("ADMIN");
@@ -298,6 +299,8 @@ export async function convertToOrder(leadId: string, data: any) {
     revalidatePath("/admin/crm/clientes");
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
+
+    await generateAndSendAnexoP(order.id);
 
     return { success: true, orderId: order.id };
   } catch (error: any) {

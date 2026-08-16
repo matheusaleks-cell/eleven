@@ -239,6 +239,98 @@ export async function getSalesOrderPdfData(orderId: string) {
   }
 }
 
+// Gera o Anexo P automaticamente a cada venda registrada, salva como Document vinculado
+// ao pedido (fica acessível no histórico do cliente) e envia por e-mail com instruções de
+// preenchimento. Nunca deve derrubar a venda em si — qualquer erro aqui é só logado.
+export async function generateAndSendAnexoP(orderId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return;
+
+  try {
+    const data = await getSalesOrderPdfData(orderId);
+    if (!data) return;
+
+    const { generateAnexoPBuffer } = await import("@/lib/pdf-server");
+    const pdfBuffer = generateAnexoPBuffer(data.buyer, data.items);
+
+    await prisma.document.create({
+      data: {
+        name: `Anexo_P_${data.orderNumber}.pdf`,
+        type: "PDF",
+        category: "Anexo P (gerado automaticamente)",
+        size: `${(pdfBuffer.length / 1024).toFixed(1)} KB`,
+        base64Data: pdfBuffer.toString("base64"),
+        salesOrderId: orderId,
+      },
+    });
+
+    if (data.buyer.email) {
+      const { sendAnexoPEmail } = await import("@/lib/email");
+      await sendAnexoPEmail(data.buyer.email, data.buyer.name || "Cliente", data.orderNumber, pdfBuffer);
+    }
+  } catch (error) {
+    console.error("Erro ao gerar/enviar Anexo P automático:", error);
+  }
+}
+
+// Documentos vinculados ao pedido — Anexo P (gerado automaticamente), Anexo P assinado,
+// nota fiscal, guia de tráfego etc. Ficam acessíveis no histórico da venda para eventuais
+// fiscalizações futuras.
+export async function getOrderDocuments(salesOrderId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
+  try {
+    return await prisma.document.findMany({
+      where: { salesOrderId },
+      orderBy: { createdAt: "desc" },
+    });
+  } catch (error) {
+    console.error("Erro ao buscar documentos do pedido:", error);
+    return [];
+  }
+}
+
+export async function uploadOrderDocument(
+  salesOrderId: string,
+  data: { name: string; type: string; category: string; size: string; base64Data: string }
+) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    const document = await prisma.document.create({
+      data: {
+        name: data.name,
+        type: data.type,
+        category: data.category,
+        size: data.size,
+        base64Data: data.base64Data,
+        salesOrderId,
+      },
+    });
+    revalidatePath("/admin/vendas");
+    return { success: true, document };
+  } catch (error) {
+    console.error("Erro ao fazer upload de documento do pedido:", error);
+    return { success: false, error: "Falha ao salvar documento." };
+  }
+}
+
+export async function deleteOrderDocument(documentId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    await prisma.document.delete({ where: { id: documentId } });
+    revalidatePath("/admin/vendas");
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao excluir documento do pedido:", error);
+    return { success: false, error: "Falha ao excluir documento." };
+  }
+}
+
 export async function getLotOptionsForCart(productIds: string[]) {
   const session = await requireSession("ADMIN");
   if (!session) return [];
@@ -423,6 +515,8 @@ export async function createDirectSale(data: {
     revalidatePath("/admin/crm/clientes");
     revalidatePath("/admin/erp/produtos");
     revalidatePath("/admin/mapa-de-armas");
+
+    await generateAndSendAnexoP(order.id);
 
     return { success: true, orderId: order.id, orderNumber };
   } catch (error: any) {

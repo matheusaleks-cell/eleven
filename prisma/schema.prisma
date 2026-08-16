@@ -370,6 +370,7 @@ model SalesOrder {
   seller          User        @relation("OrderSeller", fields: [sellerId], references: [id])
   weapons         WeaponMap[]
   invoices        Invoice[]
+  documents       Document[]
 
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
@@ -489,7 +490,10 @@ model Document {
 
   userId          String?            @map("user_id")
   user            User?              @relation("UserDocuments", fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  salesOrderId    String?            @map("sales_order_id")
+  salesOrder      SalesOrder?        @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+
   realizedValue   Float?             @map("realized_value")
   realizedDate    DateTime?          @map("realized_date")
 
@@ -500,6 +504,7 @@ model Document {
   @@index([customerId])
   @@index([lotId])
   @@index([userId])
+  @@index([salesOrderId])
   @@map("documents")
 }
 

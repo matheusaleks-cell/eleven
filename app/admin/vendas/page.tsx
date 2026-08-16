@@ -27,7 +27,7 @@ import {
   CreditCard,
   Layers,
 } from "lucide-react";
-import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder, getSalesOrderPdfData } from "@/app/admin/crm/vendas/actions";
+import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder, getSalesOrderPdfData, getOrderDocuments, uploadOrderDocument, deleteOrderDocument } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { generateAnexoPPdf, generatePedidoPdf } from "@/lib/pdf-helpers";
@@ -70,6 +70,11 @@ export default function VendasPage() {
   // Emissão de Anexo P / Pedido para um pedido já concluído (id do pedido + tipo em geração no momento)
   const [generatingDoc, setGeneratingDoc] = useState<{ orderId: string; type: "anexo" | "pedido" } | null>(null);
 
+  // Documentos anexados ao pedido em edição (Anexo P gerado automaticamente, assinado, NF, guia de tráfego...)
+  const [orderDocuments, setOrderDocuments] = useState<any[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(false);
+  const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
+
   useEffect(() => {
     try {
       const s = localStorage.getItem("eleven_session");
@@ -111,11 +116,68 @@ export default function VendasPage() {
     }).format(order.totalValue || 0);
     setEditTotal(formatted);
     setConfirmDelete(false);
+    loadOrderDocuments(order.id);
   };
 
   const closeEdit = () => {
     setEditingOrder(null);
     setConfirmDelete(false);
+    setOrderDocuments([]);
+  };
+
+  const loadOrderDocuments = async (orderId: string) => {
+    setLoadingDocs(true);
+    try {
+      const docs = await getOrderDocuments(orderId);
+      setOrderDocuments(docs);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  const handleUploadOrderDocument = async (category: string, file: File) => {
+    if (!editingOrder) return;
+    if (file.size > 4.5 * 1024 * 1024) {
+      toast.error("Arquivo muito grande. Limite de 4,5 MB.");
+      return;
+    }
+    setUploadingCategory(category);
+    try {
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await uploadOrderDocument(editingOrder.id, {
+        name: file.name,
+        type: file.type.includes("pdf") ? "PDF" : "IMAGE",
+        category,
+        size: `${(file.size / 1024).toFixed(1)} KB`,
+        base64Data,
+      });
+      if (res.success) {
+        toast.success("Documento anexado!");
+        loadOrderDocuments(editingOrder.id);
+      } else {
+        toast.error(res.error || "Erro ao anexar documento.");
+      }
+    } catch {
+      toast.error("Erro ao ler o arquivo.");
+    } finally {
+      setUploadingCategory(null);
+    }
+  };
+
+  const handleDeleteOrderDocument = async (documentId: string) => {
+    if (!editingOrder) return;
+    const res = await deleteOrderDocument(documentId);
+    if (res.success) {
+      toast.success("Documento removido.");
+      loadOrderDocuments(editingOrder.id);
+    } else {
+      toast.error(res.error || "Erro ao remover documento.");
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -638,6 +700,54 @@ export default function VendasPage() {
                         placeholder="Notas adicionais sobre o pedido..."
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Documentos do Pedido */}
+                <div className="px-5 pb-3">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <FileText size={11} className="text-brand-accent" />
+                    <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Documentos</span>
+                  </div>
+                  <div className="space-y-2">
+                    {loadingDocs ? (
+                      <p className="text-[10px] text-brand-text-muted uppercase font-bold">Carregando...</p>
+                    ) : orderDocuments.length === 0 ? (
+                      <p className="text-[10px] text-brand-text-muted uppercase font-bold">Nenhum documento anexado ainda.</p>
+                    ) : (
+                      orderDocuments.map(doc => (
+                        <div key={doc.id} className="flex items-center justify-between gap-2 px-3 py-2 rounded border border-brand-border bg-brand-surface/20">
+                          <a href={doc.base64Data} download={doc.name} className="flex-1 min-w-0">
+                            <p className="text-[10px] font-bold text-white truncate">{doc.name}</p>
+                            <p className="text-[9px] text-brand-text-muted uppercase">{doc.category} · {doc.size}</p>
+                          </a>
+                          <button onClick={() => handleDeleteOrderDocument(doc.id)} className="text-brand-text-muted hover:text-brand-danger shrink-0">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 mt-3">
+                    {["Anexo P Assinado", "Nota Fiscal", "Guia de Tráfego"].map(category => (
+                      <label
+                        key={category}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 rounded border border-dashed border-brand-border text-[9px] font-black uppercase tracking-widest text-brand-text-muted hover:text-brand-accent hover:border-brand-accent cursor-pointer transition-all"
+                      >
+                        {uploadingCategory === category ? "Enviando..." : <><Plus size={11} /> Anexar {category}</>}
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          className="hidden"
+                          disabled={uploadingCategory !== null}
+                          onChange={e => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadOrderDocument(category, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    ))}
                   </div>
                 </div>
               </div>

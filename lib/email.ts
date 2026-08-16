@@ -55,6 +55,78 @@ function baseEmailHtml(title: string, bodyHtml: string, ctaLabel: string, ctaUrl
   </div>`;
 }
 
+function baseEmailHtmlNoAction(title: string, bodyHtml: string) {
+  return `
+  <div style="background:#080808;padding:40px 16px;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" style="max-width:480px;margin:0 auto;background:#121212;border-radius:12px;overflow:hidden;border:1px solid #1f1f1f;">
+      <tr>
+        <td style="background:linear-gradient(90deg,#F5C400,#D4A900);height:3px;font-size:0;line-height:0;">&nbsp;</td>
+      </tr>
+      <tr>
+        <td style="padding:32px 32px 8px;text-align:center;">
+          <p style="margin:0;color:#F5C400;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;">Eleven Firearms</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:16px 32px 8px;text-align:center;">
+          <h1 style="margin:0;color:#FFFFFF;font-size:20px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">${title}</h1>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:8px 32px 32px;color:#AAAAAA;font-size:14px;line-height:1.6;text-align:center;">
+          ${bodyHtml}
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:20px 32px;border-top:1px solid #1f1f1f;text-align:center;">
+          <p style="margin:0;color:#444;font-size:10px;letter-spacing:2px;text-transform:uppercase;">Eleven Firearms Group · Sistema de Investimentos</p>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+// Envio genérico com anexo — usado para mandar documentos gerados pelo sistema
+// (ex: Anexo P) direto para o cliente, sem depender de um link de ação.
+export async function sendEmailWithAttachment(params: {
+  to: string;
+  subject: string;
+  title: string;
+  bodyHtml: string;
+  attachments: { filename: string; content: Buffer }[];
+}) {
+  if (!transporter) {
+    console.error("[email] GMAIL_USER/GMAIL_APP_PASSWORD não configurados — e-mail não enviado.");
+    return { success: false, error: "Serviço de e-mail não configurado." };
+  }
+
+  try {
+    await transporter.sendMail({
+      from: FROM_EMAIL,
+      to: params.to,
+      subject: params.subject,
+      html: baseEmailHtmlNoAction(params.title, params.bodyHtml),
+      attachments: params.attachments,
+    });
+    return { success: true };
+  } catch (err) {
+    console.error("[email] Erro ao enviar e-mail com anexo:", err);
+    return { success: false, error: "Falha ao enviar e-mail." };
+  }
+}
+
+// Anexo P gerado automaticamente a cada venda registrada, com instruções de
+// preenchimento para o cliente assinar e devolver.
+export async function sendAnexoPEmail(to: string, customerName: string, orderNumber: string, pdfBuffer: Buffer) {
+  return sendEmailWithAttachment({
+    to,
+    subject: `Anexo P — Pedido ${orderNumber} — Eleven Firearms`,
+    title: "Seu Anexo P está pronto",
+    bodyHtml: `Olá, ${customerName}.<br /><br />Segue em anexo o <strong>Anexo P</strong> referente ao seu pedido <strong>${orderNumber}</strong>.<br /><br /><strong>Instruções:</strong> imprima, preencha os campos indicados, assine e devolva uma cópia assinada para a Eleven Firearms (por e-mail ou presencialmente) antes da retirada/entrega do produto.<br /><br />Qualquer dúvida sobre o preenchimento, responda este e-mail.`,
+    attachments: [{ filename: `Anexo_P_${orderNumber}.pdf`, content: pdfBuffer }],
+  });
+}
+
 export async function sendPasswordResetEmail(to: string, name: string, resetUrl: string) {
   if (!transporter) {
     console.error("[email] GMAIL_USER/GMAIL_APP_PASSWORD não configurados — e-mail de redefinição não enviado.");
