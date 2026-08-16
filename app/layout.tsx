@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "sonner";
 import SessionProviderWrapper from "@/components/providers/SessionProviderWrapper";
@@ -6,6 +6,24 @@ import SessionProviderWrapper from "@/components/providers/SessionProviderWrappe
 export const metadata: Metadata = {
   title: "Eleven Firearms · Sistema de Investimentos",
   description: "Plataforma de gestão de ciclos de investimento — Eleven Firearms",
+  // Faz o iOS abrir em tela cheia (sem barra do Safari) quando salvo na tela de início
+  appleWebApp: {
+    capable: true,
+    title: "Eleven",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    apple: "/logos/logo-vertical-yellow.png",
+  },
+};
+
+// viewport-fit=cover libera as safe areas (notch / barra de gestos) para o layout
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#1A1A1A",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({

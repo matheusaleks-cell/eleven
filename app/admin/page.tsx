@@ -145,7 +145,7 @@ export default function AdminDashboard() {
   return (
     <DashboardLayout role="ADMIN" userName={session.name} userEmail={session.email} pageTitle="Dashboard">
       {/* Welcome */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6" style={{ marginBottom: "24px", flexShrink: 0 }}>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6" style={{ marginBottom: "var(--space-5)", flexShrink: 0 }}>
         <div>
           <h1 style={{ color: "#FFFFFF", fontSize: "32px", fontWeight: 700, fontFamily: "'Rajdhani', sans-serif", letterSpacing: "-0.02em" }}>
             Bem-vindo, {session.name}
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Filtros */}
-      <div style={{ marginBottom: "24px", flexShrink: 0 }}>
+      <div style={{ marginBottom: "var(--space-5)", flexShrink: 0 }}>
         <FilterBar
           startDate={startDate}
           endDate={endDate}
@@ -222,7 +222,7 @@ export default function AdminDashboard() {
         />
       </div>
 
-      <div style={{ display: "block", height: "32px", width: "100%", flexShrink: 0 }} />
+      <div style={{ display: "block", height: "var(--space-6)", width: "100%", flexShrink: 0 }} />
 
       {/* ── PAINEL: FLUXO DE CAIXA REALIZADO ── */}
       {stats && (
@@ -233,7 +233,7 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <p style={{ margin: 0, fontSize: "11px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
-                ★ Fluxo de Caixa Realizado (Vendas Físicas em Tempo Real) ★
+                Fluxo de Caixa Realizado (Vendas Físicas em Tempo Real)
               </p>
               <p style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif", marginTop: 4 }}>
                 Contabilidade real baseada em cada arma vendida · {stats.weaponsSold || 0} unidades liquidadas
@@ -373,14 +373,14 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      <div style={{ display: "block", height: "32px", width: "100%", flexShrink: 0 }} />
+      <div style={{ display: "block", height: "var(--space-6)", width: "100%", flexShrink: 0 }} />
 
       {/* Charts */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
         <div className="rounded-[4px] p-10" style={{ background: "#242424", border: "1px solid #333" }}>
           <div className="mb-6">
             <p className="section-divider" style={{ margin: 0, fontSize: "11px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
-              ★ Evolução do Capital ★
+              Evolução do Capital
             </p>
             <p style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif", marginTop: 4 }}>
               {filteredProjects.length > 0 ? filteredProjects[0].name : "Nenhum projeto selecionado"}
@@ -392,7 +392,7 @@ export default function AdminDashboard() {
         <div className="rounded-[4px] p-10" style={{ background: "#242424", border: "1px solid #333" }}>
           <div className="mb-6">
             <p style={{ margin: 0, fontSize: "11px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
-              ★ Faturamento por Ciclo ★
+              Faturamento por Ciclo
             </p>
             <p style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif", marginTop: 4 }}>
               Ciclos do projeto em destaque
@@ -407,7 +407,7 @@ export default function AdminDashboard() {
       {/* Recent Projects Table */}
       <div className="flex items-center justify-between mb-8">
         <h2 className="section-divider" style={{ margin: 0, fontSize: "16px", color: "#F5C400", letterSpacing: "0.2em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
-          ★ Projetos Recentes ★
+          Projetos Recentes
         </h2>
         <Link href="/admin/projetos" className="text-sm text-gray-500 hover:text-yellow-500 flex items-center gap-2 uppercase tracking-widest font-bold">
           Ver todos <ArrowRight size={14} />
@@ -484,7 +484,7 @@ export default function AdminDashboard() {
             {/* Liquidação de Lotes */}
             <div className="xl:col-span-2 rounded-[4px] p-8" style={{ background: "#242424", border: "1px solid #333" }}>
               <h3 style={{ margin: "0 0 20px 0", fontSize: "12px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
-                ★ Liquidação Física de Lotes em Giro ★
+                Liquidação Física de Lotes em Giro
               </h3>
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                 {stats.activeLotsProgress.map((lot: any) => (
@@ -511,7 +511,7 @@ export default function AdminDashboard() {
             {/* Status de Armas */}
             <div className="rounded-[4px] p-8" style={{ background: "#242424", border: "1px solid #333" }}>
               <h3 style={{ margin: "0 0 20px 0", fontSize: "12px", color: "#F5C400", letterSpacing: "0.15em", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700, textTransform: "uppercase" }}>
-                ★ Distribuição de Estoque Geral ★
+                Distribuição de Estoque Geral
               </h3>
               <div className="space-y-4">
                 <div className="flex justify-between items-center py-2.5 border-b border-[#2d2d2d] text-xs">

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { MobileTabBar } from "@/components/layout/MobileTabBar";
+import { cn } from "@/lib/utils";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -14,22 +16,12 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, role, userName, userEmail, pageTitle }: DashboardLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
 
-  // Robust screen width detection
-  useEffect(() => {
-    const checkScreen = () => {
-      setIsDesktop(window.innerWidth >= 1024);
-    };
-    
-    checkScreen();
-    window.addEventListener("resize", checkScreen);
-    return () => window.removeEventListener("resize", checkScreen);
-  }, []);
+  // No mobile o investidor navega pela tab bar inferior; o admin continua no drawer
+  const useTabBar = role === "INVESTOR";
 
   return (
-    <div style={{ minHeight: "100vh", background: "#1A1A1A", display: "flex", width: "100%" }}>
-      {/* Sidebar - Always active, handles its own visibility internal logic but we help it */}
+    <div className="app-shell">
       <Sidebar
         role={role}
         userName={userName}
@@ -38,19 +30,8 @@ export function DashboardLayout({ children, role, userName, userEmail, pageTitle
         onMobileClose={() => setMobileOpen(false)}
       />
 
-      {/* Main area — offset by sidebar on desktop */}
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          height: "100vh",
-          flex: 1,
-          width: "100%",
-          marginLeft: isDesktop ? "280px" : "0",
-          transition: "margin-left 0.3s cubic-bezier(0.4,0,0.2,1)",
-          overflow: "hidden"
-        }}
-      >
+      {/* Área principal — o recuo da sidebar no desktop é feito por CSS (sem flash no load) */}
+      <div className="app-main">
         <Header
           onMobileMenuOpen={() => setMobileOpen(true)}
           userName={userName}
@@ -58,20 +39,11 @@ export function DashboardLayout({ children, role, userName, userEmail, pageTitle
           pageTitle={pageTitle}
         />
 
-        <main
-          className="custom-scrollbar"
-          style={{
-            flex: 1,
-            padding: isDesktop ? "32px" : "16px",
-            width: "100%",
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column"
-          }}
-        >
-
+        <main className={cn("app-content custom-scrollbar", useTabBar && "app-content--tabbar")}>
           {children}
         </main>
+
+        {useTabBar && <MobileTabBar />}
       </div>
     </div>
   );

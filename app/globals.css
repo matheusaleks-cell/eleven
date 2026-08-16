@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./tokens.css";
 
 @theme {
   --font-rajdhani: "Rajdhani", sans-serif;
@@ -34,10 +35,16 @@
   --color-warning:        #FF9800;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Precisa estar na layer "base" do Tailwind — fora de layer nenhuma, um reset unlayered
+   sempre vence QUALQUER classe utilitária (p-*, m-*, px-*, py-*, space-y-* etc.), não
+   importa a especificidade. Era por isso que praticamente nenhuma classe de padding/margin
+   do Tailwind fazia efeito no projeto, forçando todo mundo a usar style inline pra espaçamento. */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 html {
@@ -271,6 +278,101 @@ p, span, label, input, textarea, select, td {
   .content-offset {
     margin-left: 260px;
   }
+}
+
+/* ==========================================================================
+   APP SHELL — Sidebar fixa (280px, ver components/layout/Sidebar.tsx) + área
+   principal. O recuo em desktop é feito aqui via media query (mesmo breakpoint
+   de 1024px que o Sidebar usa em JS pra decidir drawer x fixa), pra não
+   depender de estado JS e a área principal não ficar atrás da sidebar.
+   ========================================================================== */
+.app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--color-bg-primary);
+}
+
+.app-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+@media (min-width: 1024px) {
+  .app-main {
+    margin-left: 280px;
+  }
+}
+
+.app-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+@media (min-width: 768px) {
+  .app-content {
+    padding: 32px;
+  }
+}
+
+/* Espaço extra pra não ficar atrás da tab bar fixa no mobile do investidor */
+.app-content--tabbar {
+  padding-bottom: calc(var(--app-tabbar-h, 62px) + env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+@media (min-width: 1024px) {
+  .app-content--tabbar {
+    padding-bottom: 32px;
+  }
+}
+
+/* ==========================================================================
+   MOBILE TAB BAR — navegação inferior fixa (investidor, telas < 1024px)
+   ========================================================================== */
+.app-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  height: calc(var(--app-tabbar-h, 62px) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: rgba(22, 22, 22, 0.92);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (min-width: 1024px) {
+  .app-tabbar {
+    display: none;
+  }
+}
+
+.app-tabbar-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--touch-target-min, 44px);
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.app-tabbar-item[data-active="true"] {
+  color: var(--color-accent);
+}
+
+.app-tabbar-icon {
+  display: flex;
 }
 
 /* Print Styles */

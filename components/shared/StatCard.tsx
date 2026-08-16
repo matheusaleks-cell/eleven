@@ -13,18 +13,19 @@ interface StatCardProps {
 export function StatCard({ title, value, icon, sub, accent = false }: StatCardProps) {
   return (
     <div
-      className="rounded-[4px] p-8 transition-all"
+      className="rounded-[4px] transition-all"
       style={{
         background: "#242424",
         border: "1px solid #333",
         borderLeft: accent ? "4px solid #F5C400" : "1px solid #333",
+        padding: "var(--space-5)",
       }}
     >
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between" style={{ marginBottom: "var(--space-4)" }}>
         <p
           style={{
             color: "#A0A0A0",
-            fontSize: "13px",
+            fontSize: "var(--font-body-sm-size)",
             letterSpacing: "0.15em",
             textTransform: "uppercase",
             fontFamily: "'Rajdhani', sans-serif",
@@ -34,10 +35,11 @@ export function StatCard({ title, value, icon, sub, accent = false }: StatCardPr
           {title}
         </p>
         <div
-          className="p-2.5 rounded-[2px]"
+          className="rounded-[2px]"
           style={{
             background: "rgba(245,196,0,0.08)",
             color: "#F5C400",
+            padding: "var(--space-2)",
           }}
         >
           {icon}

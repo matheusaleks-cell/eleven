@@ -42,9 +42,9 @@ export function FilterBar({
   };
 
   return (
-    <div 
-      className="flex flex-wrap items-end gap-8 p-10 rounded-[4px]" 
-      style={{ background: "#1E1E1E", border: "1px solid #2A2A2A" }}
+    <div
+      className="flex flex-wrap items-end rounded-[4px]"
+      style={{ background: "#1E1E1E", border: "1px solid #2A2A2A", padding: "var(--space-5)", gap: "var(--space-5)" }}
     >
       {/* Período */}
       <div className="flex flex-col gap-1.5">

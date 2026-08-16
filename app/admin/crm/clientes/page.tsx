@@ -377,7 +377,7 @@ export default function ClientesPage() {
                         className="hover:bg-brand-accent/5 border-b border-brand-border/10 transition-all cursor-pointer group"
                         onClick={() => setViewingCustomer(cliente)}
                       >
-                        <td className="px-6 py-6">
+                        <td className="px-6 py-3">
                            <div className="flex items-center gap-4">
                               <div className="w-10 h-10 rounded-lg bg-brand-accent/10 border border-brand-accent/20 flex items-center justify-center text-brand-accent font-black text-lg shadow-[0_0_15px_rgba(245,196,0,0.05)] group-hover:shadow-[0_0_20px_rgba(245,196,0,0.15)] transition-all">
                                  {cliente.name.charAt(0).toUpperCase()}
@@ -396,19 +396,19 @@ export default function ClientesPage() {
                               </div>
                            </div>
                         </td>
-                        <td className="px-6 py-6">
+                        <td className="px-6 py-3">
                            <div className="flex flex-col gap-1">
                               <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Documento</p>
                               <p className="text-[11px] font-mono font-bold text-white/80">{cliente.document}</p>
                            </div>
                         </td>
-                        <td className="px-6 py-6">
+                        <td className="px-6 py-3">
                            <div className="flex flex-col gap-1">
                               <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">UF</p>
                               <p className="text-[11px] font-black text-white/80 uppercase">{cliente.state || "—"}</p>
                            </div>
                         </td>
-                        <td className="px-6 py-6 text-right">
+                        <td className="px-6 py-3 text-right">
                            <div className="flex flex-col gap-1 items-end">
                               <p className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest text-right">Total Investido</p>
                               <p className="text-[14px] font-mono font-black text-brand-accent leading-none">
@@ -416,7 +416,7 @@ export default function ClientesPage() {
                               </p>
                            </div>
                         </td>
-                        <td className="px-6 py-6 text-right pr-12">
+                        <td className="px-6 py-3 text-right pr-12">
                            <div className="flex justify-end gap-2">
                               <Button 
                                 variant="ghost" 

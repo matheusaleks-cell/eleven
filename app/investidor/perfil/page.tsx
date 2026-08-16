@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { User, Mail, Phone, MapPin, Landmark, Briefcase, Calendar, Shield, CreditCard, ArrowLeft } from "lucide-react";
+import { User, Mail, Phone, MapPin, Landmark, Briefcase, Calendar, Shield, CreditCard, ArrowLeft, LogOut } from "lucide-react";
 import { getInvestorProfile } from "../actions";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { toast } from "sonner";
 
 export default function PerfilPage() {
@@ -61,6 +62,13 @@ export default function PerfilPage() {
     } finally {
       setUpdating(false);
     }
+  };
+
+  // Mesmo fluxo de logout do Sidebar (limpa a sessão local antes do signOut)
+  const handleLogout = async () => {
+    localStorage.removeItem("eleven_session");
+    await signOut({ redirect: false });
+    window.location.href = "/login";
   };
 
   const handleRequestChange = () => {
@@ -206,6 +214,14 @@ export default function PerfilPage() {
               <p className="text-[9px] text-center text-brand-text-muted italic">
                 A senha deve conter no mínimo 6 caracteres.
               </p>
+
+              {/* Mobile: a navegação é pela tab bar (sem drawer), então o logout mora aqui */}
+              <button
+                onClick={handleLogout}
+                className="lg:hidden w-full flex items-center justify-center gap-2 mt-2 py-3 rounded border border-brand-border text-brand-text-secondary text-[10px] font-black uppercase tracking-widest active:scale-[0.98] transition-transform"
+              >
+                <LogOut size={14} /> Sair da Conta
+              </button>
             </Card>
           </div>
 

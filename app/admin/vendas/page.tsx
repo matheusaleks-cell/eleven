@@ -686,7 +686,7 @@ export default function VendasPage() {
                       className="flex-[2] py-2.5 rounded text-[10px] font-black uppercase tracking-widest"
                       style={{ background: savingEdit ? "#333" : "#F5C400", color: savingEdit ? "#606060" : "#1A1A1A" }}
                     >
-                      {savingEdit ? "Salvando..." : "★ Salvar Alterações"}
+                      {savingEdit ? "Salvando..." : "Salvar Alterações"}
                     </button>
                   </div>
                 )}

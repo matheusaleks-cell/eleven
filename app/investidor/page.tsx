@@ -82,7 +82,7 @@ export default function InvestorDashboard() {
 
   return (
     <DashboardLayout role="INVESTOR" userName={session.name} userEmail={session.email}>
-      <div className="flex flex-col gap-10 animate-fade-in pb-10 px-4 md:px-0">
+      <div className="flex flex-col gap-8 md:gap-10 animate-fade-in">
 
         {/* Welcome Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
