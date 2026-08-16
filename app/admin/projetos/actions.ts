@@ -287,11 +287,74 @@ export async function createCycle(data: any) {
       });
     }
 
+    // Abre automaticamente o próximo lote usando o capital de reinvestimento apurado —
+    // antes esse processo era manual e desconectado em 2 passos (fechar o ciclo aqui,
+    // depois ir em Importação criar um lote novo e vincular ao projeto à parte). Só
+    // reinveste se o projeto for de fato configurado pra reinvestir (payoutRule),
+    // ainda não atingiu o máximo de ciclos e sobrou capital de fato.
+    const reinvestmentShare = data.reinvestmentShare || data.nextCycleCapital || 0;
+    await tryAutoOpenNextLot(data.projectId, data.importLotId, reinvestmentShare);
+
     revalidatePath(`/admin/projetos/${data.projectId}`);
     return { success: true, cycle };
   } catch (error) {
     console.error("Erro ao criar ciclo:", error);
     return { success: false, error: "Falha ao registrar ciclo" };
+  }
+}
+
+// Best-effort: nunca derruba o fechamento do ciclo em si por causa de uma falha aqui.
+async function tryAutoOpenNextLot(projectId: string, closedLotId: string | null | undefined, reinvestmentShare: number) {
+  if (!closedLotId || reinvestmentShare <= 0) return;
+
+  try {
+    const project = await prisma.investmentProject.findUnique({
+      where: { id: projectId },
+      include: { cycles: true },
+    });
+    if (!project) return;
+    if (project.payoutRule && project.payoutRule !== "REINVEST") return; // investidor optou por saque, não reinveste
+    if (project.cycles.length >= project.maxCycles) return; // já atingiu o máximo de ciclos do projeto
+
+    const closedLot = await prisma.importLot.findUnique({
+      where: { id: closedLotId },
+      include: { products: { select: { id: true } } },
+    });
+    if (!closedLot) return;
+
+    // Estimativa de FOB a partir do capital de reinvestimento (48% de carga tributária/
+    // custos de nacionalização, mesma referência usada no resumo "EST." da tela de novo
+    // lote) — é só o ponto de partida; o admin ajusta com os valores reais ao negociar
+    // a compra efetiva deste novo lote, do mesmo jeito que já faz pra qualquer lote novo.
+    const estimatedFobUsd = (reinvestmentShare / 1.48) / (closedLot.exchangeRate || 5.25);
+
+    await prisma.importLot.create({
+      data: {
+        batchCode: `LOT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        supplierId: closedLot.supplierId,
+        countryOrigin: closedLot.countryOrigin,
+        purchaseDate: new Date(),
+        currency: "USD",
+        exchangeRate: closedLot.exchangeRate,
+        fobValue: estimatedFobUsd,
+        freight: 0,
+        insurance: 0,
+        customsTaxes: reinvestmentShare * 0.40,
+        customsFees: 7884,
+        totalCostNationalized: reinvestmentShare,
+        quantityItems: closedLot.quantityItems,
+        status: "PEDIDO_FEITO",
+        expectedMarginPct: closedLot.expectedMarginPct,
+        investmentProjectId: projectId,
+        products: closedLot.products.length > 0 ? { connect: closedLot.products.map(p => ({ id: p.id })) } : undefined,
+      },
+    });
+
+    revalidatePath("/admin/importacao/lotes");
+    revalidatePath(`/admin/projetos/${projectId}`);
+    revalidatePath(`/investidor/projetos/${projectId}`);
+  } catch (error) {
+    console.error("Erro ao abrir automaticamente o próximo lote:", error);
   }
 }
 
