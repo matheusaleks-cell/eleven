@@ -32,6 +32,115 @@ function generatePeriods() {
 }
 const PERIODS = generatePeriods();
 
+const fmtBRL2 = (value: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+
+// ─── DRE (impresso) ─────────────────────────────────────────────────────────
+// Mesmo padrão do relatório do Simulador (app/admin/simulador/page.tsx): um bloco
+// só visível na impressão (globals.css já cuida de esconder nav/botões/modais),
+// acionado via window.print(). Mantido compacto de propósito pra caber numa página.
+function DREReportContent({
+  periodLabel,
+  sessionName,
+  stats,
+  lucroLiquido,
+  splitRules,
+}: {
+  periodLabel: string;
+  sessionName: string;
+  stats: { custody: number; distributed: number; reinvestment: number; taxes: number; transitCapital: number };
+  lucroLiquido: number;
+  splitRules: { investor: number; company: number; reserve: number; reinvest: number; operationalCost: number };
+}) {
+  const receitaLiquida = stats.custody - stats.taxes;
+
+  const linhas: { label: string; value: number; bold?: boolean; accent?: boolean; indent?: boolean }[] = [
+    { label: "(+) Receita Bruta de Vendas", value: stats.custody },
+    { label: "(-) Impostos sobre Vendas", value: -stats.taxes || 0, indent: true },
+    { label: "(=) Receita Líquida", value: receitaLiquida, bold: true },
+    { label: "(-) Distribuído a Investidores", value: -stats.distributed || 0, indent: true },
+    { label: "(-) Reinvestimento (retido p/ próximo ciclo)", value: -stats.reinvestment || 0, indent: true },
+    { label: "(=) Lucro Líquido da Empresa", value: lucroLiquido, bold: true, accent: true },
+  ];
+
+  return (
+    <div className="bg-white text-slate-900 font-sans text-xs p-6 leading-snug w-full max-w-3xl mx-auto border border-slate-200 rounded">
+      <div className="flex justify-between items-center border-b-2 border-amber-500 pb-3 mb-4">
+        <div className="flex items-center gap-4">
+          <img
+            src="/logos/logo-alta-preto.png"
+            alt="Eleven Firearms"
+            className="h-9 w-auto object-contain shrink-0"
+            onError={(e) => { (e.target as HTMLElement).style.display = "none"; }}
+          />
+          <div className="h-10 w-[1px] bg-slate-300 mx-1 hidden sm:block" />
+          <div>
+            <span className="bg-slate-900 text-amber-400 font-black text-[10px] px-2.5 py-0.5 tracking-widest uppercase rounded inline-block mb-1" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+              ELEVEN FIREARMS
+            </span>
+            <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight">
+              Demonstração de Resultado do Exercício (DRE)
+            </h1>
+            <p className="text-xs font-bold text-amber-800 mt-0.5">Período: {periodLabel}</p>
+          </div>
+        </div>
+        <div className="text-right text-[9.5px] text-slate-500 leading-snug shrink-0">
+          <p>Emissão: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
+          <p>Responsável: <span className="font-semibold text-slate-700">{sessionName || "Administrador"}</span></p>
+        </div>
+      </div>
+
+      <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-slate-900 text-amber-400 font-bold px-5 py-2 text-[11px] uppercase tracking-wider border-b border-slate-800" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+          Resultado do Período
+        </div>
+        <table className="w-full text-[11px] border-collapse">
+          <tbody>
+            {linhas.map((l) => (
+              <tr key={l.label} className={cn("border-b border-slate-200/80", l.bold && "bg-amber-50/60")}>
+                <td className={cn("py-2 px-4 text-slate-700", l.indent && "pl-8 text-slate-500", l.bold && "font-black uppercase text-slate-900")}>
+                  {l.label}
+                </td>
+                <td className={cn(
+                  "py-2 px-4 font-mono text-right",
+                  l.value < 0 ? "text-slate-500" : "text-slate-800",
+                  l.bold && "font-black text-xs",
+                  l.accent && (l.value >= 0 ? "text-emerald-700" : "text-red-700")
+                )}>
+                  {l.value < 0 ? `(${fmtBRL2(Math.abs(l.value))})` : fmtBRL2(l.value)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 mt-4">
+        <div className="border border-slate-300 bg-slate-50/90 rounded-xl p-3">
+          <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1">
+            Capital em Trânsito (Estoque Internacional)
+          </span>
+          <span className="text-sm font-bold font-mono text-slate-900">{fmtBRL2(stats.transitCapital)}</span>
+        </div>
+        <div className="border border-slate-300 bg-slate-50/90 rounded-xl p-3">
+          <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1">
+            Regra de Distribuição Vigente
+          </span>
+          <span className="text-[10.5px] font-bold font-mono text-slate-800">
+            Inv. {splitRules.investor}% · Empresa {splitRules.company}% · Reserva {splitRules.reserve}% · Reinv. {splitRules.reinvest}%
+          </span>
+        </div>
+      </div>
+
+      <div className="border-t border-slate-300 pt-3 mt-6">
+        <p className="text-[8.5px] text-slate-500 text-justify leading-snug">
+          <strong>NOTA:</strong> Demonstrativo gerado a partir dos dados reais consolidados no sistema para o período selecionado (vendas pagas e ciclos de investimento fechados). Não substitui a apuração contábil formal.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function FinancialPage() {
   const session = useAdminSession();
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -91,9 +200,8 @@ export default function FinancialPage() {
   };
 
   const handleGenerateDRE = () => {
-    toast.error("Exportação de DRE em PDF ainda não implementada.", {
-      description: "Use a tela de Relatórios para exportar os dados em CSV por enquanto.",
-    });
+    toast.info("Gerando DRE do período...");
+    setTimeout(() => window.print(), 200);
   };
 
   const handleSaveSplit = async () => {
@@ -118,7 +226,7 @@ export default function FinancialPage() {
 
   return (
     <DashboardLayout role="ADMIN" userName={session.userName} userEmail={session.userEmail}>
-      <div className="flex flex-col gap-8 animate-fade-in pb-10">
+      <div className="flex flex-col gap-8 animate-fade-in pb-10 no-print">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
@@ -549,6 +657,17 @@ export default function FinancialPage() {
            </div>
         </div>
       </Dialog>
+
+      {/* ── SEÇÃO EXCLUSIVA PARA IMPRESSÃO DO DRE (IMPERCEPTÍVEL NA TELA) ── */}
+      <div className="hidden print:block">
+        <DREReportContent
+          periodLabel={selectedPeriod.longName}
+          sessionName={session.userName}
+          stats={stats}
+          lucroLiquido={lucroLiquido}
+          splitRules={splitRules}
+        />
+      </div>
     </DashboardLayout>
   );
 }
