@@ -4,6 +4,24 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 
+// Lista de administradores que podem ser selecionados como vendedor responsável
+// por uma venda (ao inves de assumir sempre quem esta logado no momento).
+export async function getSellers() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
+  try {
+    return await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  } catch (error) {
+    console.error("Erro ao buscar vendedores:", error);
+    return [];
+  }
+}
+
 export async function getCustomersForSale() {
   const session = await requireSession("ADMIN");
   if (!session) return [];
@@ -180,7 +198,7 @@ export async function getSalesOrderPdfData(orderId: string) {
     return {
       orderNumber: order.orderNumber,
       orderDate: (order.proposedDate || order.createdAt).toLocaleDateString("pt-BR"),
-      sellerName: order.seller?.name || "RAUL",
+      sellerName: order.seller?.name || "Raul Fiuza",
       paymentMethod: order.paymentMethod,
       totalValue: order.totalValue,
       buyer: {

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
+import { getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
 export async function getDashboardStats(filters?: { investorId?: string; startDate?: string; endDate?: string }) {
   const session = await requireSession("ADMIN");
@@ -53,12 +54,16 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
     ), 0
   );
 
+  const financialDefaults = await getActiveFinancialRates();
+
   if (totalPhysicalSold > 0) {
     // ── MODO FÍSICO: cada arma vendida contabilizada individualmente ──
     projects.forEach(p => {
       const splitPct = p.profitSplitPct || 0.50;
       p.importLots?.forEach((lot: any) => {
         const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
+        const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
         lot.weapons?.forEach((w: any) => {
           if (w.currentStatus !== "VENDIDA") return;
           const wDate = w.saleDate ? new Date(w.saleDate) : new Date(w.updatedAt || w.createdAt);
@@ -66,17 +71,13 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
           if (endDateObj && wDate > endDateObj) return;
           const uCost = w.unitCost || uCostAvg;
           const sValue = w.saleValue || 0;
-          const taxAmt = sValue * 0.08;
-          const opAmt = sValue * 0.15;
-          const netProfit = sValue - uCost - taxAmt - opAmt;
-          const invShare = netProfit > 0 ? netProfit * splitPct : 0;
-          const compShare = netProfit > 0 ? netProfit * (1 - splitPct) : 0;
-          totalRevenue += sValue;
-          totalInvestorShare += invShare;
-          totalCompanyShare += compShare;
-          totalTaxes += taxAmt;
-          totalOperationalCosts += opAmt;
-          totalUnitCosts += uCost;
+          const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+          totalRevenue += fin.saleValue;
+          totalInvestorShare += fin.investorShare;
+          totalCompanyShare += fin.companyShare;
+          totalTaxes += fin.taxAmount;
+          totalOperationalCosts += fin.operationalAmount;
+          totalUnitCosts += fin.unitCost;
         });
       });
     });
@@ -90,21 +91,18 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
         if (startDateObj && new Date(c.createdAt) < startDateObj) return;
         if (endDateObj && new Date(c.createdAt) > endDateObj) return;
 
-        const taxAmt = (c.salesTax > 0) ? c.salesTax : grossRev * 0.08;
-        const opAmt = (c.salesOperationalCost > 0) ? c.salesOperationalCost : grossRev * 0.15;
+        const rates = ratesFromCycleOrDefault(c, financialDefaults);
         const lotForCycle = p.importLots?.find((l: any) => l.id === c.importLotId);
         const uCostTotal = c.totalInvestment > 0
           ? c.totalInvestment
           : (lotForCycle?.totalCostNationalized || 0);
-        const netProfit = grossRev - uCostTotal - taxAmt - opAmt;
-        const invShare = netProfit > 0 ? netProfit * splitPct : 0;
-        const compShare = netProfit > 0 ? netProfit * (1 - splitPct) : 0;
-        totalRevenue += grossRev;
-        totalInvestorShare += invShare;
-        totalCompanyShare += compShare;
-        totalTaxes += taxAmt;
-        totalOperationalCosts += opAmt;
-        totalUnitCosts += uCostTotal;
+        const fin = computeUnitFinancials(grossRev, uCostTotal, splitPct, rates);
+        totalRevenue += fin.saleValue;
+        totalInvestorShare += fin.investorShare;
+        totalCompanyShare += fin.companyShare;
+        totalTaxes += fin.taxAmount;
+        totalOperationalCosts += fin.operationalAmount;
+        totalUnitCosts += fin.unitCost;
       });
     });
 
@@ -115,13 +113,12 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
           where: { status: { in: ["PAGO", "ENTREGUE"] } }
         });
         salesOrders.forEach(o => {
-          const sVal = o.totalValue || 0;
-          totalRevenue += sVal;
-          totalTaxes += sVal * 0.08;
-          totalOperationalCosts += sVal * 0.15;
-          const netProfit = sVal * 0.77;
-          totalInvestorShare += netProfit * 0.5;
-          totalCompanyShare += netProfit * 0.5;
+          const fin = computeUnitFinancials(o.totalValue || 0, 0, 0.5, financialDefaults);
+          totalRevenue += fin.saleValue;
+          totalTaxes += fin.taxAmount;
+          totalOperationalCosts += fin.operationalAmount;
+          totalInvestorShare += fin.investorShare;
+          totalCompanyShare += fin.companyShare;
         });
       } catch {}
     }

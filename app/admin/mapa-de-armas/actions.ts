@@ -13,6 +13,7 @@ export async function getWeapons() {
       include: {
         product: true,
         customer: true,
+        importLot: true,
       },
       orderBy: [
         { serialNumber: "asc" },
@@ -26,10 +27,15 @@ export async function getWeapons() {
       status: w.currentStatus,
       location: w.warehouseLocation || "S/L",
       entryDate: w.entryDate.toLocaleDateString("pt-BR"),
-      lot: (w.importLotId ?? '').substring(0, 8).toUpperCase(),
+      lot: w.importLot?.batchCode || "—",
       customer: w.customer?.name || "ESTOQUE ELEVEN",
       id: w.id,
-      di: w.diNumber || "24/0988712-0",
+      di: w.diNumber || "N/A",
+      diDate: w.diDate ? w.diDate.toLocaleDateString("pt-BR") : null,
+      customsClearanceDate: w.customsClearanceDate ? w.customsClearanceDate.toLocaleDateString("pt-BR") : null,
+      saleDate: w.saleDate ? w.saleDate.toLocaleDateString("pt-BR") : null,
+      hasDivergence: w.hasDivergence,
+      observations: w.observations,
       caliber: w.product.caliber,
       brand: w.product.brand,
     }));

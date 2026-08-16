@@ -44,7 +44,7 @@ export default function FinancialPage() {
   const [periodIdx, setPeriodIdx] = useState(0);
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [savingRules, setSavingRules] = useState(false);
-  const [splitRules, setSplitRules] = useState({ investor: 50, company: 35, reserve: 10, reinvest: 5 });
+  const [splitRules, setSplitRules] = useState({ investor: 50, company: 35, reserve: 10, reinvest: 5, operationalCost: 15 });
 
   // Derived values
   const selectedPeriod = PERIODS[periodIdx];
@@ -64,7 +64,7 @@ export default function FinancialPage() {
     setLoading(true);
     try {
       const [sData, tData, rData, mData] = await Promise.all([
-        getFinancialStats(),
+        getFinancialStats({ month, year }),
         getRecentTransactions({ month, year }),
         getSplitRules(),
         getMonthlyRevenue(year),
@@ -85,19 +85,14 @@ export default function FinancialPage() {
   }, [periodIdx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleMonthlyClosing = () => {
-    toast.promise(
-      new Promise((resolve) => setTimeout(resolve, 3000)),
-      {
-        loading: "Consolidando lançamentos e gerando guias de impostos...",
-        success: "Fechamento Mensal realizado com sucesso!",
-        error: "Erro ao processar fechamento.",
-      }
-    );
+    toast.error("Fechamento mensal ainda não implementado.", {
+      description: "Os números acima já refletem os dados reais do período selecionado — falta apenas a consolidação/trava formal do mês.",
+    });
   };
 
   const handleGenerateDRE = () => {
-    toast.info("Gerando Relatório DRE consolidado...", {
-      description: "O PDF será aberto em uma nova aba assim que processado.",
+    toast.error("Exportação de DRE em PDF ainda não implementada.", {
+      description: "Use a tela de Relatórios para exportar os dados em CSV por enquanto.",
     });
   };
 
@@ -214,19 +209,19 @@ export default function FinancialPage() {
           </Card>
           <Card className="border-l-2 border-l-brand-warning bg-brand-surface/30">
              <div className="flex justify-between items-start mb-2">
-                <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Operacional Eleven</span>
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Reinvestimento</span>
                 <History size={16} className="text-brand-warning opacity-50" />
              </div>
              <MoneyDisplay value={stats.reinvestment} size="lg" />
-             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Operacional Eleven ({splitRules.company}%)</p>
+             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Capital para o próximo ciclo ({splitRules.reinvest}%)</p>
           </Card>
           <Card className="border-l-2 border-l-brand-danger bg-brand-surface/30">
              <div className="flex justify-between items-start mb-2">
-                <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Provisão Impostos</span>
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest">Impostos Apurados</span>
                 <Percent size={16} className="text-brand-danger opacity-50" />
              </div>
              <MoneyDisplay value={stats.taxes} size="lg" />
-             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Estimativa (5%)</p>
+             <p className="text-[9px] text-brand-text-muted mt-2 uppercase font-bold tracking-wider">Valor real dos ciclos fechados</p>
           </Card>
         </div>
 
@@ -382,7 +377,7 @@ export default function FinancialPage() {
              </div>
              <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                   <label className="text-[10px] font-bold uppercase text-brand-text-muted">Operacional Eleven (%)</label>
+                   <label className="text-[10px] font-bold uppercase text-brand-text-muted">Lucro da Empresa (%)</label>
                    <span className="text-xs font-mono font-bold text-brand-success">{splitRules.company}%</span>
                 </div>
                 <input 
@@ -414,6 +409,27 @@ export default function FinancialPage() {
                   className="w-full h-1.5 bg-brand-bg rounded-lg appearance-none cursor-pointer accent-brand-danger"
                   value={splitRules.reinvest}
                   onChange={(e) => setSplitRules({...splitRules, reinvest: parseInt(e.target.value)})}
+                />
+             </div>
+          </div>
+
+          <div className="pt-4 border-t border-brand-border space-y-2">
+             <div className="p-3 bg-brand-accent/5 rounded border border-brand-accent/20 flex gap-3">
+                <AlertCircle className="text-brand-accent shrink-0" size={16} />
+                <p className="text-[9px] text-brand-text-secondary leading-tight uppercase font-bold">
+                  Custo operacional é descontado do faturamento de cada venda ANTES do lucro ser dividido acima — não faz parte dos 100%.
+                </p>
+             </div>
+             <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                   <label className="text-[10px] font-bold uppercase text-brand-text-muted">Custo Operacional sobre Venda (%)</label>
+                   <span className="text-xs font-mono font-bold text-white">{splitRules.operationalCost}%</span>
+                </div>
+                <input
+                  type="range" min="0" max="50" step="1"
+                  className="w-full h-1.5 bg-brand-bg rounded-lg appearance-none cursor-pointer accent-white"
+                  value={splitRules.operationalCost}
+                  onChange={(e) => setSplitRules({...splitRules, operationalCost: parseInt(e.target.value)})}
                 />
              </div>
           </div>

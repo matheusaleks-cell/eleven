@@ -6,7 +6,7 @@ import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Search, Filter, ShieldCheck, QrCode, FileText, MoreHorizontal, Target, History, CheckCircle2, Plus, Eye, Trash2, Save } from "lucide-react";
+import { Search, Filter, ShieldCheck, QrCode, MoreHorizontal, Target, History, CheckCircle2, Plus, Eye, Trash2, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/Dialog";
@@ -92,6 +92,30 @@ export default function WeaponsMapPage() {
     } catch (error) {
       toast.error("Erro ao processar cadastro.");
     }
+  };
+
+  const handleExportCSV = () => {
+    if (filteredWeapons.length === 0) {
+      toast.error("Nenhuma arma para exportar.");
+      return;
+    }
+    const headers = ["Numero_Serie", "Produto", "Marca", "Calibre", "Status", "Localizacao", "Lote", "DI", "Data_Entrada", "Cliente"];
+    const rows = filteredWeapons.map(w => [
+      w.serial, w.product, w.brand, w.caliber, w.status, w.location, w.lot, w.di, w.entryDate, w.customer,
+    ]);
+    const csvContent = [headers, ...rows]
+      .map(row => row.map((val: any) => `"${String(val ?? "").replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
+    const blob = new Blob(["﻿" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `mapa-de-armas_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("Base de rastreabilidade exportada!");
   };
 
   const handleDeleteWeapon = async (id: string) => {
@@ -242,12 +266,17 @@ export default function WeaponsMapPage() {
                     <td>
                       <div className="flex flex-col">
                         <span className="text-xs font-bold uppercase text-white">{w.product}</span>
-                        <span className="text-[10px] text-brand-text-muted uppercase font-bold tracking-tighter leading-none mt-0.5">PEÇA VERIFICADA</span>
+                        <span className={cn(
+                          "text-[10px] uppercase font-bold tracking-tighter leading-none mt-0.5",
+                          w.hasDivergence ? "text-brand-danger" : "text-brand-text-muted"
+                        )}>
+                          {w.hasDivergence ? "DIVERGÊNCIA" : "SEM DIVERGÊNCIA"}
+                        </span>
                       </div>
                     </td>
                     <td className="font-mono text-[10px] text-brand-text-secondary uppercase">
                       {w.lot}<br/>
-                      <span className="text-brand-text-muted opacity-60">DI: 24/0988712-0</span>
+                      <span className="text-brand-text-muted opacity-60">DI: {w.di}</span>
                     </td>
                     <td>
                       <div className="flex items-center gap-2">
@@ -286,10 +315,13 @@ export default function WeaponsMapPage() {
           </div>
           <div className="p-4 bg-brand-surface/20 flex items-center justify-between border-t border-brand-border">
             <p className="text-[10px] text-brand-text-muted uppercase tracking-[0.2em] font-bold flex items-center gap-2">
-              <CheckCircle2 size={12} className="text-brand-success" /> Conformidade Técnica: <span className="text-brand-success">Verificada (100%)</span>
+              <CheckCircle2 size={12} className={stats.divergence > 0 ? "text-brand-danger" : "text-brand-success"} />
+              Sem Divergências: <span className={stats.divergence > 0 ? "text-brand-danger" : "text-brand-success"}>
+                {stats.total > 0 ? (((stats.total - stats.divergence) / stats.total) * 100).toFixed(1) : "100.0"}% ({stats.total - stats.divergence}/{stats.total})
+              </span>
             </p>
             <div className="flex gap-2">
-               <Button variant="secondary" size="sm" className="text-[10px] font-bold uppercase h-8 px-4" onClick={() => toast.success("Exportando base de rastreabilidade...")}>Exportar CSV</Button>
+               <Button variant="secondary" size="sm" className="text-[10px] font-bold uppercase h-8 px-4" onClick={handleExportCSV}>Exportar CSV</Button>
             </div>
           </div>
         </Card>
@@ -314,25 +346,27 @@ export default function WeaponsMapPage() {
 
             <div className="p-6 overflow-y-auto max-h-[70vh]">
                 {(() => {
-                  const entryDateObj = (() => {
-                    if (!selectedWeapon.entryDate) return new Date();
-                    const parts = selectedWeapon.entryDate.split("/");
-                    if (parts.length === 3) {
-                      return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-                    }
-                    return new Date(selectedWeapon.entryDate);
-                  })();
-
-                  const formatDateStr = (date: Date) => date.toLocaleDateString("pt-BR");
-
-                  const dateChegada = new Date(entryDateObj.getTime() - 15 * 24 * 60 * 60 * 1000);
-                  const dateVistoria = new Date(entryDateObj.getTime() - 3 * 24 * 60 * 60 * 1000);
+                  // Linha do tempo construída SOMENTE a partir de datas reais gravadas na arma.
+                  // Etapas sem data registrada no sistema (ex: vistoria do Exército) são omitidas
+                  // em vez de inventadas.
+                  const steps: { date: string; text: string }[] = [];
+                  if (selectedWeapon.entryDate) {
+                    steps.push({ date: selectedWeapon.entryDate, text: "Entrada em Estoque Eleven" });
+                  }
+                  if (selectedWeapon.customsClearanceDate) {
+                    steps.push({ date: selectedWeapon.customsClearanceDate, text: "Desembaraço Aduaneiro" });
+                  }
+                  if (selectedWeapon.status === "VENDIDA" && selectedWeapon.saleDate) {
+                    steps.push({ date: selectedWeapon.saleDate, text: `Venda registrada${selectedWeapon.customer ? ` — ${selectedWeapon.customer}` : ""}` });
+                  } else {
+                    steps.push({ date: "Atual", text: selectedWeapon.status === "VENDIDA" ? "Vendida" : "Em custódia Eleven" });
+                  }
 
                   return (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                        <div className="space-y-6">
                          <div>
-                           <p className="text-[10px] font-bold uppercase text-brand-accent mb-3 tracking-widest">FICHA TÉCNICA E CONFORMIDADE</p>
+                           <p className="text-[10px] font-bold uppercase text-brand-accent mb-3 tracking-widest">FICHA TÉCNICA</p>
                            <div className="space-y-2">
                              {[
                                ["Modelo", selectedWeapon.product],
@@ -340,7 +374,6 @@ export default function WeaponsMapPage() {
                                ["Calibre", selectedWeapon.caliber || "N/A"],
                                ["Lote", selectedWeapon.lot],
                                ["DI Importação", selectedWeapon.di || "N/A"],
-                               ["Autorização Exército", "SFPC-11/2026-988"],
                              ].map(([label, val]) => (
                                <div key={label} className="flex justify-between py-1.5 border-b border-brand-border/50">
                                  <span className="text-[11px] font-bold uppercase text-brand-text-muted">{label}</span>
@@ -350,13 +383,18 @@ export default function WeaponsMapPage() {
                            </div>
                          </div>
 
-                         <div className="p-4 bg-brand-success/5 border border-brand-success/20 rounded">
+                         <div className={cn(
+                           "p-4 rounded border",
+                           selectedWeapon.hasDivergence ? "bg-brand-danger/5 border-brand-danger/20" : "bg-brand-success/5 border-brand-success/20"
+                         )}>
                             <div className="flex items-center gap-3 mb-2">
-                              <ShieldCheck className="text-brand-success" size={16} />
-                              <span className="text-xs font-bold uppercase text-brand-success">Status de Conformidade</span>
+                              <ShieldCheck className={selectedWeapon.hasDivergence ? "text-brand-danger" : "text-brand-success"} size={16} />
+                              <span className={cn("text-xs font-bold uppercase", selectedWeapon.hasDivergence ? "text-brand-danger" : "text-brand-success")}>
+                                {selectedWeapon.hasDivergence ? "Divergência Registrada" : "Sem Divergências Registradas"}
+                              </span>
                             </div>
                             <p className="text-[10px] text-brand-text-secondary leading-relaxed uppercase font-bold">
-                              Esta peça passou por todos os testes de balística e conferência física na entrada da alfândega.
+                              {selectedWeapon.observations || (selectedWeapon.hasDivergence ? "Verifique as observações do registro." : "Nenhuma observação cadastrada para esta peça.")}
                             </p>
                          </div>
                        </div>
@@ -364,17 +402,11 @@ export default function WeaponsMapPage() {
                        <div>
                          <p className="text-[10px] font-bold uppercase text-brand-accent mb-3 tracking-widest">HISTÓRICO DE CUSTÓDIA</p>
                          <div className="relative border-l border-brand-border pl-4 space-y-6 py-2">
-                           {[
-                             { date: formatDateStr(dateChegada), text: "Chegada em Porto/Alfândega", user: "Despachante" },
-                             { date: formatDateStr(dateVistoria), text: "Vistoria Exército Brasileiro", user: "Tenente-Coronel Silva" },
-                             { date: selectedWeapon.entryDate, text: "Entrada em Estoque Eleven", user: "Logística" },
-                             { date: "Hoje", text: selectedWeapon.status === "VENDIDA" ? "Entrega ao Cliente Final" : "Em Custódia Eleven", user: selectedWeapon.customer },
-                           ].map((step, i) => (
+                           {steps.map((step, i) => (
                              <div key={i} className="relative">
                                <div className="absolute -left-[21px] top-1 w-2 h-2 rounded-full bg-brand-accent" />
                                <p className="text-[10px] font-bold text-brand-text-muted uppercase leading-none">{step.date}</p>
                                <p className="text-xs font-bold text-white uppercase mt-1">{step.text}</p>
-                               <p className="text-[9px] text-brand-text-secondary uppercase mt-0.5 tracking-tighter">Responsável: {step.user}</p>
                              </div>
                            ))}
                          </div>
@@ -386,9 +418,6 @@ export default function WeaponsMapPage() {
 
             <div className="p-4 bg-brand-surface/50 border-t border-brand-border flex justify-end gap-3">
               <Button variant="secondary" size="sm" onClick={() => setModalOpen(false)}>FECHAR</Button>
-              <Button size="sm" className="gap-2" onClick={() => toast.success("Download do laudo técnico...")}>
-                <FileText size={14} /> IMPRIMIR LAUDO
-              </Button>
             </div>
           </div>
         </div>

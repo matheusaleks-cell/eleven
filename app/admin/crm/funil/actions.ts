@@ -124,7 +124,7 @@ export async function createLead(data: any) {
         logs: {
           create: {
             action: "Lead cadastrado via formulário de prospecção",
-            user: data.assignedTo || "Admin Eleven"
+            user: data.assignedTo || "Raul Fiuza"
           }
         }
       },
@@ -354,7 +354,7 @@ export async function convertToCustomer(leadId: string) {
   }
 }
 
-export async function addLeadLog(leadId: string, action: string, user: string = "Admin Eleven") {
+export async function addLeadLog(leadId: string, action: string, user: string = "Raul Fiuza") {
   const session = await requireSession("ADMIN");
   if (!session) return { success: false };
 

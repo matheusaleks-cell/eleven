@@ -7,6 +7,7 @@ import * as z from "zod";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { searchCustomersForLead } from "@/app/admin/crm/funil/actions";
+import { getSellers } from "@/app/admin/crm/vendas/actions";
 import { Search, X, CheckCircle2, Building2, User } from "lucide-react";
 
 const leadSchema = z.object({
@@ -84,7 +85,7 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
       customerType: initialData?.customerType || "PF",
       documentStatus: initialData?.documentStatus || "NONE",
       category: initialData?.category || "ARMAS",
-      assignedTo: initialData?.assignedTo || "ADMIN",
+      assignedTo: initialData?.assignedTo || "Raul Fiuza",
       notes: initialData?.notes || "",
       taxId: initialData?.taxId || "",
       state: initialData?.state || "",
@@ -102,8 +103,14 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
   const searchRef = useRef<HTMLDivElement>(null);
   const isFirstRender = useRef(true);
 
+  const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    getSellers().then(setSellers);
+  }, []);
+
   const watchInterest = watch("interest");
   const watchCustomerType = watch("customerType");
+  const watchAssignedTo = watch("assignedTo");
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -368,15 +375,16 @@ export function LeadForm({ initialData, products = [], onSubmit, onCancel, submi
             </div>
             <div>
               <label className="text-[12px] font-bold text-brand-text-muted uppercase mb-2 block tracking-widest">Vendedor</label>
-              <select 
-                {...register("assignedTo")}
+              <select
+                value={watchAssignedTo}
+                onChange={e => setValue("assignedTo", e.target.value, { shouldValidate: true })}
                 className="w-full bg-brand-input border border-brand-border rounded h-12 px-4 text-base text-brand-accent font-bold focus:outline-none focus:border-brand-accent appearance-none"
                 style={{ background: "#0F0F0F" }}
               >
-                <option value="ADMIN">ADMIN ELEVEN</option>
-                <option value="RODRIGO">RODRIGO MOURA</option>
-                <option value="BEATRIZ">BEATRIZ SILVA</option>
-                <option value="CARLOS">CARLOS EDUARDO</option>
+                {sellers.length === 0 && <option value={watchAssignedTo}>{watchAssignedTo || "Carregando..."}</option>}
+                {sellers.map(s => (
+                  <option key={s.id} value={s.name}>{s.name.toUpperCase()}</option>
+                ))}
               </select>
             </div>
           </div>

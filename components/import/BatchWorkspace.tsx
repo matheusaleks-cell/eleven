@@ -1020,33 +1020,66 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
           </div>
         )}
 
-        {activeTab === "history" && (
-          <div className="space-y-4">
-            <h4 className="text-xs font-bold text-brand-accent uppercase tracking-widest mb-4">Linha do Tempo de Operações</h4>
-            <div className="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-brand-border">
-               {[
-                 { date: "10/05/2026 14:30", action: "Status alterado para NACIONALIZANDO", user: "Raul (Admin)", icon: <Truck size={12} /> },
-                 { date: "08/05/2026 09:15", action: "Embarque confirmado - Istanbul", user: "Sistema", icon: <Ship size={12} /> },
-                 { date: "01/05/2026 16:40", action: "Pagamento FOB realizado", user: "Financeiro", icon: <DollarSign size={12} /> },
-                 { date: "28/04/2026 11:20", action: "Lote criado no sistema", user: "Raul (Admin)", icon: <Plus size={12} /> },
-               ].map((item, i) => (
-                 <div key={i} className="flex gap-4 relative z-10">
-                    <div className="w-6 h-6 rounded-full bg-brand-bg border border-brand-border flex items-center justify-center text-brand-accent shadow-sm">
-                       {item.icon}
-                    </div>
-                    <div className="flex flex-col">
-                       <span className="text-[11px] font-bold text-white uppercase">{item.action}</span>
-                       <div className="flex gap-2 text-[9px] text-brand-text-muted font-medium uppercase mt-0.5">
-                          <span>{item.date}</span>
-                          <span>•</span>
-                          <span className="text-brand-accent/70">{item.user}</span>
-                       </div>
-                    </div>
-                 </div>
-               ))}
+        {activeTab === "history" && (() => {
+          // Linha do tempo construída SOMENTE a partir de dados reais (criação do lote +
+          // documentos anexados/valores reais registrados). Não inventa datas/usuários/etapas
+          // que o sistema não rastreia de fato hoje.
+          type HistoryEvent = { date: Date; action: string; icon: React.ReactNode };
+          const events: HistoryEvent[] = [];
+
+          if (batch.createdAt) {
+            events.push({
+              date: new Date(batch.createdAt),
+              action: `Lote ${batch.batchCode || ""} criado no sistema`,
+              icon: <Plus size={12} />,
+            });
+          }
+          (batch.documents || []).forEach((d: any) => {
+            if (d.createdAt) {
+              events.push({
+                date: new Date(d.createdAt),
+                action: `Documento anexado: ${d.category}`,
+                icon: <FileText size={12} />,
+              });
+            }
+            if (d.realizedValue && d.realizedDate) {
+              events.push({
+                date: new Date(d.realizedDate),
+                action: `Valor real registrado: ${d.category} — ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(d.realizedValue)}`,
+                icon: <DollarSign size={12} />,
+              });
+            }
+          });
+          events.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+          return (
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-brand-accent uppercase tracking-widest mb-4">Linha do Tempo de Operações</h4>
+              <p className="text-[9px] text-brand-text-muted uppercase font-bold tracking-wider -mt-2 mb-2">
+                Baseado nos eventos reais registrados neste lote (o sistema ainda não guarda a data exata de cada mudança de etapa).
+              </p>
+              {events.length === 0 ? (
+                <p className="text-[10px] text-brand-text-muted uppercase font-bold">Nenhum evento registrado ainda.</p>
+              ) : (
+                <div className="space-y-4 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[1px] before:bg-brand-border">
+                   {events.map((item, i) => (
+                     <div key={i} className="flex gap-4 relative z-10">
+                        <div className="w-6 h-6 rounded-full bg-brand-bg border border-brand-border flex items-center justify-center text-brand-accent shadow-sm">
+                           {item.icon}
+                        </div>
+                        <div className="flex flex-col">
+                           <span className="text-[11px] font-bold text-white uppercase">{item.action}</span>
+                           <div className="flex gap-2 text-[9px] text-brand-text-muted font-medium uppercase mt-0.5">
+                              <span>{item.date.toLocaleDateString("pt-BR")} {item.date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+                           </div>
+                        </div>
+                     </div>
+                   ))}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Footer Actions */}

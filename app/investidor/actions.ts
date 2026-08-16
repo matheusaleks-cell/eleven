@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { requireSession } from "@/lib/auth-guard";
+import { FinancialRates, getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
 // Fonte única de verdade para "quanto o investidor já recebeu" de um projeto: ciclos COMPLETED
 // usam o valor oficial já gravado (Cycle.investorShare, fechado pelo admin), o lote ainda não
@@ -10,7 +11,7 @@ import { requireSession } from "@/lib/auth-guard";
 // getInvestorDashboardData — mantém Dashboard, Extrato, Projetos e detalhe do Projeto consistentes
 // entre si (antes cada função recalculava do zero, inclusive lotes já liquidados, e podia divergir
 // do valor oficial do ciclo fechado).
-function computeProjectYield(project: any) {
+function computeProjectYield(project: any, financialDefaults: FinancialRates) {
   const completedCyclesYield = (project.cycles || [])
     .filter((c: any) => c.status === "COMPLETED")
     .reduce((acc: number, c: any) => acc + (c.investorShare || 0), 0);
@@ -22,18 +23,15 @@ function computeProjectYield(project: any) {
     if (lot.status === "LIQUIDADO") return; // já contabilizado acima via Cycle.investorShare
 
     const lotCycle = (project.cycles || []).find((c: any) => c.importLotId === lot.id);
-    let deductionRate = 0.23;
+    const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
     const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-    if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
-      deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
-    }
 
     (lot.weapons || []).forEach((w: any) => {
       if (w.currentStatus !== "VENDIDA") return;
       const uCost = w.unitCost || uCostAvg;
       const sValue = w.saleValue || 0;
-      const netProfit = sValue - uCost - (sValue * deductionRate);
-      activeRealizedProfit += netProfit > 0 ? netProfit * splitPct : 0;
+      const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+      activeRealizedProfit += fin.investorShare;
     });
   });
 
@@ -74,6 +72,7 @@ export async function getInvestorDashboardData() {
 
     if (!investor) throw new Error("Investidor não encontrado");
 
+    const financialDefaults = await getActiveFinancialRates();
     let totalPatrimony = 0;
     let totalYield = 0;
     const activeProjectsCount = investor.investedProjects.filter(p => p.status === "ACTIVE").length;
@@ -104,13 +103,9 @@ export async function getInvestorDashboardData() {
       // Iterar em todos os lotes do projeto para calcular vendas em tempo real
       project.importLots.forEach(lot => {
         const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
-        let deductionRate = 0.23;
-        let splitPct = project.profitSplitPct || 0.50;
-        let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-
-        if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
-          deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
-        }
+        const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+        const splitPct = project.profitSplitPct || 0.50;
+        const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
 
         if (lot.status !== "LIQUIDADO") {
           activeCycleTotalWeapons += lot.quantityItems || lot.weapons.length || 0;
@@ -123,9 +118,8 @@ export async function getInvestorDashboardData() {
               activeCycleSoldWeapons++;
             }
             const sValue = w.saleValue || 0;
-            const weaponDeductions = sValue * deductionRate;
-            const netProfit = sValue - uCost - weaponDeductions;
-            const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
+            const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+            const investorProfit = fin.investorShare;
 
             if (lot.status !== "LIQUIDADO") {
               activeCycleRealizedProfit += investorProfit;
@@ -292,6 +286,7 @@ export async function getInvestorStatement() {
 
     if (!investor) throw new Error("Investidor não encontrado");
 
+    const financialDefaults = await getActiveFinancialRates();
     const statement: any[] = [];
 
     // Aportes Iniciais
@@ -331,19 +326,16 @@ export async function getInvestorStatement() {
         if (lot.status === "LIQUIDADO") return; // já contabilizado acima via ciclo fechado
         if (lot.weapons && lot.weapons.length > 0) {
           const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
-          let deductionRate = 0.23;
-          if (lotCycle && lotCycle.grossRevenue && lotCycle.grossRevenue > 0) {
-            deductionRate = ((lotCycle.salesTax || 0) + (lotCycle.salesOperationalCost || 0)) / lotCycle.grossRevenue;
-          }
-          let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-          let splitPct = project.profitSplitPct || 0.50;
+          const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+          const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+          const splitPct = project.profitSplitPct || 0.50;
 
           lot.weapons.forEach(w => {
             if (w.currentStatus === "VENDIDA") {
               const uCost = w.unitCost || uCostAvg;
               const sValue = w.saleValue || 0;
-              const netProfit = sValue - uCost - (sValue * deductionRate);
-              const investorProfit = netProfit > 0 ? netProfit * splitPct : 0;
+              const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+              const investorProfit = fin.investorShare;
 
               if (investorProfit > 0) {
                 const stmtDate = w.saleDate || w.updatedAt;
@@ -411,8 +403,9 @@ export async function getInvestorProjects() {
 
     if (!investor) return { success: false, projects: [] };
 
+    const financialDefaults = await getActiveFinancialRates();
     const mapped = investor.investedProjects.map(p => {
-      const { totalReceived } = computeProjectYield(p);
+      const { totalReceived } = computeProjectYield(p, financialDefaults);
 
       return {
         id: p.id,
@@ -463,7 +456,8 @@ export async function getInvestorProjectDetails(id: string) {
 
     if (!project) return { success: false, project: null };
 
-    const { totalReceived } = computeProjectYield(project);
+    const financialDefaults = await getActiveFinancialRates();
+    const { totalReceived } = computeProjectYield(project, financialDefaults);
 
     const mappedCycles = project.cycles.map(c => {
       // Ciclo fechado: usa o valor oficial gravado pelo admin (mesma fonte da Dashboard).
@@ -487,18 +481,15 @@ export async function getInvestorProjectDetails(id: string) {
 
       const lot = project.importLots.find(l => l.id === c.importLotId);
       if (lot && lot.weapons && lot.weapons.length > 0) {
-        let uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-        let deductionRate = 0.23;
-        if (c.grossRevenue && c.grossRevenue > 0) {
-          deductionRate = ((c.salesTax || 0) + (c.salesOperationalCost || 0)) / c.grossRevenue;
-        }
+        const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        const rates = ratesFromCycleOrDefault(c, financialDefaults);
 
         lot.weapons.forEach(w => {
           if (w.currentStatus === "VENDIDA") {
             const uCost = w.unitCost || uCostAvg;
             const sValue = w.saleValue || 0;
-            const netProfit = sValue - uCost - (sValue * deductionRate);
-            investorProfitShare += netProfit > 0 ? netProfit * project.profitSplitPct : 0;
+            const fin = computeUnitFinancials(sValue, uCost, project.profitSplitPct, rates);
+            investorProfitShare += fin.investorShare;
             grossRevenue += sValue;
           }
         });
@@ -595,21 +586,17 @@ export async function getCycleSales(cycleId: string) {
 
     if (!cycle || !importLot) return { success: false, sales: [] };
 
+    const financialDefaults = await getActiveFinancialRates();
     const splitPct = cycle.project?.profitSplitPct || 0.50;
-    const grossRev = cycle.grossRevenue || 1;
-    const totalDeductions = (cycle.salesTax || 0) + (cycle.salesOperationalCost || 0);
-    const deductionRate = totalDeductions / grossRev;
+    const rates = ratesFromCycleOrDefault(cycle, financialDefaults);
 
     const sales = importLot.weapons.map((w: any) => {
       const uCost = w.unitCost || (cycle.totalInvestment / (cycle.quantity || 1));
       const sValue = w.saleValue || 0;
-      
-      // Deduções proporcionais de impostos e operacional de venda para esta peça
-      const weaponDeductions = sValue * deductionRate;
-      // Lucro líquido unitário apurado
-      const netProfit = sValue - uCost - weaponDeductions;
+
       // Retorno do investidor = custo unitário amortizado + fatia do lucro
-      const investorProfitShare = netProfit > 0 ? netProfit * splitPct : 0;
+      const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+      const investorProfitShare = fin.investorShare;
       const investorReturn = uCost + investorProfitShare;
 
       return {

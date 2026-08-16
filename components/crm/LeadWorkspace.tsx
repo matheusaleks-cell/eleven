@@ -172,7 +172,7 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
     try {
       onUpdate({ ...lead, ...data });
       if (data.status && data.status !== lead.status) {
-        await addLeadLog(lead.id, `Status alterado para ${data.status}`, lead.assignedTo || "Admin Eleven");
+        await addLeadLog(lead.id, `Status alterado para ${data.status}`, lead.assignedTo || "Raul Fiuza");
       }
       setIsEditingInfo(false);
       toast.success("Dados do lead sincronizados com o Kanban!");
@@ -241,7 +241,7 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
       
       doc.save(`Proposta_Eleven_${lead.name.replace(/\s+/g, '_')}.pdf`);
       
-      await addLeadLog(lead.id, "Proposta Comercial B2C gerada via sistema", lead.assignedTo || "Admin Eleven");
+      await addLeadLog(lead.id, "Proposta Comercial B2C gerada via sistema", lead.assignedTo || "Raul Fiuza");
 
       setTimeout(() => {
         setIsGenerating(false);
@@ -308,7 +308,7 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
     try {
       generateAnexoPPdf(buildAnexoPBuyer(), buildAnexoPItems(), lead.name);
 
-      await addLeadLog(lead.id, "Anexo P Oficial (PCE) gerado via sistema", lead.assignedTo || "Admin Eleven");
+      await addLeadLog(lead.id, "Anexo P Oficial (PCE) gerado via sistema", lead.assignedTo || "Raul Fiuza");
 
       setTimeout(() => {
         setIsGenerating(false);
@@ -338,13 +338,13 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
         {
           orderNumber: `LEAD-${lead.id.slice(0, 6).toUpperCase()}`,
           orderDate: new Date().toLocaleDateString("pt-BR"),
-          sellerName: lead.assignedTo || "RAUL",
+          sellerName: lead.assignedTo || "Raul Fiuza",
           paymentMethod: "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO",
           totalValue: totalValue,
         }
       );
 
-      await addLeadLog(lead.id, "Pedido gerado via sistema", lead.assignedTo || "Admin Eleven");
+      await addLeadLog(lead.id, "Pedido gerado via sistema", lead.assignedTo || "Raul Fiuza");
 
       setTimeout(() => {
         setIsGeneratingPedido(false);
@@ -686,7 +686,7 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
                       </div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">Vendedor</p>
-                        <p className="text-sm font-bold text-brand-accent uppercase">{lead.assignedTo || "Admin Eleven"}</p>
+                        <p className="text-sm font-bold text-brand-accent uppercase">{lead.assignedTo || "Raul Fiuza"}</p>
                       </div>
                       <div>
                         <p className="text-[10px] uppercase font-bold text-brand-text-muted tracking-widest mb-1.5">Pipeline / Fase</p>

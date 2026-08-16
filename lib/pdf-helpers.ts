@@ -257,7 +257,7 @@ export const generatePedidoPdf = async (
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const timestamp = options?.orderDate || new Date().toLocaleDateString("pt-BR");
   const orderNumber = options?.orderNumber || "N/A";
-  const sellerName = (options?.sellerName || "RAUL").toUpperCase();
+  const sellerName = (options?.sellerName || "Raul Fiuza").toUpperCase();
   const paymentMethod = options?.paymentMethod || "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO";
 
   const totalCalculated = items.reduce((sum, i) => sum + ((i.unitPrice ?? 0) * (i.quantity ?? 1)), 0);
@@ -266,54 +266,62 @@ export const generatePedidoPdf = async (
   const remainingBalance = totalValue - downPayment;
 
   // --- CABEÇALHO DA EMPRESA (Topo) ---
-  const headerY = 12;
+  // Logo à esquerda; nome/CNPJ/CR ao lado, na mesma altura (usa a largura da página
+  // em vez de empilhar tudo numa coluna estreita).
+  const leftX = 10;
+  const headerY = 10;
+  const logoW = 45;
+  const infoX = leftX + logoW + 7;
+
   try {
     const logoData = await loadImageAsDataURL(logoSrc || "/logos/logo-alta-preto.png");
-    addContainedImage(doc, logoData, 10, headerY, 52, 14);
+    addContainedImage(doc, logoData, leftX, headerY, logoW, 16);
   } catch {
     // Fallback caso a imagem não carregue
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
     doc.setTextColor(0, 0, 0);
-    doc.text("ELEVEN FIREARMS", 10, headerY + 10);
+    doc.text("ELEVEN FIREARMS", leftX, headerY + 10);
   }
 
-  // Dados da Empresa
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
   doc.setTextColor(0, 0, 0);
-  doc.text("ELEVEN FIREARMS REPRESENTAÇÃO LTDA", 10, headerY + 19);
+  doc.text("ELEVEN FIREARMS REPRESENTAÇÃO LTDA", infoX, headerY + 6);
 
-  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
   doc.setTextColor(90, 90, 90);
-  doc.text(`CNPJ ${ANEXO_P_SUPPLIER.cnpj}                    CR ${ANEXO_P_SUPPLIER.crNumber}`, 10, headerY + 23.5);
+  doc.text(`CNPJ ${ANEXO_P_SUPPLIER.cnpj}    •    CR ${ANEXO_P_SUPPLIER.crNumber}`, infoX, headerY + 12);
 
-  // Lista de Contatos com ícones/bolinhas douradas
-  const contacts = [
-    ANEXO_P_SUPPLIER.address,
-    ANEXO_P_SUPPLIER.phone,
-    ANEXO_P_SUPPLIER.email,
-    ANEXO_P_SUPPLIER.instagram,
-  ];
+  // Linha divisória separando a identificação da empresa dos contatos
+  const dividerY = headerY + 19;
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.setLineWidth(0.2);
+  doc.line(leftX, dividerY, leftX + 190, dividerY);
 
-  let contactY = headerY + 27.5;
-  contacts.forEach((text) => {
-    // Bolinha amarela
+  // Contatos organizados em duas linhas horizontais (em vez de empilhados numa
+  // única coluna): endereço sozinho na primeira (é o texto mais longo) e
+  // telefone / e-mail / instagram distribuídos na segunda.
+  const drawContact = (text: string, x: number, y: number, isLink = false) => {
     doc.setFillColor(...GOLD_COLOR);
-    doc.circle(11.5, contactY - 0.8, 1.2, "F");
-
+    doc.circle(x, y - 0.8, 1.1, "F");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
-    doc.setTextColor(50, 50, 50);
-    if (text === ANEXO_P_SUPPLIER.email) {
-      doc.setTextColor(0, 85, 170); // Cor de link azul
-    }
-    doc.text(text, 14.5, contactY);
-    contactY += 3.8;
-  });
+    doc.setTextColor(isLink ? 0 : 50, isLink ? 85 : 50, isLink ? 170 : 50);
+    doc.text(text, x + 3, y);
+  };
+
+  const contactRow1Y = dividerY + 5;
+  drawContact(ANEXO_P_SUPPLIER.address, leftX + 1.5, contactRow1Y);
+
+  const contactRow2Y = contactRow1Y + 5;
+  drawContact(ANEXO_P_SUPPLIER.phone, leftX + 1.5, contactRow2Y);
+  drawContact(ANEXO_P_SUPPLIER.email, leftX + 60, contactRow2Y, true);
+  drawContact(ANEXO_P_SUPPLIER.instagram, leftX + 130, contactRow2Y);
 
   // --- TABELA DE INFORMAÇÕES DO PEDIDO E CLIENTE ---
-  let gridY = contactY + 2;
-  const leftX = 10;
+  let gridY = contactRow2Y + 6;
   const tableW = 190;
 
   // Helper para desenhar célula com cabeçalho amarelo e valor

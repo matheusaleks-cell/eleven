@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import { ShoppingBag, Plus, Trash2, DollarSign, Building2, User, FileText, Search, X } from "lucide-react";
-import { getProductsForSale, createDirectSale, getLotOptionsForCart, getAvailableSerialsForProduct } from "@/app/admin/crm/vendas/actions";
+import { getProductsForSale, createDirectSale, getLotOptionsForCart, getAvailableSerialsForProduct, getSellers } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { fmtDate, getMissingAnexoPSpecs, generateAnexoPPdf, generatePedidoPdf, AnexoPBuyer, AnexoPItemSpec } from "@/lib/pdf-helpers";
 import { toast } from "sonner";
@@ -73,6 +73,11 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
   const [isGeneratingPedido, setIsGeneratingPedido] = useState(false);
   const [search, setSearch] = useState("");
 
+  // Vendedor responsável pela venda — pré-selecionado com quem está logado, mas
+  // pode ser trocado (ex: admin lançando uma venda que o Raul fechou).
+  const [sellers, setSellers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedSellerId, setSelectedSellerId] = useState<string>(sellerId || "");
+
   // Cliente: travado quando `fixedCustomer` é informado (venda a partir do perfil do cliente);
   // caso contrário, seleção estilo PDV — escolhido/trocado dentro do próprio modal.
   const isCustomerLocked = !!fixedCustomer;
@@ -96,7 +101,9 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
       setCustomer(fixedCustomer ?? null);
       setShowCustomerPicker(false);
       setCustomerSearch("");
+      setSelectedSellerId(sellerId || "");
       loadProducts();
+      getSellers().then(setSellers);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, fixedCustomer?.id]);
@@ -234,7 +241,7 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
         paymentMethod,
         status,
         notes,
-        sellerId,
+        sellerId: selectedSellerId || sellerId,
       });
       if (res.success) {
         toast.success(`Pedido ${res.orderNumber} registrado!`);
@@ -362,7 +369,7 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
         {
           orderNumber: `ORC-${Date.now().toString().slice(-4)}`,
           orderDate: new Date().toLocaleDateString("pt-BR"),
-          sellerName: "RAUL",
+          sellerName: sellers.find(s => s.id === selectedSellerId)?.name || "Raul Fiuza",
           paymentMethod: paymentMethod || "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO",
           totalValue: totalValue,
         }
@@ -659,6 +666,20 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
                 <span className="text-xl font-mono font-black text-brand-accent">
                   {fmt(Math.max(0, totalValue - discount))}
                 </span>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[9px] font-black text-brand-text-muted uppercase">Vendedor</label>
+                <select
+                  className="w-full bg-brand-input border border-brand-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-brand-accent"
+                  value={selectedSellerId}
+                  onChange={e => setSelectedSellerId(e.target.value)}
+                >
+                  {sellers.length === 0 && <option value="">Carregando...</option>}
+                  {sellers.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

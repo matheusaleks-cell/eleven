@@ -62,7 +62,7 @@ const REPORT_CATEGORIES = [
     icon: <Shield size={24} />,
     color: "text-brand-danger",
     reports: [
-      { name: "Logs de Acesso", icon: <History size={16} />, format: ["CSV"] },
+      { name: "Atividade de Leads (CRM)", icon: <History size={16} />, format: ["CSV"] },
       { name: "Histórico de Movimentações", icon: <History size={16} />, format: ["PDF", "CSV"] },
       { name: "Alterações de Preço/Impostos", icon: <UserCheck size={16} />, format: ["PDF"] },
     ]
@@ -96,8 +96,9 @@ export default function ReportsPage() {
   const session = useAdminSession();
   const handleExport = async (reportName: string, format: string) => {
     if (format === "PDF") {
-      toast.success(`Preparando impressão de "${reportName}"...`);
-      setTimeout(() => window.print(), 800);
+      toast.error(`Exportação em PDF de "${reportName}" ainda não implementada.`, {
+        description: "Use a opção CSV por enquanto.",
+      });
       return;
     }
 
@@ -136,7 +137,7 @@ export default function ReportsPage() {
       } else if (reportName.includes("Histórico de Movimentações")) {
         const res = await getMovementHistoryData();
         if (res.success) data = res.data;
-      } else if (reportName.includes("Logs de Acesso")) {
+      } else if (reportName.includes("Atividade de Leads (CRM)")) {
         const res = await getAccessLogsData();
         if (res.success) data = res.data;
       } else {
@@ -240,7 +241,11 @@ export default function ReportsPage() {
                 <p className="text-xs text-brand-text-secondary mt-1">Configure o envio automático de relatórios para seu e-mail (Semanal/Mensal).</p>
               </div>
            </div>
-           <Button variant="secondary" className="whitespace-nowrap border-brand-accent/40 text-brand-accent">
+           <Button
+             variant="secondary"
+             className="whitespace-nowrap border-brand-accent/40 text-brand-accent"
+             onClick={() => toast.error("Agendamento automático de relatórios ainda não implementado.")}
+           >
              CONFIGURAR AGENDAMENTOS
            </Button>
         </Card>

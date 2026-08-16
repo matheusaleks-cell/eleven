@@ -4,13 +4,21 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 
-export async function getFinancialStats() {
+export async function getFinancialStats(filters?: { month?: number; year?: number }) {
   const session = await requireSession("ADMIN");
   if (!session) return { custody: 0, distributed: 0, reinvestment: 0, taxes: 0, transitCapital: 0 };
 
   try {
+    let periodWhere: { createdAt?: { gte: Date; lt: Date } } = {};
+    if (filters?.month || filters?.year) {
+      const now = new Date();
+      const year = filters?.year ?? now.getFullYear();
+      const month = filters?.month ?? now.getMonth() + 1;
+      periodWhere = { createdAt: { gte: new Date(year, month - 1, 1), lt: new Date(year, month, 1) } };
+    }
+
     const totalSales = await prisma.salesOrder.aggregate({
-      where: { status: "PAGO" },
+      where: { status: "PAGO", ...periodWhere },
       _sum: { totalValue: true }
     });
 
@@ -24,7 +32,7 @@ export async function getFinancialStats() {
     // estimativa sobre o faturamento bruto total com um percentual global — que não tinha
     // nenhuma relação com o que de fato foi apurado e distribuído por projeto.
     const closedCycles = await prisma.cycle.aggregate({
-      where: { status: "COMPLETED" },
+      where: { status: "COMPLETED", ...periodWhere },
       _sum: { investorShare: true, reinvestmentShare: true, salesTax: true },
     });
 
@@ -59,6 +67,7 @@ export async function getSplitRules() {
       company: rule.companyPct,
       reserve: rule.reservePct,
       reinvest: rule.reinvestmentPct,
+      operationalCost: rule.operationalCost,
     };
   } catch {
     return null;
@@ -70,6 +79,7 @@ export async function saveSplitRules(data: {
   company: number;
   reserve: number;
   reinvest: number;
+  operationalCost: number;
 }) {
   const session = await requireSession("ADMIN");
   if (!session) return { success: false, error: "Não autorizado." };
@@ -86,6 +96,7 @@ export async function saveSplitRules(data: {
           companyPct: data.company,
           reservePct: data.reserve,
           reinvestmentPct: data.reinvest,
+          operationalCost: data.operationalCost,
         },
       });
     } else {
@@ -96,7 +107,7 @@ export async function saveSplitRules(data: {
           companyPct: data.company,
           reservePct: data.reserve,
           reinvestmentPct: data.reinvest,
-          operationalCost: 0,
+          operationalCost: data.operationalCost,
           salesCommission: 0,
           minBalanceNewPurchase: 0,
           newBatchCriteria: "MANUAL",
