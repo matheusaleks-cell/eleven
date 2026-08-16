@@ -75,17 +75,24 @@ interface FieldProps {
 
 function Field({ label, id, value, onChange, prefix, suffix, hint }: FieldProps) {
   const [isFocused, setIsFocused] = useState(false);
+  // Guarda o texto exatamente como digitado (com vírgula/casas decimais em progresso).
+  // Reconstruir a partir de `value.toString()` a cada tecla apaga o "," que acabou de ser
+  // digitado assim que o número ainda não tem parte decimal (ex: "5," vira "5" de novo),
+  // impedindo digitar decimais — daí câmbio e outros campos só aceitavam número inteiro.
+  const [rawInput, setRawInput] = useState(() => value.toString().replace(".", ","));
 
-  const formattedValue = useMemo(() => {
-    if (isFocused) return value.toString().replace(".", ",");
-    return new Intl.NumberFormat("pt-BR", {
-      minimumFractionDigits: value % 1 === 0 ? 0 : 2,
-      maximumFractionDigits: 4,
-    }).format(value);
-  }, [value, isFocused]);
+  const formattedValue = isFocused
+    ? rawInput
+    : new Intl.NumberFormat("pt-BR", {
+        minimumFractionDigits: value % 1 === 0 ? 0 : 2,
+        maximumFractionDigits: 4,
+      }).format(value);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(",", ".");
+    const typed = e.target.value;
+    if (!/^\d*[.,]?\d*$/.test(typed)) return; // só dígitos e um separador decimal
+    setRawInput(typed);
+    const raw = typed.replace(",", ".");
     const num = parseFloat(raw);
     if (!isNaN(num)) onChange(num);
     else if (raw === "") onChange(0);
@@ -104,9 +111,13 @@ function Field({ label, id, value, onChange, prefix, suffix, hint }: FieldProps)
         <input
           id={id}
           type="text"
+          inputMode="decimal"
           value={formattedValue}
           onChange={handleChange}
-          onFocus={() => setIsFocused(true)}
+          onFocus={() => {
+            setRawInput(value.toString().replace(".", ","));
+            setIsFocused(true);
+          }}
           onBlur={() => setIsFocused(false)}
           className="bg-transparent text-white text-sm font-mono w-full outline-none"
         />

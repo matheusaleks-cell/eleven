@@ -19,6 +19,7 @@ import { getTaxConfigs } from "../../configuracoes/actions";
 import { addLotDocument, deleteLotDocument, updateDocumentRealizedFields } from "../../importacao/lotes/actions";
 import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
+import { parseDecimalInput } from "@/lib/masks";
 
 const DOCUMENT_GROUPS = [
   {
@@ -472,7 +473,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         ...data.result,
         quantity: parseFloat(data.qty),
         salePricePerUnit: cleanBRL(data.price),
-        exchangeRateUsd: cleanBRL(data.rate),
+        exchangeRateUsd: parseDecimalInput(data.rate),
         fobValueUsd: cleanBRL(data.fob),
         freightUsd: cleanBRL(data.freight),
         insuranceUsd: cleanBRL(data.insurance),

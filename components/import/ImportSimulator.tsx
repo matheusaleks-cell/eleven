@@ -12,16 +12,20 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getProducts } from "@/app/admin/erp/produtos/actions";
-import { maskDecimal } from "@/lib/masks";
+import { isValidDecimalInput, parseDecimalInput } from "@/lib/masks";
 
 export const ImportSimulator = () => {
-  const [fob, setFob] = useState(15000);
-  const [freight, setFreight] = useState(1500);
+  const [fobInput, setFobInput] = useState("15000");
+  const [freightInput, setFreightInput] = useState("1500");
   const [insurance, setInsurance] = useState(450);
-  const [exchangeRate, setExchangeRate] = useState(5.15);
+  const [exchangeRateInput, setExchangeRateInput] = useState("5,15");
   const [taxPreset, setTaxPreset] = useState("TURQUIA");
   const [catalog, setCatalog] = useState<any[]>([]);
   const [selectedSku, setSelectedSku] = useState("");
+
+  const fob = useMemo(() => parseDecimalInput(fobInput), [fobInput]);
+  const freight = useMemo(() => parseDecimalInput(freightInput), [freightInput]);
+  const exchangeRate = useMemo(() => parseDecimalInput(exchangeRateInput), [exchangeRateInput]);
 
   useEffect(() => {
     getProducts().then(setCatalog);
@@ -104,7 +108,7 @@ export const ImportSimulator = () => {
                       const p = catalog.find(x => x.id === e.target.value);
                       if (p) {
                         setSelectedSku(p.id);
-                        setFob(p.priceB2B || p.priceB2C * 0.6);
+                        setFobInput(String(p.priceB2B || p.priceB2C * 0.6).replace(".", ","));
                       }
                     }}
                    >
@@ -115,22 +119,25 @@ export const ImportSimulator = () => {
                    </select>
                 </div>
 
-                <Input 
-                  label="Valor FOB Mercadoria (USD)" 
-                  value={fob} 
-                  onChange={(e) => setFob(Number(maskDecimal(e.target.value)))} 
+                <Input
+                  label="Valor FOB Mercadoria (USD)"
+                  inputMode="decimal"
+                  value={fobInput}
+                  onChange={(e) => isValidDecimalInput(e.target.value) && setFobInput(e.target.value)}
                 />
-                
+
                 <div className="grid grid-cols-2 gap-4">
-                  <Input 
-                    label="Logística (USD)" 
-                    value={freight} 
-                    onChange={(e) => setFreight(Number(maskDecimal(e.target.value)))} 
+                  <Input
+                    label="Logística (USD)"
+                    inputMode="decimal"
+                    value={freightInput}
+                    onChange={(e) => isValidDecimalInput(e.target.value) && setFreightInput(e.target.value)}
                   />
-                  <Input 
-                    label="Câmbio (BRL)" 
-                    value={exchangeRate} 
-                    onChange={(e) => setExchangeRate(Number(maskDecimal(e.target.value)))} 
+                  <Input
+                    label="Câmbio (BRL)"
+                    inputMode="decimal"
+                    value={exchangeRateInput}
+                    onChange={(e) => isValidDecimalInput(e.target.value) && setExchangeRateInput(e.target.value)}
                   />
                 </div>
              </div>

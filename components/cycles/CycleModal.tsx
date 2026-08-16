@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { calculateCycle, getCycleName, formatMoney, TaxConfig } from "@/lib/calculations";
 import { X, Calculator } from "lucide-react";
 import { toast } from "sonner";
+import { isValidDecimalInput, parseDecimalInput } from "@/lib/masks";
 
 interface CycleModalProps {
   projectName: string;
@@ -80,7 +81,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
   useEffect(() => {
     const q = parseFloat(qty);
     const p = clean(price);
-    const r = clean(rate);
+    const r = parseDecimalInput(rate);
     const f = clean(fob);
     const fr = clean(freight);
     const ins = clean(insurance) || 0;
@@ -167,7 +168,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
                 
                 const docSwift = activeLot.documents?.find((d: any) => d.category === "SWIFT – COMPROVANTE DE PAGTO/CÂMBIO");
                 const realizedExchange = activeLot.exchangeRate || 5.25;
-                setRate(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(realizedExchange));
+                setRate(String(realizedExchange).replace(".", ","));
 
                 const realizedFob = activeLot.fobValue || 0;
                 setFob(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedFob));
@@ -210,7 +211,13 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Taxa Cambial (USD)</label>
-              <input value={rate} onChange={(e) => handleBRLMask(e.target.value, setRate)} placeholder="R$ 0,00" style={inputStyle} />
+              <input
+                value={rate}
+                onChange={(e) => isValidDecimalInput(e.target.value) && setRate(e.target.value)}
+                inputMode="decimal"
+                placeholder="5,2500"
+                style={inputStyle}
+              />
             </div>
             <div className="space-y-1">
               <label className="text-[11px] font-bold text-brand-text-muted uppercase tracking-widest">Quantidade de Unidades</label>

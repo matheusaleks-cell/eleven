@@ -36,3 +36,13 @@ export const maskCurrency = (value: string) => {
 export const maskDecimal = (value: string) => {
   return value.replace(/[^\d.,]/g, "").replace(",", ".");
 };
+
+// Pra campos de taxa/câmbio digitados livremente (não em cascata de centavos), tipo
+// "5,2234" — precisa aceitar precisão além de 2 casas decimais (PTAX real varia nisso)
+// e nunca perder o "," que o usuário acabou de digitar entre um render e outro.
+export const isValidDecimalInput = (value: string) => /^\d*[.,]?\d*$/.test(value);
+
+export const parseDecimalInput = (value: string) => {
+  const num = parseFloat(value.replace(",", "."));
+  return isNaN(num) ? 0 : num;
+};

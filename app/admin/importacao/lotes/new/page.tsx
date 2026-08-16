@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { getProducts } from "../../../erp/produtos/actions";
 import { createImportLot, getSuppliers } from "../actions";
 import { getProjects } from "../../../projetos/actions";
-import { maskDecimal } from "@/lib/masks";
+import { isValidDecimalInput, parseDecimalInput } from "@/lib/masks";
 
 export default function NewBatchPage() {
   const session = useAdminSession();
@@ -26,7 +26,7 @@ export default function NewBatchPage() {
   const [projectId, setProjectId] = useState("");
   const [eta, setEta] = useState("");
   const [currency, setCurrency] = useState("USD");
-  const [ptax, setPtax] = useState("R$ 5,12");
+  const [ptax, setPtax] = useState("5,12");
   const [freight, setFreight] = useState("US$ 0,00");
   const [insurance, setInsurance] = useState("US$ 0,00");
   const [selectedProduct, setSelectedProduct] = useState("");
@@ -79,7 +79,7 @@ export default function NewBatchPage() {
     const fob = totalFob;
     const freightVal = cleanCurrency(freight);
     const insuranceVal = cleanCurrency(insurance);
-    const rate = cleanCurrency(ptax);
+    const rate = parseDecimalInput(ptax);
 
     // Fórmulas exatas do preset VR12_PUMP_PRESET
     const iiRate = 0.18;
@@ -167,7 +167,7 @@ export default function NewBatchPage() {
       projectId,
       originCountry: "Turquia",
       currency,
-      exchangeRate: cleanCurrency(ptax),
+      exchangeRate: parseDecimalInput(ptax),
       fobTotal: totalFob,
       freightTotal: cleanCurrency(freight),
       insuranceTotal: cleanCurrency(insurance),
@@ -278,17 +278,12 @@ export default function NewBatchPage() {
                           <option value="GBP">GBP - Libra</option>
                        </select>
                     </div>
-                    <Input 
-                      label="Taxa de Câmbio (Ptax)" 
+                    <Input
+                      label="Taxa de Câmbio (Ptax)"
                       value={ptax}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, "");
-                        const formatted = new Intl.NumberFormat("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        }).format(Number(value) / 100);
-                        setPtax(formatted);
-                      }}
+                      inputMode="decimal"
+                      placeholder="5,12"
+                      onChange={(e) => isValidDecimalInput(e.target.value) && setPtax(e.target.value)}
                     />
                     <Input 
                       label="Valor FOB Total" 
