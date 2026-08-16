@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
+import { weaponStatusForOrder } from "@/lib/order-status";
 
 // Lista de administradores que podem ser selecionados como vendedor responsável
 // por uma venda (ao inves de assumir sempre quem esta logado no momento).
@@ -404,7 +405,7 @@ export async function createDirectSale(data: {
         await prisma.weaponMap.updateMany({
           where: { id: { in: weaponsToSell.map((w) => w.id) } },
           data: {
-            currentStatus: "VENDIDA",
+            currentStatus: weaponStatusForOrder(data.status),
             salesOrderId: order.id,
             saleDate,
             saleValue: finalSaleValue,
@@ -567,7 +568,7 @@ export async function updateSalesOrder(
           await prisma.weaponMap.updateMany({
             where: { id: { in: weaponsToSell.map(w => w.id) } },
             data: {
-              currentStatus: "VENDIDA",
+              currentStatus: weaponStatusForOrder(data.status),
               salesOrderId: currentOrder.id,
               saleDate,
               saleValue: finalSaleValue,
@@ -578,6 +579,16 @@ export async function updateSalesOrder(
           });
         }
       }
+    }
+
+    // 2.5. Transição entre RESERVADA e VENDIDA quando o status muda sem passar por CANCELADO
+    // (ex: pedido PENDENTE com armas reservadas vira PAGO ao confirmar o pagamento, ou vice-versa).
+    if (!isCancelling && !wasCancelled && data.status !== undefined && data.status !== currentOrder.status) {
+      const targetWeaponStatus = weaponStatusForOrder(data.status);
+      await prisma.weaponMap.updateMany({
+        where: { salesOrderId: id, currentStatus: { in: ["RESERVADA", "VENDIDA"] } },
+        data: { currentStatus: targetWeaponStatus, lastMovementDate: new Date() },
+      });
     }
 
     // 3. Se o valor total do pedido mudou e o pedido continua ativo, devemos recalcular e atualizar o saleValue das armas

@@ -123,7 +123,12 @@ export async function createWeapon(data: any) {
         entryDate: new Date(),
       }
     });
+    await prisma.product.update({
+      where: { id: data.productId },
+      data: { stockAvailable: { increment: 1 } },
+    });
     revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
     return { success: true, weapon };
   } catch (error) {
     console.error("Erro ao cadastrar arma:", error);
@@ -136,10 +141,20 @@ export async function deleteWeapon(id: string) {
   if (!session) return { success: false, error: "Não autorizado." };
 
   try {
+    const weapon = await prisma.weaponMap.findUnique({ where: { id }, select: { productId: true, currentStatus: true } });
     await prisma.weaponMap.delete({
       where: { id }
     });
+    // Só desconta do estoque disponível se a peça ainda não tinha sido vendida/reservada
+    // (nesses casos o estoque já foi descontado no momento da venda).
+    if (weapon && weapon.currentStatus === "ESTOQUE") {
+      await prisma.product.update({
+        where: { id: weapon.productId },
+        data: { stockAvailable: { decrement: 1 } },
+      });
+    }
     revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
     return { success: true };
   } catch (error) {
     console.error("Erro ao excluir arma:", error);

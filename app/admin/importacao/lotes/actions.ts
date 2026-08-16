@@ -350,6 +350,14 @@ export async function registerLotSerials(lotId: string, productId: string, seria
 
     await prisma.$transaction(creations);
 
+    // As séries recém-cadastradas entram como estoque disponível de verdade —
+    // sem isso o ERP ficava defasado (mostrava o estoque cadastrado manualmente,
+    // sem refletir as armas que de fato entraram via lote de importação).
+    await prisma.product.update({
+      where: { id: productId },
+      data: { stockAvailable: { increment: cleanSerials.length } },
+    });
+
     revalidatePath("/admin/importacao/lotes");
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");

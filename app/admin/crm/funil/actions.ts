@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
+import { weaponStatusForOrder } from "@/lib/order-status";
 
 export async function searchCustomersForLead(query: string) {
   const session = await requireSession("ADMIN");
@@ -274,7 +275,7 @@ export async function convertToOrder(leadId: string, data: any) {
         await prisma.weaponMap.updateMany({
           where: { id: { in: weaponsToSell.map((w) => w.id) } },
           data: {
-            currentStatus: "VENDIDA",
+            currentStatus: weaponStatusForOrder(order.status),
             salesOrderId: order.id,
             saleDate,
             saleValue: finalSaleValue,

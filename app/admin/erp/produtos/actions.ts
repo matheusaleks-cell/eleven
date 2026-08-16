@@ -9,9 +9,24 @@ export async function getProducts() {
   if (!session) return [];
 
   try {
-    return await prisma.product.findMany({
+    const products = await prisma.product.findMany({
       orderBy: { commercialName: "asc" }
     });
+
+    // stockReserved no banco é um campo morto (nunca escrito por nenhuma venda) — o
+    // reservado de verdade é contado ao vivo a partir das armas com pedido tirado
+    // (status RESERVADA), a mesma fonte usada no Mapa de Armas.
+    const reservedCounts = await prisma.weaponMap.groupBy({
+      by: ["productId"],
+      where: { currentStatus: "RESERVADA" },
+      _count: { _all: true },
+    });
+    const reservedByProduct = new Map(reservedCounts.map(r => [r.productId, r._count._all]));
+
+    return products.map(p => ({
+      ...p,
+      stockReserved: reservedByProduct.get(p.id) || 0,
+    }));
   } catch (error) {
     console.error("Erro ao buscar produtos:", error);
     return [];
