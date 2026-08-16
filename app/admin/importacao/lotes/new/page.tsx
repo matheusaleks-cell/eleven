@@ -31,7 +31,7 @@ export default function NewBatchPage() {
   const [insurance, setInsurance] = useState("US$ 0,00");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [addQty, setAddQty] = useState(1);
-  const [addUnitPrice, setAddUnitPrice] = useState(0);
+  const [addUnitPrice, setAddUnitPrice] = useState("0"); // texto livre — ver isValidDecimalInput/parseDecimalInput
   const [items, setItems] = useState<any[]>([]);
   const [catalog, setCatalog] = useState<any[]>([]);
 
@@ -72,7 +72,7 @@ export default function NewBatchPage() {
   }, [currency]);
 
   const totalFob = useMemo(() => {
-    return items.reduce((acc, item) => acc + (item.qty * item.unitFob), 0);
+    return items.reduce((acc, item) => acc + (item.qty * parseDecimalInput(item.unitFob)), 0);
   }, [items]);
 
   const importSummary = useMemo(() => {
@@ -141,18 +141,18 @@ export default function NewBatchPage() {
       productId = product.id;
     }
 
-    setItems([...items, { 
-      id: Math.random().toString(), 
+    setItems([...items, {
+      id: Math.random().toString(),
       productId: productId,
-      name: itemName, 
-      qty: addQty, 
-      unitFob: addUnitPrice > 0 ? addUnitPrice : 0 
+      name: itemName,
+      qty: addQty,
+      unitFob: parseDecimalInput(addUnitPrice) > 0 ? addUnitPrice : "0"
     }]);
-    
+
     toast.success(`${itemName} adicionado ao lote.`);
     // Reset inputs
     setAddQty(1);
-    setAddUnitPrice(0);
+    setAddUnitPrice("0");
   };
 
 
@@ -175,7 +175,7 @@ export default function NewBatchPage() {
       items: items.map(i => ({
         productId: i.productId,
         quantity: i.qty,
-        unitFob: i.unitFob
+        unitFob: parseDecimalInput(i.unitFob)
       }))
     });
 
@@ -335,8 +335,8 @@ export default function NewBatchPage() {
                         onChange={(e) => {
                           setSelectedProduct(e.target.value);
                           const p = catalog.find(item => item.id === e.target.value);
-                          if (p) setAddUnitPrice(p.priceB2B || (p.priceB2C * 0.6));
-                          else if (e.target.value === "GENERIC") setAddUnitPrice(0);
+                          if (p) setAddUnitPrice(String(p.priceB2B || (p.priceB2C * 0.6)).replace(".", ","));
+                          else if (e.target.value === "GENERIC") setAddUnitPrice("0");
                         }}
                        >
                           <option value="">SELECIONAR PRODUTO...</option>
@@ -353,11 +353,12 @@ export default function NewBatchPage() {
                             onChange={(e) => setAddQty(Number(e.target.value))}
                             className="w-12 bg-brand-bg border border-brand-border rounded px-2 py-1 text-[10px] text-white h-8"
                           />
-                          <input 
-                            type="number" 
+                          <input
+                            type="text"
+                            inputMode="decimal"
                             placeholder="Valor FOB"
                             value={addUnitPrice}
-                            onChange={(e) => setAddUnitPrice(Number(e.target.value))}
+                            onChange={(e) => isValidDecimalInput(e.target.value) && setAddUnitPrice(e.target.value)}
                             className="w-20 bg-brand-bg border border-brand-border rounded px-2 py-1 text-[10px] text-white h-8"
                           />
                        </div>
@@ -393,15 +394,16 @@ export default function NewBatchPage() {
                                <td className="font-mono text-xs">
                                 <div className="flex items-center gap-1">
                                   <span className="text-brand-text-muted">USD</span>
-                                  <input 
-                                    type="number" 
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
                                     value={item.unitFob}
-                                    onChange={(e) => setItems(items.map(i => i.id === item.id ? { ...i, unitFob: Number(e.target.value) } : i))}
+                                    onChange={(e) => isValidDecimalInput(e.target.value) && setItems(items.map(i => i.id === item.id ? { ...i, unitFob: e.target.value } : i))}
                                     className="w-20 bg-brand-bg border border-brand-border rounded px-2 py-1 text-xs text-white font-mono"
                                   />
                                 </div>
                               </td>
-                              <td className="font-mono text-xs font-bold text-brand-accent">USD {(item.qty * item.unitFob).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              <td className="font-mono text-xs font-bold text-brand-accent">USD {(item.qty * parseDecimalInput(item.unitFob)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
 
                               <td className="text-right">
                                  <button 
