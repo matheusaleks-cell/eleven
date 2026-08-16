@@ -252,15 +252,15 @@ function ReportContent({
   }, [breakdown]);
 
   return (
-    <div className="bg-white text-slate-900 font-sans text-xs p-8 leading-relaxed w-full max-w-4xl mx-auto border border-slate-200 rounded flex flex-col justify-between min-h-[270mm]">
+    <div className="bg-white text-slate-900 font-sans text-xs p-4 leading-snug w-full max-w-4xl mx-auto border border-slate-200 rounded flex flex-col justify-between min-h-[270mm]">
       <div>
         {/* Cabeçalho da Proposta com Logo */}
-        <div className="flex justify-between items-center border-b-2 border-amber-500 pb-5 mb-8">
+        <div className="flex justify-between items-center border-b-2 border-amber-500 pb-2 mb-3">
           <div className="flex items-center gap-4">
             <img
               src="/logos/logo-alta-preto.png"
               alt="Eleven Firearms"
-              className="h-12 w-auto object-contain shrink-0"
+              className="h-9 w-auto object-contain shrink-0"
               onError={(e) => {
                 // Fallback se o PNG não for encontrado na rota relativa
                 (e.target as HTMLElement).style.display = "none";
@@ -276,17 +276,17 @@ function ReportContent({
                   Inteligência em Operações Internacionais
                 </span>
               </div>
-              <h1 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+              <h1 className="text-lg font-black text-slate-900 uppercase tracking-tight">
                 Simulação de Escalada de Lotes & Aportes
               </h1>
               {investorName && (
-                <p className="text-xs font-bold text-amber-800 mt-1">
+                <p className="text-xs font-bold text-amber-800 mt-0.5">
                   Investidor / Proposta: <span className="text-slate-900 font-extrabold">{investorName}</span>
                 </p>
               )}
             </div>
           </div>
-          <div className="text-right text-[9.5px] text-slate-500 leading-relaxed shrink-0">
+          <div className="text-right text-[9.5px] text-slate-500 leading-snug shrink-0">
             <p className="font-black text-slate-900 uppercase tracking-wider">PROJEÇÃO ESTRATÉGICA</p>
             <p>Emissão: {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</p>
             <p>Responsável: <span className="font-semibold text-slate-700">{sessionName || "Administrador"}</span></p>
@@ -294,21 +294,21 @@ function ReportContent({
         </div>
 
         {/* 3 KPIs Principais em Destaque */}
-        <div className="grid grid-cols-3 gap-6 mb-8">
-          <div className="border border-slate-300 bg-slate-50/80 rounded-xl p-4 text-center shadow-sm">
-            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1.5">
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="border border-slate-300 bg-slate-50/80 rounded-xl p-2 text-center shadow-sm">
+            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1">
               Aporte Inicial (Lote 1)
             </span>
             <span className="text-lg font-black text-slate-900 font-mono">{fmtBRL(initialAporte)}</span>
           </div>
-          <div className="border border-amber-300 bg-amber-50/80 rounded-xl p-4 text-center shadow-sm">
-            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-amber-800 block mb-1.5">
+          <div className="border border-amber-300 bg-amber-50/80 rounded-xl p-2 text-center shadow-sm">
+            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-amber-800 block mb-1">
               Lucro Acumulado Investidor
             </span>
             <span className="text-lg font-black text-amber-700 font-mono">{fmtBRL(totalInvestorEarnings)}</span>
           </div>
-          <div className="border border-emerald-300 bg-emerald-50/80 rounded-xl p-4 text-center shadow-sm">
-            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-emerald-800 block mb-1.5">
+          <div className="border border-emerald-300 bg-emerald-50/80 rounded-xl p-2 text-center shadow-sm">
+            <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-emerald-800 block mb-1">
               ROI Global Acumulado
             </span>
             <span className="text-lg font-black text-emerald-700 font-mono">+{fmtPct(globalROI)}</span>
@@ -316,34 +316,34 @@ function ReportContent({
         </div>
 
         {/* Operação & Custo Aduaneiro */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-8 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           {/* Dados da Operação */}
           <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm flex flex-col bg-white">
-            <div className="bg-slate-900 text-amber-400 font-bold px-5 py-3.5 text-[11px] uppercase tracking-wider border-b border-slate-800" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+            <div className="bg-slate-900 text-amber-400 font-bold px-5 py-1.5 text-[11px] uppercase tracking-wider border-b border-slate-800" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
               1. Parâmetros da Operação
             </div>
-            <div className="p-3">
+            <div className="p-2">
               <table className="w-full text-[10.5px] border-collapse">
                 <tbody>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">Qtd Inicial / Preço Venda:</td>
-                    <td className="py-3.5 px-4 font-bold text-right text-slate-900">{inputs.initialQuantity} un. @ {fmtBRL(inputs.salePricePerUnit)}</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">Qtd Inicial / Preço Venda:</td>
+                    <td className="py-1 px-4 font-bold text-right text-slate-900">{inputs.initialQuantity} un. @ {fmtBRL(inputs.salePricePerUnit)}</td>
                   </tr>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">FOB / Frete Unitário:</td>
-                    <td className="py-3.5 px-4 font-mono text-right text-slate-800">US$ {inputs.fobUnitUSD.toFixed(2)} / US$ {inputs.freightUnitUSD.toFixed(2)}</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">FOB / Frete Unitário:</td>
+                    <td className="py-1 px-4 font-mono text-right text-slate-800">US$ {inputs.fobUnitUSD.toFixed(2)} / US$ {inputs.freightUnitUSD.toFixed(2)}</td>
                   </tr>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">Câmbio BRL/USD:</td>
-                    <td className="py-3.5 px-4 font-mono text-right text-slate-800">R$ {inputs.exchangeRate.toFixed(2)}</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">Câmbio BRL/USD:</td>
+                    <td className="py-1 px-4 font-mono text-right text-slate-800">R$ {inputs.exchangeRate.toFixed(2)}</td>
                   </tr>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">Impostos Venda / OpEx:</td>
-                    <td className="py-3.5 px-4 font-mono text-right text-slate-800">{(inputs.salesTaxRate * 100).toFixed(1)}% / {(inputs.opExRate * 100).toFixed(1)}%</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">Impostos Venda / OpEx:</td>
+                    <td className="py-1 px-4 font-mono text-right text-slate-800">{(inputs.salesTaxRate * 100).toFixed(1)}% / {(inputs.opExRate * 100).toFixed(1)}%</td>
                   </tr>
                   <tr>
-                    <td className="py-3.5 px-4 text-slate-600 font-medium">Split Investidor / Lotes:</td>
-                    <td className="py-3.5 px-4 font-bold text-amber-800 text-right">{(inputs.investorSplitPct * 100).toFixed(0)}% ({inputs.numBatches} lotes)</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">Split Investidor / Lotes:</td>
+                    <td className="py-1 px-4 font-bold text-amber-800 text-right">{(inputs.investorSplitPct * 100).toFixed(0)}% ({inputs.numBatches} lotes)</td>
                   </tr>
                 </tbody>
               </table>
@@ -352,31 +352,31 @@ function ReportContent({
 
           {/* Custo Aduaneiro Lote 1 */}
           <div className="border border-slate-300 rounded-xl overflow-hidden shadow-sm flex flex-col bg-white">
-            <div className="bg-slate-900 text-amber-400 font-bold px-5 py-3.5 text-[11px] uppercase tracking-wider border-b border-slate-800" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+            <div className="bg-slate-900 text-amber-400 font-bold px-5 py-1.5 text-[11px] uppercase tracking-wider border-b border-slate-800" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
               2. Custo Aduaneiro Lote 1 (Cálculo Real)
             </div>
-            <div className="p-3">
+            <div className="p-2">
               <table className="w-full text-[10.5px] border-collapse">
                 <tbody>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3 px-4 text-slate-600 font-medium">Valor Aduaneiro (CIF):</td>
-                    <td className="py-3 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.va)}</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">Valor Aduaneiro (CIF):</td>
+                    <td className="py-1 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.va)}</td>
                   </tr>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3 px-4 text-slate-600 font-medium">II / IPI:</td>
-                    <td className="py-3 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.ii)} / {fmtBRL2(breakdown.ipi)}</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">II / IPI:</td>
+                    <td className="py-1 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.ii)} / {fmtBRL2(breakdown.ipi)}</td>
                   </tr>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3 px-4 text-slate-600 font-medium">PIS / COFINS / Siscomex / Op:</td>
-                    <td className="py-3 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.pis + breakdown.cofins + breakdown.siscomex + breakdown.custoOp)}</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">PIS / COFINS / Siscomex / Op:</td>
+                    <td className="py-1 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.pis + breakdown.cofins + breakdown.siscomex + breakdown.custoOp)}</td>
                   </tr>
                   <tr className="border-b border-slate-200/80">
-                    <td className="py-3 px-4 text-slate-600 font-medium">ICMS Importação (Gross-up):</td>
-                    <td className="py-3 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.icms)}</td>
+                    <td className="py-1 px-4 text-slate-600 font-medium">ICMS Importação (Gross-up):</td>
+                    <td className="py-1 px-4 font-mono text-right text-slate-800">{fmtBRL2(breakdown.icms)}</td>
                   </tr>
                   <tr className="bg-amber-50/80 font-bold">
-                    <td className="py-3.5 px-4 text-slate-900 uppercase">Custo Total Aporte Lote 1:</td>
-                    <td className="py-3.5 px-4 font-mono text-amber-900 font-black text-right text-xs">{fmtBRL2(breakdown.total)}</td>
+                    <td className="py-1 px-4 text-slate-900 uppercase">Custo Total Aporte Lote 1:</td>
+                    <td className="py-1 px-4 font-mono text-amber-900 font-black text-right text-xs">{fmtBRL2(breakdown.total)}</td>
                   </tr>
                 </tbody>
               </table>
@@ -385,10 +385,10 @@ function ReportContent({
         </div>
 
         {/* ── SEÇÃO DE GRÁFICOS VISUAIS NO PDF ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-10 mb-14">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
           {/* Gráfico 1: Escalada por Lote (Faturamento vs Lucro Investidor) */}
-          <div className="border border-slate-300 rounded-xl p-6 bg-slate-50/50 shadow-sm flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
+          <div className="border border-slate-300 rounded-xl p-2.5 bg-slate-50/50 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2 border-b border-slate-200 pb-2">
               <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-800">
                 Gráfico: Faturamento vs Lucro Investidor (R$)
               </span>
@@ -397,18 +397,18 @@ function ReportContent({
               </span>
             </div>
             
-            <div className="space-y-4 my-3">
+            <div className="space-y-1 my-1">
               {batches.map((b) => {
                 const revPct = (b.grossRevenue / maxRevenue) * 100;
                 const invPct = (b.investorShare / maxRevenue) * 100;
                 return (
-                  <div key={b.batchNumber} className="space-y-1.5">
-                    <div className="flex justify-between text-[9.5px] font-bold">
+                  <div key={b.batchNumber} className="space-y-0.5">
+                    <div className="flex justify-between text-[9px] font-bold">
                       <span className="text-slate-700">Lote #{b.batchNumber} ({b.quantity} un.)</span>
                       <span className="text-amber-800 font-mono">Fat: {fmtBRL(b.grossRevenue)} | Inv: {fmtBRL(b.investorShare)}</span>
                     </div>
                     {/* Barra de Faturamento */}
-                    <div className="h-3 rounded-full bg-slate-200 overflow-hidden relative flex" style={{ backgroundColor: "#e2e8f0", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden relative flex" style={{ backgroundColor: "#e2e8f0", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
@@ -433,7 +433,7 @@ function ReportContent({
               })}
             </div>
 
-            <div className="flex items-center justify-center gap-6 text-[9.5px] font-bold text-slate-600 pt-4 border-t border-slate-200 mt-4">
+            <div className="flex items-center justify-center gap-6 text-[9.5px] font-bold text-slate-600 pt-2 border-t border-slate-200 mt-2">
               <span className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: "#1e293b", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }} />
                 Faturamento Bruto
@@ -446,8 +446,8 @@ function ReportContent({
           </div>
 
           {/* Gráfico 2: Composição do Custo Aduaneiro (Lote 1) */}
-          <div className="border border-slate-300 rounded-xl p-6 bg-slate-50/50 shadow-sm flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-4 border-b border-slate-200 pb-3">
+          <div className="border border-slate-300 rounded-xl p-2.5 bg-slate-50/50 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-2 border-b border-slate-200 pb-2">
               <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-800">
                 Gráfico: Composição do Custo Lote 1 (%)
               </span>
@@ -457,8 +457,8 @@ function ReportContent({
             </div>
 
             {/* Stacked Bar Visual */}
-            <div className="my-3">
-              <div className="h-6 rounded-lg overflow-hidden flex border border-slate-300 shadow-inner bg-slate-100">
+            <div className="my-1.5">
+              <div className="h-5 rounded-lg overflow-hidden flex border border-slate-300 shadow-inner bg-slate-100">
                 {costComposition.map((item, idx) => (
                   <div
                     key={idx}
@@ -477,9 +477,9 @@ function ReportContent({
               </div>
 
               {/* Legenda Detalhada do Gráfico */}
-              <div className="grid grid-cols-2 gap-3 mt-5 text-[9.5px]">
+              <div className="grid grid-cols-2 gap-2 mt-3 text-[9.5px]">
                 {costComposition.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-200">
+                  <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-white border border-slate-200">
                     <div className="flex items-center gap-1.5">
                       <span className="w-3 h-3 rounded shrink-0" style={{ backgroundColor: item.hex, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }} />
                       <span className="text-slate-700 font-medium truncate">{item.label}</span>
@@ -490,30 +490,30 @@ function ReportContent({
               </div>
             </div>
 
-            <div className="text-[9px] text-slate-500 text-center pt-4 border-t border-slate-200 mt-4">
+            <div className="text-[9px] text-slate-500 text-center pt-2 border-t border-slate-200 mt-2">
               *Calculado com ICMS gross-up e alíquotas oficiais de importação.
             </div>
           </div>
         </div>
 
         {/* Projeção Detalhada Lote a Lote */}
-        <div className="border border-slate-300 rounded-xl overflow-hidden mt-12 mb-12 shadow-sm bg-white">
-          <div className="bg-slate-900 text-amber-400 font-bold px-6 py-4 text-[11.5px] uppercase tracking-wider flex justify-between items-center border-b border-slate-800" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
+        <div className="border border-slate-300 rounded-xl overflow-hidden mt-3 mb-3 shadow-sm bg-white">
+          <div className="bg-slate-900 text-amber-400 font-bold px-6 py-1.5 text-[11.5px] uppercase tracking-wider flex justify-between items-center border-b border-slate-800" style={{ backgroundColor: "#0f172a", color: "#f5c400", printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}>
             <span>3. Projeção de Escalada Lote a Lote</span>
             <span className="text-[9.5px] text-slate-300 font-normal">Reaplicação dos lucros no próximo lote</span>
           </div>
-          <div className="p-3">
+          <div className="p-2">
             <table className="w-full text-[10.5px] text-left border-collapse">
               <thead>
                 <tr className="bg-slate-100 border-b-2 border-slate-300 font-extrabold text-slate-700 uppercase tracking-wider text-[9.5px]">
-                  <th className="py-3.5 px-4 text-center">Lote</th>
-                  <th className="py-3.5 px-4 text-right">Qtd</th>
-                  <th className="py-3.5 px-4 text-right">Aporte Lote</th>
-                  <th className="py-3.5 px-4 text-right">Faturamento</th>
-                  <th className="py-3.5 px-4 text-right">Lucro Líquido</th>
-                  <th className="py-3.5 px-4 text-right text-amber-800">Lucro Investidor</th>
-                  <th className="py-3.5 px-4 text-center text-emerald-800">ROI Lote</th>
-                  <th className="py-3.5 px-4 text-right">Cap. Próx. Lote</th>
+                  <th className="py-1 px-4 text-center">Lote</th>
+                  <th className="py-1 px-4 text-right">Qtd</th>
+                  <th className="py-1 px-4 text-right">Aporte Lote</th>
+                  <th className="py-1 px-4 text-right">Faturamento</th>
+                  <th className="py-1 px-4 text-right">Lucro Líquido</th>
+                  <th className="py-1 px-4 text-right text-amber-800">Lucro Investidor</th>
+                  <th className="py-1 px-4 text-center text-emerald-800">ROI Lote</th>
+                  <th className="py-1 px-4 text-right">Cap. Próx. Lote</th>
                 </tr>
               </thead>
               <tbody>
@@ -521,14 +521,14 @@ function ReportContent({
                   <tr key={b.batchNumber} className={`border-b border-slate-200 transition-colors ${
                     b.batchNumber === 1 ? "bg-amber-50/80 font-bold" : "even:bg-slate-50/40"
                   }`}>
-                    <td className="py-4 px-4 text-center font-bold font-mono text-xs">#{b.batchNumber}</td>
-                    <td className="py-4 px-4 text-right font-mono">{b.quantity} un</td>
-                    <td className="py-4 px-4 text-right font-mono">{fmtBRL(b.totalImportCostBRL)}</td>
-                    <td className="py-4 px-4 text-right font-mono">{fmtBRL(b.grossRevenue)}</td>
-                    <td className="py-4 px-4 text-right font-mono">{fmtBRL(b.netLiquidProfit)}</td>
-                    <td className="py-4 px-4 text-right font-mono font-bold text-amber-800">{fmtBRL(b.investorShare)}</td>
-                    <td className="py-4 px-4 text-center font-mono font-bold text-emerald-700">{fmtPct(b.investorROI)}</td>
-                    <td className="py-4 px-4 text-right font-mono text-slate-700">{fmtBRL(b.nextBatchCapital)}</td>
+                    <td className="py-1 px-4 text-center font-bold font-mono text-xs">#{b.batchNumber}</td>
+                    <td className="py-1 px-4 text-right font-mono">{b.quantity} un</td>
+                    <td className="py-1 px-4 text-right font-mono">{fmtBRL(b.totalImportCostBRL)}</td>
+                    <td className="py-1 px-4 text-right font-mono">{fmtBRL(b.grossRevenue)}</td>
+                    <td className="py-1 px-4 text-right font-mono">{fmtBRL(b.netLiquidProfit)}</td>
+                    <td className="py-1 px-4 text-right font-mono font-bold text-amber-800">{fmtBRL(b.investorShare)}</td>
+                    <td className="py-1 px-4 text-center font-mono font-bold text-emerald-700">{fmtPct(b.investorROI)}</td>
+                    <td className="py-1 px-4 text-right font-mono text-slate-700">{fmtBRL(b.nextBatchCapital)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -537,7 +537,7 @@ function ReportContent({
         </div>
 
         {/* Resumo Final Totais */}
-        <div className="border border-slate-300 bg-slate-50/90 rounded-xl p-6 mt-10 mb-10 shadow-sm">
+        <div className="border border-slate-300 bg-slate-50/90 rounded-xl p-2.5 mt-3 mb-3 shadow-sm">
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 block mb-1">
@@ -562,12 +562,12 @@ function ReportContent({
       </div>
 
       {/* Rodapé com Assinaturas e Isenção */}
-      <div className="border-t border-slate-300 pt-4 mt-auto">
-        <p className="text-[8.5px] text-slate-500 text-justify leading-relaxed mb-6">
+      <div className="border-t border-slate-300 pt-2 mt-auto">
+        <p className="text-[8.5px] text-slate-500 text-justify leading-snug mb-3">
           <strong>AVISO LEGAL:</strong> Projeção financeira estimativa baseada em parâmetros operacionais e tributários informados nesta data. Variações nas alíquotas de impostos, alterações cambiais (BRL/USD) e custos aduaneiros pontuais poderão alterar os resultados efetivos.
         </p>
 
-        <div className="grid grid-cols-2 gap-16 pt-3">
+        <div className="grid grid-cols-2 gap-16 pt-2">
           <div className="text-center border-t border-slate-400 pt-1.5">
             <p className="text-[9.5px] font-bold text-slate-800 uppercase">{investorName || "Investidor / Cliente"}</p>
             <p className="text-[8px] text-slate-500">De acordo / Aceite da Proposta</p>
