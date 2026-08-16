@@ -26,11 +26,27 @@ import {
   FileText,
   CreditCard,
   Layers,
+  RefreshCw,
 } from "lucide-react";
-import { getSalesOrders, getCustomersForSale, updateSalesOrder, deleteSalesOrder, getSalesOrderPdfData, getOrderDocuments, uploadOrderDocument, deleteOrderDocument } from "@/app/admin/crm/vendas/actions";
+import {
+  getSalesOrders,
+  getCustomersForSale,
+  updateSalesOrder,
+  deleteSalesOrder,
+  getSalesOrderPdfData,
+  getOrderDocuments,
+  uploadOrderDocument,
+  deleteOrderDocument,
+  getSalesMonthlySnapshot,
+  saveSalesGoal,
+  swapWeaponSerial,
+  getAvailableSerialsForProduct,
+} from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { generateAnexoPPdf, generatePedidoPdf } from "@/lib/pdf-helpers";
+
+const MONTH_NAMES_LONG = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 const cleanMoney = (val: string) => {
   const num = Number(val.replace(/\D/g, "")) / 100;
@@ -75,6 +91,19 @@ export default function VendasPage() {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [uploadingCategory, setUploadingCategory] = useState<string | null>(null);
 
+  // Mini-dashboard mensal (mês vigente x mês anterior x meta do mês seguinte)
+  const [monthlySnapshot, setMonthlySnapshot] = useState({ currentMonth: 0, currentMonthCustomers: 0, previousMonth: 0, nextMonthGoal: 0 });
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [goalInput, setGoalInput] = useState("");
+  const [savingGoal, setSavingGoal] = useState(false);
+
+  // Troca de número de série de uma arma dentro do pedido em edição
+  const [swappingWeaponId, setSwappingWeaponId] = useState<string | null>(null);
+  const [availableSerials, setAvailableSerials] = useState<{ id: string; serial: string; batchCode: string }[]>([]);
+  const [loadingSerials, setLoadingSerials] = useState(false);
+  const [selectedNewSerial, setSelectedNewSerial] = useState("");
+  const [swappingInProgress, setSwappingInProgress] = useState(false);
+
   useEffect(() => {
     try {
       const s = localStorage.getItem("eleven_session");
@@ -88,9 +117,14 @@ export default function VendasPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [ordersData, customersData] = await Promise.all([getSalesOrders(), getCustomersForSale()]);
+      const [ordersData, customersData, snapshot] = await Promise.all([
+        getSalesOrders(),
+        getCustomersForSale(),
+        getSalesMonthlySnapshot(),
+      ]);
       setOrders(ordersData);
       setCustomers(customersData);
+      setMonthlySnapshot(snapshot);
     } catch {
       console.error("Erro ao carregar dados de vendas.");
     } finally {
@@ -123,6 +157,66 @@ export default function VendasPage() {
     setEditingOrder(null);
     setConfirmDelete(false);
     setOrderDocuments([]);
+    setSwappingWeaponId(null);
+    setAvailableSerials([]);
+    setSelectedNewSerial("");
+  };
+
+  const handleSaveGoal = async () => {
+    const value = cleanMoney(goalInput);
+    if (value <= 0) {
+      toast.error("Informe um valor de meta válido.");
+      return;
+    }
+    setSavingGoal(true);
+    try {
+      const now = new Date();
+      const nextMonth = now.getMonth() + 2 > 12 ? 1 : now.getMonth() + 2;
+      const nextYear = now.getMonth() + 2 > 12 ? now.getFullYear() + 1 : now.getFullYear();
+      const res = await saveSalesGoal(nextMonth, nextYear, value);
+      if (res.success) {
+        toast.success("Meta salva!");
+        setEditingGoal(false);
+        loadData();
+      } else {
+        toast.error(res.error || "Erro ao salvar meta.");
+      }
+    } finally {
+      setSavingGoal(false);
+    }
+  };
+
+  const openSwapPicker = async (weaponId: string, productId: string) => {
+    setSwappingWeaponId(weaponId);
+    setSelectedNewSerial("");
+    setLoadingSerials(true);
+    try {
+      const serials = await getAvailableSerialsForProduct(productId, "AUTO");
+      setAvailableSerials(serials);
+    } finally {
+      setLoadingSerials(false);
+    }
+  };
+
+  const handleConfirmSwap = async (oldWeaponId: string) => {
+    if (!editingOrder || !selectedNewSerial) return;
+    setSwappingInProgress(true);
+    try {
+      const res = await swapWeaponSerial(editingOrder.id, oldWeaponId, selectedNewSerial);
+      if (res.success) {
+        toast.success("Número de série trocado!");
+        setSwappingWeaponId(null);
+        setSelectedNewSerial("");
+        const refreshed = await getSalesOrders();
+        setOrders(refreshed);
+        const updatedOrder = refreshed.find((o: any) => o.id === editingOrder.id);
+        if (updatedOrder) setEditingOrder(updatedOrder);
+      } else {
+        toast.error(res.error || "Erro ao trocar número de série.");
+      }
+    } finally {
+      setSwappingInProgress(false);
+    }
   };
 
   const loadOrderDocuments = async (orderId: string) => {
@@ -299,25 +393,52 @@ export default function VendasPage() {
           </Button>
         </div>
 
-        {/* Stats */}
+        {/* Mini-dashboard mensal */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card className="p-6 border-brand-border bg-brand-surface/20 flex flex-col gap-2">
-            <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Total de Pedidos</span>
-            <p className="text-2xl font-bold text-white">{orders.length}</p>
-          </Card>
-          <Card className="p-6 border-brand-border bg-brand-surface/20 flex flex-col gap-2">
-            <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Faturamento Total</span>
-            <p className="text-2xl font-bold text-brand-accent">
-              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(orders.reduce((a, o) => a + (o.totalValue || 0), 0))}
+            <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">{MONTH_NAMES_LONG[(new Date().getMonth() + 11) % 12]} (Mês Anterior)</span>
+            <p className="text-xl font-bold text-white">
+              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(monthlySnapshot.previousMonth)}
             </p>
           </Card>
-          <Card className="p-6 border-brand-border bg-brand-surface/20 flex flex-col gap-2">
-            <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">Ticket Médio</span>
-            <p className="text-2xl font-bold text-white">
-              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(
-                orders.length > 0 ? orders.reduce((a, o) => a + (o.totalValue || 0), 0) / orders.length : 0
-              )}
+          <Card className="p-6 border-2 border-brand-accent/40 bg-brand-accent/5 flex flex-col gap-2 items-center text-center">
+            <span className="text-[10px] font-black text-brand-accent uppercase tracking-widest">{MONTH_NAMES_LONG[new Date().getMonth()]} (Mês Vigente)</span>
+            <p className="text-3xl font-bold text-brand-accent">
+              {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(monthlySnapshot.currentMonth)}
             </p>
+            <span className="text-[10px] font-bold text-brand-text-muted uppercase">{monthlySnapshot.currentMonthCustomers} cliente(s) únicos</span>
+          </Card>
+          <Card className="p-6 border-brand-border bg-brand-surface/20 flex flex-col gap-2">
+            <span className="text-[10px] font-black text-brand-text-muted uppercase tracking-widest">{MONTH_NAMES_LONG[(new Date().getMonth() + 1) % 12]} (Meta)</span>
+            {editingGoal ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  autoFocus
+                  className="w-full bg-brand-input border border-brand-border rounded px-2 py-1 text-sm text-white font-mono outline-none focus:border-brand-accent"
+                  value={goalInput}
+                  onChange={(e) => handleBRLMask(e.target.value, setGoalInput)}
+                  placeholder="R$ 0,00"
+                />
+                <Button size="sm" className="text-[10px] shrink-0" onClick={handleSaveGoal} disabled={savingGoal}>
+                  {savingGoal ? "..." : "OK"}
+                </Button>
+              </div>
+            ) : (
+              <button
+                className="text-xl font-bold text-white text-left hover:text-brand-accent transition-colors"
+                onClick={() => {
+                  setGoalInput(monthlySnapshot.nextMonthGoal > 0
+                    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(monthlySnapshot.nextMonthGoal)
+                    : "");
+                  setEditingGoal(true);
+                }}
+              >
+                {monthlySnapshot.nextMonthGoal > 0
+                  ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(monthlySnapshot.nextMonthGoal)
+                  : "Definir meta →"}
+              </button>
+            )}
           </Card>
         </div>
 
@@ -640,6 +761,62 @@ export default function VendasPage() {
                     </div>
                   );
                 })()}
+
+                {/* Números de Série do Pedido — permite trocar a unidade física entregue */}
+                {editingOrder.weapons && editingOrder.weapons.length > 0 && (
+                  <div className="px-5 pb-3">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <RefreshCw size={11} className="text-brand-accent" />
+                      <span className="text-[9px] font-black text-brand-accent uppercase tracking-widest">Número(s) de Série</span>
+                    </div>
+                    <div className="space-y-2">
+                      {editingOrder.weapons.map((w: any) => (
+                        <div key={w.id} className="p-2.5 rounded border border-brand-border bg-brand-surface/30">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-mono font-bold text-white">{w.serialNumber}</span>
+                            {swappingWeaponId === w.id ? (
+                              <Button size="sm" variant="ghost" className="text-[9px] shrink-0" onClick={() => setSwappingWeaponId(null)}>
+                                CANCELAR
+                              </Button>
+                            ) : (
+                              <Button size="sm" variant="ghost" className="text-[9px] gap-1 shrink-0" onClick={() => openSwapPicker(w.id, w.productId)}>
+                                <RefreshCw size={10} /> TROCAR
+                              </Button>
+                            )}
+                          </div>
+                          {swappingWeaponId === w.id && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <select
+                                className="w-full bg-brand-input border border-brand-border rounded px-2 py-1.5 text-xs text-white outline-none focus:border-brand-accent"
+                                value={selectedNewSerial}
+                                onChange={(e) => setSelectedNewSerial(e.target.value)}
+                                disabled={loadingSerials}
+                              >
+                                <option value="">
+                                  {loadingSerials ? "Carregando séries..." : "Selecionar novo número de série..."}
+                                </option>
+                                {availableSerials.map((s) => (
+                                  <option key={s.id} value={s.id}>{s.serial} · {s.batchCode}</option>
+                                ))}
+                              </select>
+                              <Button
+                                size="sm"
+                                className="text-[9px] shrink-0"
+                                disabled={!selectedNewSerial || swappingInProgress}
+                                onClick={() => handleConfirmSwap(w.id)}
+                              >
+                                {swappingInProgress ? "..." : "CONFIRMAR"}
+                              </Button>
+                            </div>
+                          )}
+                          {!loadingSerials && swappingWeaponId === w.id && availableSerials.length === 0 && (
+                            <p className="text-[9px] text-brand-text-muted uppercase font-bold mt-1">Nenhuma outra unidade deste produto em estoque.</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Campos editáveis */}
                 <div className="px-5 pb-3">

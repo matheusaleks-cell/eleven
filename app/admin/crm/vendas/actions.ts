@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { weaponStatusForOrder } from "@/lib/order-status";
-import { logWeaponMovements } from "@/lib/weapon-movement";
+import { logWeaponMovements, logWeaponMovement } from "@/lib/weapon-movement";
 
 // Lista de administradores que podem ser selecionados como vendedor responsável
 // por uma venda (ao inves de assumir sempre quem esta logado no momento).
@@ -130,6 +130,9 @@ export async function getSalesOrders() {
         customer: true,
         weapons: {
           select: {
+            id: true,
+            serialNumber: true,
+            productId: true,
             importLot: {
               select: {
                 investmentProjectId: true,
@@ -790,5 +793,134 @@ export async function getAvailableSerialsForProduct(
   } catch (error) {
     console.error("Erro ao buscar números de série disponíveis:", error);
     return [];
+  }
+}
+
+// Troca o número de série de uma unidade dentro de um pedido já lançado (correção
+// manual — ex: entregou a arma errada ao cliente). Mesma dança de devolver/alocar já
+// usada em deleteSalesOrder/updateSalesOrder, mas escopada a UMA arma dentro do pedido
+// em vez do pedido inteiro: devolve a antiga pro estoque e aloca a nova com os mesmos
+// dados de venda que a antiga tinha (não recalcula nada, só troca qual peça física saiu).
+export async function swapWeaponSerial(salesOrderId: string, oldWeaponId: string, newWeaponId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    const oldWeapon = await prisma.weaponMap.findUnique({ where: { id: oldWeaponId } });
+    if (!oldWeapon || oldWeapon.salesOrderId !== salesOrderId) {
+      return { success: false, error: "Essa arma não pertence a este pedido." };
+    }
+
+    const newWeapon = await prisma.weaponMap.findUnique({ where: { id: newWeaponId } });
+    if (!newWeapon || newWeapon.currentStatus !== "ESTOQUE") {
+      return { success: false, error: "O número de série escolhido não está disponível em estoque." };
+    }
+    if (newWeapon.productId !== oldWeapon.productId) {
+      return { success: false, error: "A troca só pode ser feita entre unidades do mesmo produto." };
+    }
+
+    const order = await prisma.salesOrder.findUnique({ where: { id: salesOrderId } });
+    const orderLabel = order?.orderNumber || salesOrderId;
+
+    await prisma.weaponMap.update({
+      where: { id: oldWeaponId },
+      data: {
+        currentStatus: "ESTOQUE",
+        salesOrderId: null,
+        saleDate: null,
+        saleValue: null,
+        customerId: null,
+        sellingUserId: null,
+        lastMovementDate: new Date(),
+      },
+    });
+    await logWeaponMovement(oldWeaponId, "DEVOLUCAO_ESTOQUE", `Pedido ${orderLabel} — série trocada, devolvida ao estoque`);
+
+    await prisma.weaponMap.update({
+      where: { id: newWeaponId },
+      data: {
+        currentStatus: oldWeapon.currentStatus,
+        salesOrderId: oldWeapon.salesOrderId,
+        saleDate: oldWeapon.saleDate,
+        saleValue: oldWeapon.saleValue,
+        customerId: oldWeapon.customerId,
+        sellingUserId: oldWeapon.sellingUserId,
+        lastMovementDate: new Date(),
+      },
+    });
+    const movType = oldWeapon.currentStatus === "VENDIDA" ? "VENDA" : "RESERVA";
+    await logWeaponMovement(newWeaponId, movType, `Pedido ${orderLabel} — série trocada, assumiu a venda`);
+
+    revalidatePath("/admin/vendas");
+    revalidatePath("/admin");
+    revalidatePath("/admin/mapa-de-armas");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro ao trocar número de série:", error);
+    return { success: false, error: error.message || "Falha ao trocar número de série." };
+  }
+}
+
+// Mini-dashboard mensal de Vendas: mês vigente (com clientes únicos) x mês anterior x
+// meta cadastrada pro mês seguinte. Mesmo padrão de filtro por createdAt já usado em
+// getFinancialStats (app/admin/financeiro/actions.ts).
+export async function getSalesMonthlySnapshot() {
+  const session = await requireSession("ADMIN");
+  if (!session) return { currentMonth: 0, currentMonthCustomers: 0, previousMonth: 0, nextMonthGoal: 0 };
+
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth(); // 0-indexed
+
+    const currentStart = new Date(year, month, 1);
+    const currentEnd = new Date(year, month + 1, 1);
+    const previousStart = new Date(year, month - 1, 1);
+    const previousEnd = currentStart;
+
+    const [currentOrders, previousAgg, goal] = await Promise.all([
+      prisma.salesOrder.findMany({
+        where: { status: "PAGO", createdAt: { gte: currentStart, lt: currentEnd } },
+        select: { totalValue: true, customerId: true },
+      }),
+      prisma.salesOrder.aggregate({
+        where: { status: "PAGO", createdAt: { gte: previousStart, lt: previousEnd } },
+        _sum: { totalValue: true },
+      }),
+      prisma.salesGoal.findUnique({
+        where: { month_year: { month: month + 2 > 12 ? 1 : month + 2, year: month + 2 > 12 ? year + 1 : year } },
+      }),
+    ]);
+
+    const currentMonth = currentOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
+    const currentMonthCustomers = new Set(currentOrders.map(o => o.customerId)).size;
+
+    return {
+      currentMonth,
+      currentMonthCustomers,
+      previousMonth: Number(previousAgg._sum.totalValue) || 0,
+      nextMonthGoal: goal?.targetValue || 0,
+    };
+  } catch (error) {
+    console.error("Erro ao buscar snapshot mensal de vendas:", error);
+    return { currentMonth: 0, currentMonthCustomers: 0, previousMonth: 0, nextMonthGoal: 0 };
+  }
+}
+
+export async function saveSalesGoal(month: number, year: number, targetValue: number) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    await prisma.salesGoal.upsert({
+      where: { month_year: { month, year } },
+      create: { month, year, targetValue },
+      update: { targetValue },
+    });
+    revalidatePath("/admin/vendas");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Erro ao salvar meta de vendas:", error);
+    return { success: false, error: error.message || "Falha ao salvar meta." };
   }
 }

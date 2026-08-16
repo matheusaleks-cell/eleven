@@ -43,6 +43,21 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
   let totalOperationalCosts = 0;
   let totalUnitCosts = 0;
 
+  // Mesmo breakdown financeiro dos totais acima, mas por lote — pra mostrar no
+  // Dashboard quanto cada lote vendeu e como foi redistribuído (investidor/empresa),
+  // não só a % de unidades que já existia em activeLotsProgress.
+  const lotFinancials = new Map<string, { grossRevenue: number; investorShare: number; companyShare: number; taxAmount: number; operationalAmount: number }>();
+  const addToLot = (lotId: string | null | undefined, fin: { saleValue: number; investorShare: number; companyShare: number; taxAmount: number; operationalAmount: number }) => {
+    if (!lotId) return;
+    const cur = lotFinancials.get(lotId) || { grossRevenue: 0, investorShare: 0, companyShare: 0, taxAmount: 0, operationalAmount: 0 };
+    cur.grossRevenue += fin.saleValue;
+    cur.investorShare += fin.investorShare;
+    cur.companyShare += fin.companyShare;
+    cur.taxAmount += fin.taxAmount;
+    cur.operationalAmount += fin.operationalAmount;
+    lotFinancials.set(lotId, cur);
+  };
+
   let startDateObj = filters?.startDate ? new Date(filters.startDate) : null;
   let endDateObj = filters?.endDate ? new Date(filters.endDate) : null;
   if (endDateObj) endDateObj.setHours(23, 59, 59, 999);
@@ -78,6 +93,7 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
           totalTaxes += fin.taxAmount;
           totalOperationalCosts += fin.operationalAmount;
           totalUnitCosts += fin.unitCost;
+          addToLot(lot.id, fin);
         });
       });
     });
@@ -103,6 +119,7 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
         totalTaxes += fin.taxAmount;
         totalOperationalCosts += fin.operationalAmount;
         totalUnitCosts += fin.unitCost;
+        addToLot(c.importLotId, fin);
       });
     });
 
@@ -191,6 +208,7 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
       }
 
       const pct = total > 0 ? (sold / total) * 100 : 0;
+      const lotFin = lotFinancials.get(lot.id);
       activeLotsProgress.push({
         id: lot.id,
         batchCode: lot.batchCode,
@@ -198,7 +216,12 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
         investorName: lot.investmentProject?.investor?.name || "Eleven Armas",
         sold,
         total,
-        percentage: parseFloat(pct.toFixed(1))
+        percentage: parseFloat(pct.toFixed(1)),
+        grossRevenue: lotFin?.grossRevenue || 0,
+        investorShare: lotFin?.investorShare || 0,
+        companyShare: lotFin?.companyShare || 0,
+        taxAmount: lotFin?.taxAmount || 0,
+        operationalAmount: lotFin?.operationalAmount || 0,
       });
     });
   } catch (err) {

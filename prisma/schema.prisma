@@ -549,3 +549,19 @@ model TaxConfig {
 
   @@map("tax_configs")
 }
+
+// Meta de faturamento digitada manualmente pelo admin pra um mês específico —
+// usada no mini-dashboard de Vendas pra comparar o mês vigente contra a meta
+// do mês seguinte (não existe fórmula automática pra isso, é decisão humana).
+model SalesGoal {
+  id          String   @id @default(uuid())
+  month       Int
+  year        Int
+  targetValue Float    @map("target_value")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([month, year])
+  @@map("sales_goals")
+}

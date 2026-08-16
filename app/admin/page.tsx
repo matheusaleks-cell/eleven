@@ -15,6 +15,9 @@ import { getDashboardStats, getRecentProjects } from "./actions";
 import { getInvestors } from "./investidores/actions";
 import { toast } from "sonner";
 
+const fmtBRL = (v: number) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [session, setSession] = useState<any>(null);
@@ -498,11 +501,27 @@ export default function AdminDashboard() {
                       <span style={{ color: "#F5C400" }}>{lot.sold} / {lot.total} unidades ({lot.percentage}%)</span>
                     </div>
                     <div className="h-1.5 rounded-full bg-brand-border overflow-hidden">
-                      <div 
-                        className="h-full rounded-full" 
+                      <div
+                        className="h-full rounded-full"
                         style={{ width: `${lot.percentage}%`, background: "linear-gradient(90deg, #F5C400, #FFD740)" }}
                       />
                     </div>
+                    {lot.grossRevenue > 0 && (
+                      <div className="grid grid-cols-3 gap-2 pt-2 mt-1 border-t border-[#2d2d2d]">
+                        <div className="flex flex-col">
+                          <span className="text-[8px] font-bold text-[#606060] uppercase">Faturado</span>
+                          <span className="text-[10px] font-mono font-bold text-white">{fmtBRL(lot.grossRevenue)}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[8px] font-bold text-[#606060] uppercase">Investidor</span>
+                          <span className="text-[10px] font-mono font-bold text-[#F5C400]">{fmtBRL(lot.investorShare)}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[8px] font-bold text-[#606060] uppercase">Empresa</span>
+                          <span className="text-[10px] font-mono font-bold text-[#4CAF50]">{fmtBRL(lot.companyShare)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
