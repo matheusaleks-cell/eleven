@@ -261,14 +261,19 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
     crValidity: lead.crValidity,
     phone: lead.phone,
     email: lead.email,
+    address: lead.city ? `${lead.city} / ${lead.state || "SP"}` : null,
+    contactName: lead.name,
   });
 
   const buildAnexoPItems = (): AnexoPItemSpec[] =>
     dealItems.map(item => {
       const fullProduct = products.find(p => p.id === item.product.id) || {};
+      const unitPrice = item.product.price ?? 0;
       return {
         quantity: item.quantity,
         name: item.product.name,
+        unitPrice,
+        totalPrice: unitPrice * item.quantity,
         species: fullProduct.species,
         brand: fullProduct.brand,
         model: fullProduct.model,
@@ -277,6 +282,8 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
         finish: fullProduct.finish,
         originCountry: fullProduct.originCountry,
         barrelLength: fullProduct.barrelLength,
+        capacity: fullProduct.capacity,
+        technicalDescription: fullProduct.technicalDescription,
       };
     });
 
@@ -321,7 +328,21 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
     toast.info("Gerando Pedido...");
 
     try {
-      await generatePedidoPdf(buildAnexoPBuyer(), buildAnexoPItems(), lead.name, "/logos/logo-alta-branco.png");
+      const buyer = buildAnexoPBuyer();
+      const items = buildAnexoPItems();
+      await generatePedidoPdf(
+        buyer,
+        items,
+        lead.name,
+        "/logos/logo-alta-preto.png",
+        {
+          orderNumber: `LEAD-${lead.id.slice(0, 6).toUpperCase()}`,
+          orderDate: new Date().toLocaleDateString("pt-BR"),
+          sellerName: lead.assignedTo || "RAUL",
+          paymentMethod: "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO",
+          totalValue: totalValue,
+        }
+      );
 
       await addLeadLog(lead.id, "Pedido gerado via sistema", lead.assignedTo || "Admin Eleven");
 

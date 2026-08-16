@@ -20,8 +20,7 @@ export const loadImageAsDataURL = async (src: string): Promise<string> => {
   });
 };
 
-// Desenha uma imagem dentro de uma caixa preservando a proporção original (evita esticar o logo,
-// já que a caixa do cabeçalho do Anexo P não tem a mesma proporção do PNG de origem).
+// Desenha uma imagem dentro de uma caixa preservando a proporção original
 export const addContainedImage = (
   doc: jsPDF,
   dataUrl: string,
@@ -68,11 +67,15 @@ export interface AnexoPBuyer {
   crValidity?: string | null;
   phone?: string | null;
   email?: string | null;
+  address?: string | null;
+  contactName?: string | null;
 }
 
 export interface AnexoPItemSpec {
   quantity: number;
   name: string;
+  unitPrice?: number | null;
+  totalPrice?: number | null;
   species?: string | null;
   brand?: string | null;
   model?: string | null;
@@ -81,6 +84,18 @@ export interface AnexoPItemSpec {
   finish?: string | null;
   originCountry?: string | null;
   barrelLength?: number | null;
+  capacity?: number | null;
+  technicalDescription?: string | null;
+}
+
+export interface PedidoExtraOptions {
+  sellerName?: string | null;
+  orderDate?: string | null;
+  orderNumber?: string | null;
+  paymentMethod?: string | null;
+  downPayment?: number | null;
+  totalValue?: number | null;
+  logoSrc?: string;
 }
 
 const ANEXO_P_SUPPLIER = {
@@ -88,19 +103,16 @@ const ANEXO_P_SUPPLIER = {
   cnpj: "36.312.424/0001-39",
   crNumber: "550771",
   crValidity: "13/07/2027",
+  address: "Av. Nova Cantareira, 2855 - Tucuruvi /SP - CEP 02341-000",
+  phone: "11 99889-9777",
+  email: "elevenfirearms@gmail.com",
+  instagram: "eleven.firearms",
 };
 
-// Cabeçalho de marca (fundo preto + logo) — usado SOMENTE no documento PEDIDO.
-// O Anexo P oficial vai para o Exército e precisa sair sem identidade visual da empresa (sem logo, sem cor).
-export const drawBrandedHeader = async (doc: jsPDF, logoSrc: string) => {
-  doc.setFillColor(15, 15, 15);
-  doc.rect(0, 0, 210, 35, "F");
-  const logoData = await loadImageAsDataURL(logoSrc);
-  addContainedImage(doc, logoData, (210 - 60) / 2, 5, 60, 25);
-};
+// ==========================================
+// 1. ANEXO P OFICIAL (Para o Exército)
+// ==========================================
 
-// Corpo do documento (adquirente, produtos, fornecedor, declarações, assinatura) — idêntico entre
-// Anexo P e Pedido, o que muda é o título e o `titleY` (o Anexo P não tem cabeçalho de marca acima).
 export const drawAnexoPBody = (
   doc: jsPDF,
   opts: {
@@ -170,8 +182,6 @@ export const drawAnexoPBody = (
     }
   });
 
-  // O bloco fixo abaixo (fornecedor + anexos + declaracoes + assinatura) consome
-  // exatamente 141mm de y (offsets fixos, texto das declaracoes nao varia) + margem de seguranca.
   if (y > 297 - 141 - 10) {
     doc.addPage();
     y = 20;
@@ -215,8 +225,6 @@ export const drawAnexoPBody = (
   doc.text(buyerName.toUpperCase(), 105, y, { align: "center" });
 };
 
-// Anexo P oficial — SEM logo/marca (documento entregue ao Exército). Título fica próximo do topo
-// já que não há cabeçalho de marca acima consumindo espaço.
 export const generateAnexoPPdf = (buyer: AnexoPBuyer, items: AnexoPItemSpec[], fileNameBase: string) => {
   const doc = new jsPDF();
   const timestamp = new Date().toLocaleDateString("pt-BR");
@@ -224,16 +232,325 @@ export const generateAnexoPPdf = (buyer: AnexoPBuyer, items: AnexoPItemSpec[], f
   doc.save(`Anexo_P_${(fileNameBase || "Cliente").replace(/\s+/g, "_")}.pdf`);
 };
 
-// PEDIDO — mesmo corpo do Anexo P, mas com o cabeçalho de marca (logo) usado anteriormente pelo Anexo P.
+// ==========================================
+// 2. PEDIDO COMERCIAL OFICIAL (Layout Eleven Firearms)
+// ==========================================
+
+const GOLD_COLOR: [number, number, number] = [235, 184, 0];   // #EBB800
+const GRAY_COLOR: [number, number, number] = [112, 112, 112]; // #707070
+const BORDER_COLOR: [number, number, number] = [210, 210, 210];
+
+const formatCurrency = (val: number) => {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(val);
+};
+
 export const generatePedidoPdf = async (
   buyer: AnexoPBuyer,
   items: AnexoPItemSpec[],
   fileNameBase: string,
-  logoSrc: string
+  logoSrc: string = "/logos/logo-alta-preto.png",
+  options?: PedidoExtraOptions
 ) => {
-  const doc = new jsPDF();
-  const timestamp = new Date().toLocaleDateString("pt-BR");
-  await drawBrandedHeader(doc, logoSrc);
-  drawAnexoPBody(doc, { title: "PEDIDO", titleY: 45, buyer, items, timestamp });
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const timestamp = options?.orderDate || new Date().toLocaleDateString("pt-BR");
+  const orderNumber = options?.orderNumber || "N/A";
+  const sellerName = (options?.sellerName || "RAUL").toUpperCase();
+  const paymentMethod = options?.paymentMethod || "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO";
+
+  const totalCalculated = items.reduce((sum, i) => sum + ((i.unitPrice ?? 0) * (i.quantity ?? 1)), 0);
+  const totalValue = options?.totalValue ?? totalCalculated;
+  const downPayment = options?.downPayment ?? (totalValue * 0.5);
+  const remainingBalance = totalValue - downPayment;
+
+  // --- CABEÇALHO DA EMPRESA (Topo) ---
+  const headerY = 12;
+  try {
+    const logoData = await loadImageAsDataURL(logoSrc || "/logos/logo-alta-preto.png");
+    addContainedImage(doc, logoData, 10, headerY, 52, 14);
+  } catch {
+    // Fallback caso a imagem não carregue
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    doc.text("ELEVEN FIREARMS", 10, headerY + 10);
+  }
+
+  // Dados da Empresa
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text("ELEVEN FIREARMS REPRESENTAÇÃO LTDA", 10, headerY + 19);
+
+  doc.setFontSize(7.5);
+  doc.setTextColor(90, 90, 90);
+  doc.text(`CNPJ ${ANEXO_P_SUPPLIER.cnpj}                    CR ${ANEXO_P_SUPPLIER.crNumber}`, 10, headerY + 23.5);
+
+  // Lista de Contatos com ícones/bolinhas douradas
+  const contacts = [
+    ANEXO_P_SUPPLIER.address,
+    ANEXO_P_SUPPLIER.phone,
+    ANEXO_P_SUPPLIER.email,
+    ANEXO_P_SUPPLIER.instagram,
+  ];
+
+  let contactY = headerY + 27.5;
+  contacts.forEach((text) => {
+    // Bolinha amarela
+    doc.setFillColor(...GOLD_COLOR);
+    doc.circle(11.5, contactY - 0.8, 1.2, "F");
+
+    doc.setFontSize(7);
+    doc.setTextColor(50, 50, 50);
+    if (text === ANEXO_P_SUPPLIER.email) {
+      doc.setTextColor(0, 85, 170); // Cor de link azul
+    }
+    doc.text(text, 14.5, contactY);
+    contactY += 3.8;
+  });
+
+  // --- TABELA DE INFORMAÇÕES DO PEDIDO E CLIENTE ---
+  let gridY = contactY + 2;
+  const leftX = 10;
+  const tableW = 190;
+
+  // Helper para desenhar célula com cabeçalho amarelo e valor
+  const drawFieldCell = (
+    x: number,
+    y: number,
+    w: number,
+    headerH: number,
+    dataH: number,
+    headerText: string,
+    valueText: string,
+    align: "left" | "center" | "right" = "center",
+    isLink = false
+  ) => {
+    // Header Amarelo
+    doc.setFillColor(...GOLD_COLOR);
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.rect(x, y, w, headerH, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(0, 0, 0);
+    doc.text(headerText, x + w / 2, y + headerH - 1.5, { align: "center" });
+
+    // Data Branco
+    doc.setFillColor(255, 255, 255);
+    doc.rect(x, y + headerH, w, dataH, "FD");
+
+    doc.setFont("helvetica", isLink ? "normal" : "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(isLink ? 0 : 0, isLink ? 85 : 0, isLink ? 170 : 0);
+
+    const posX = align === "center" ? x + w / 2 : align === "right" ? x + w - 3 : x + 3;
+    doc.text(valueText || "N/A", posX, y + headerH + dataH - 1.8, { align });
+  };
+
+  // Linha 1: Vendedor (65mm) | Data Pedido (60mm) | Nº do Pedido (65mm)
+  drawFieldCell(leftX, gridY, 65, 4.5, 5.5, "Vendedor / Representante", sellerName);
+  drawFieldCell(leftX + 65, gridY, 60, 4.5, 5.5, "Data Pedido", timestamp);
+  drawFieldCell(leftX + 125, gridY, 65, 4.5, 5.5, "Nº do Pedido", orderNumber);
+  gridY += 10;
+
+  // Linha 2: Razão Social / Nome Completo (125mm) | CNPJ / CPF (65mm)
+  const buyerName = (buyer.name || "CLIENTE NÃO INFORMADO").toUpperCase();
+  const buyerDoc = buyer.document || "N/A";
+  drawFieldCell(leftX, gridY, 125, 4.5, 5.5, "Razão Social / Nome Completo", buyerName);
+  drawFieldCell(leftX + 125, gridY, 65, 4.5, 5.5, "CNPJ / CPF", buyerDoc);
+  gridY += 10;
+
+  // Linha 3: Endereço (190mm)
+  const buyerAddress = buyer.address || "Endereço não informado";
+  drawFieldCell(leftX, gridY, 190, 4.5, 5.5, "Endereço", buyerAddress);
+  gridY += 10;
+
+  // Linha 4: Contato (40mm) | E-MAIL (85mm) | TELEFONE (65mm)
+  const contactName = (buyer.contactName || "N/A").toUpperCase();
+  const buyerEmail = buyer.email || "N/A";
+  const buyerPhone = buyer.phone || "N/A";
+  drawFieldCell(leftX, gridY, 40, 4.5, 5.5, "Contato", contactName);
+  drawFieldCell(leftX + 40, gridY, 85, 4.5, 5.5, "E-MAIL", buyerEmail, "center", true);
+  drawFieldCell(leftX + 125, gridY, 65, 4.5, 5.5, "TELEFONE", buyerPhone);
+  gridY += 12;
+
+  // --- TABELA DE PRODUTOS ---
+  const colQtdW = 12;
+  const colDescW = 118;
+  const colUnitPriceW = 30;
+  const colTotalW = 30;
+
+  // Cabeçalho da Tabela
+  doc.setFillColor(...GOLD_COLOR);
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.rect(leftX, gridY, colQtdW, 5.5, "FD");
+  doc.rect(leftX + colQtdW, gridY, colDescW, 5.5, "FD");
+  doc.rect(leftX + colQtdW + colDescW, gridY, colUnitPriceW, 5.5, "FD");
+  doc.rect(leftX + colQtdW + colDescW + colUnitPriceW, gridY, colTotalW, 5.5, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Qtd", leftX + colQtdW / 2, gridY + 3.8, { align: "center" });
+  doc.text("Descrição", leftX + colQtdW + colDescW / 2, gridY + 3.8, { align: "center" });
+  doc.text("Preço unitário", leftX + colQtdW + colDescW + colUnitPriceW / 2, gridY + 3.8, { align: "center" });
+  doc.text("Total", leftX + colQtdW + colDescW + colUnitPriceW + colTotalW / 2, gridY + 3.8, { align: "center" });
+  gridY += 5.5;
+
+  // Itens da Tabela
+  items.forEach((item) => {
+    const qty = item.quantity || 1;
+    const unitPrice = item.unitPrice ?? (totalValue / items.length);
+    const itemTotal = item.totalPrice ?? (unitPrice * qty);
+
+    // Monta descrição técnica detalhada
+    let desc = "";
+    if (item.technicalDescription) {
+      desc = item.technicalDescription;
+    } else {
+      const especie = item.species || "Arma de Fogo";
+      const marca = item.brand || item.name.split(" ")[0] || "N/A";
+      const modelo = item.model || item.name.split(" ").slice(1).join(" ") || item.name;
+      const calibre = item.caliber || "N/A";
+      const cano = item.barrelLength
+        ? `${item.barrelLength}" (${(item.barrelLength * 25.4).toFixed(2)}mm)`
+        : "N/A";
+      const acao = item.actionType || "N/A";
+      const acabamento = item.finish || "N/A";
+      const origem = item.originCountry || "Turquia";
+      const cap = item.capacity ? `02 (${item.capacity} tiros)` : "02 carregadores";
+
+      desc = `Espécie: ${especie} - Marca: ${marca} - Modelo: ${modelo} - Calibre: ${calibre} - Comprimento do Cano: ${cano} - Quantidade de cano: 01 - Tipo de alma: ${especie.toLowerCase().includes("espingarda") ? "Lisa" : "Raiada"} - Funcionamento: ${especie.toLowerCase().includes("pistola") ? "Semi-Automatico" : "Repetição"} - Sistema de Ação: ${acao} - Quantidade de carregadores: ${cap} - Acabamento: ${acabamento} - País de Origem: ${origem} - Arma de repetição de uso permitido (1.1.0020)`;
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    const splitDesc = doc.splitTextToSize(desc, colDescW - 6);
+    const rowH = Math.max(splitDesc.length * 3.2 + 6, 12);
+
+    // Verifica se precisa de nova página
+    if (gridY + rowH > 240) {
+      doc.addPage();
+      gridY = 20;
+    }
+
+    // Desenha bordas da linha
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.rect(leftX, gridY, colQtdW, rowH, "FD");
+    doc.rect(leftX + colQtdW, gridY, colDescW, rowH, "FD");
+    doc.rect(leftX + colQtdW + colDescW, gridY, colUnitPriceW, rowH, "FD");
+    doc.rect(leftX + colQtdW + colDescW + colUnitPriceW, gridY, colTotalW, rowH, "FD");
+
+    // Qtd
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(0, 0, 0);
+    doc.text(qty.toString(), leftX + colQtdW / 2, gridY + rowH / 2 + 1, { align: "center" });
+
+    // Descrição
+    doc.setFontSize(7);
+    doc.text(splitDesc, leftX + colQtdW + 3, gridY + 4.5);
+
+    // Preço Unitário
+    doc.setFontSize(7.5);
+    doc.text(formatCurrency(unitPrice), leftX + colQtdW + colDescW + colUnitPriceW - 3, gridY + rowH / 2 + 1, { align: "right" });
+
+    // Total
+    doc.text(formatCurrency(itemTotal), leftX + colQtdW + colDescW + colUnitPriceW + colTotalW - 3, gridY + rowH / 2 + 1, { align: "right" });
+
+    gridY += rowH;
+  });
+
+  // --- FORMA DE PAGAMENTO (Banner) ---
+  gridY += 2;
+  doc.setFillColor(...GOLD_COLOR);
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.rect(leftX, gridY, tableW, 5.5, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`FORMA DE PAGAMENTO: ${paymentMethod.toUpperCase()}`, leftX + tableW / 2, gridY + 3.8, { align: "center" });
+  gridY += 7.5;
+
+  // --- TOTAIS (Alinhado à direita) ---
+  const totalsBoxW = 75;
+  const totalsBoxX = leftX + tableW - totalsBoxW;
+  const totalsLabelW = 35;
+  const totalsValW = 40;
+  const rowH = 5.2;
+
+  const drawTotalRow = (label: string, val: number) => {
+    // Label cinza
+    doc.setFillColor(...GRAY_COLOR);
+    doc.setDrawColor(...BORDER_COLOR);
+    doc.rect(totalsBoxX, gridY, totalsLabelW, rowH, "FD");
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(255, 255, 255);
+    doc.text(label, totalsBoxX + totalsLabelW / 2, gridY + 3.6, { align: "center" });
+
+    // Valor amarelo
+    doc.setFillColor(...GOLD_COLOR);
+    doc.rect(totalsBoxX + totalsLabelW, gridY, totalsValW, rowH, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text(formatCurrency(val), totalsBoxX + totalsLabelW + totalsValW - 3, gridY + 3.6, { align: "right" });
+
+    gridY += rowH;
+  };
+
+  drawTotalRow("Total", totalValue);
+  drawTotalRow("Entrada", downPayment);
+  drawTotalRow("Saldo Remanescente", remainingBalance);
+
+  // --- OBRIGADO PELA PREFERÊNCIA (Banner) ---
+  gridY += 3;
+  doc.setFillColor(...GOLD_COLOR);
+  doc.setDrawColor(...BORDER_COLOR);
+  doc.rect(leftX, gridY, tableW, 5.5, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Obrigado pela preferência!", leftX + tableW / 2, gridY + 3.8, { align: "center" });
+
+  // --- BLOCO DE ASSINATURAS (Rodapé da página) ---
+  let sigY = Math.max(gridY + 16, 260);
+  if (sigY > 275) {
+    doc.addPage();
+    sigY = 40;
+  }
+
+  // Linhas de assinatura
+  const sigCol1X = leftX;
+  const sigCol1W = 85;
+  const sigCol2X = leftX + 105;
+  const sigCol2W = 85;
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.3);
+  doc.line(sigCol1X, sigY, sigCol1X + sigCol1W, sigY);
+  doc.line(sigCol2X, sigY, sigCol2X + sigCol2W, sigY);
+
+  // Textos Vendedora (Esquerda)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7.5);
+  doc.setTextColor(0, 0, 0);
+  doc.text(`CNPJ: ${ANEXO_P_SUPPLIER.cnpj}`, sigCol1X, sigY + 4);
+  doc.text("VENDEDORA:", sigCol1X, sigY + 8);
+  doc.text(ANEXO_P_SUPPLIER.name, sigCol1X, sigY + 12);
+
+  // Textos Comprador (Direita)
+  doc.text(`CNPJ / CPF: ${buyerDoc}`, sigCol2X, sigY + 4);
+  doc.text("COMPRADOR:", sigCol2X, sigY + 8);
+  doc.text(buyerName, sigCol2X, sigY + 12);
+
   doc.save(`Pedido_${(fileNameBase || "Cliente").replace(/\s+/g, "_")}.pdf`);
 };

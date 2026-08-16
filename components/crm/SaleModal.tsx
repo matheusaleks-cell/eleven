@@ -250,21 +250,38 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
     }
   };
 
-  const buildAnexoPBuyer = (): AnexoPBuyer => ({
-    name: customer?.name,
-    document: customer?.document || customer?.cpfCnpj,
-    crNumber: customer?.crNumber || customer?.cr,
-    crValidity: fmtDate(customer?.crValidityDate),
-    phone: customer?.phone,
-    email: customer?.email,
-  });
+  const buildAnexoPBuyer = (): AnexoPBuyer => {
+    const addressParts = [
+      customer?.address,
+      customer?.addressNumber ? `nº ${customer.addressNumber}` : null,
+      customer?.addressComplement,
+      customer?.neighborhood ? `– ${customer.neighborhood}` : null,
+      customer?.city ? `– ${customer.city}` : null,
+      customer?.state ? `/ ${customer.state}` : null,
+      customer?.cep ? `– CEP: ${customer.cep}` : null,
+    ].filter(Boolean);
+
+    return {
+      name: customer?.name,
+      document: customer?.document || customer?.cpfCnpj,
+      crNumber: customer?.crNumber || customer?.cr,
+      crValidity: fmtDate(customer?.crValidityDate),
+      phone: customer?.phone,
+      email: customer?.email,
+      address: addressParts.length > 0 ? addressParts.join(" ") : null,
+      contactName: customer?.responsibleName || null,
+    };
+  };
 
   const buildAnexoPItems = (): AnexoPItemSpec[] =>
     cart.map(item => {
       const fullProduct = products.find(p => p.id === item.id) || {};
+      const unitPrice = item.price ?? 0;
       return {
         quantity: item.quantity,
         name: item.name,
+        unitPrice,
+        totalPrice: unitPrice * item.quantity,
         species: fullProduct.species,
         brand: fullProduct.brand,
         model: fullProduct.model,
@@ -273,6 +290,8 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
         finish: fullProduct.finish,
         originCountry: fullProduct.originCountry,
         barrelLength: fullProduct.barrelLength,
+        capacity: fullProduct.capacity,
+        technicalDescription: fullProduct.technicalDescription,
       };
     });
 
@@ -333,7 +352,21 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
     toast.info("Gerando Pedido...");
 
     try {
-      await generatePedidoPdf(buildAnexoPBuyer(), buildAnexoPItems(), customer?.name || "Cliente", "/logos/logo-alta-a.png");
+      const buyer = buildAnexoPBuyer();
+      const items = buildAnexoPItems();
+      await generatePedidoPdf(
+        buyer,
+        items,
+        customer?.name || "Cliente",
+        "/logos/logo-alta-preto.png",
+        {
+          orderNumber: `ORC-${Date.now().toString().slice(-4)}`,
+          orderDate: new Date().toLocaleDateString("pt-BR"),
+          sellerName: "RAUL",
+          paymentMethod: paymentMethod || "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO",
+          totalValue: totalValue,
+        }
+      );
 
       setTimeout(() => {
         setIsGeneratingPedido(false);

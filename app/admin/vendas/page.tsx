@@ -166,7 +166,13 @@ export default function VendasPage() {
         generateAnexoPPdf(data.buyer, data.items, fileNameBase);
         toast.success("Anexo P gerado!");
       } else {
-        await generatePedidoPdf(data.buyer, data.items, fileNameBase, "/logos/logo-alta-a.png");
+        await generatePedidoPdf(data.buyer, data.items, fileNameBase, "/logos/logo-alta-preto.png", {
+          orderNumber: data.orderNumber || order.orderNumber,
+          orderDate: data.orderDate,
+          sellerName: data.sellerName,
+          paymentMethod: data.paymentMethod || order.paymentMethod,
+          totalValue: data.totalValue || order.totalValue,
+        });
         toast.success("Pedido gerado!");
       }
     } catch (err) {

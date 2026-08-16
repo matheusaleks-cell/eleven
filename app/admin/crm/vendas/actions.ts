@@ -134,7 +134,7 @@ export async function getSalesOrders() {
 }
 
 // Dados para gerar o Anexo P / Pedido de um pedido JÁ CONCLUÍDO. O snapshot salvo em `products`
-// (SalesOrder.products) só tem nome/sku/preço/quantidade — as specs técnicas (espécie, calibre etc.)
+// (SalesOrder.products) tem nome/sku/preço/quantidade — as specs técnicas (espécie, calibre etc.)
 // usadas no documento vêm sempre do cadastro atual do Product, buscado aqui por id.
 export async function getSalesOrderPdfData(orderId: string) {
   const session = await requireSession("ADMIN");
@@ -143,11 +143,11 @@ export async function getSalesOrderPdfData(orderId: string) {
   try {
     const order = await prisma.salesOrder.findUnique({
       where: { id: orderId },
-      include: { customer: true },
+      include: { customer: true, seller: true },
     });
     if (!order) return null;
 
-    const items: { id: string; name: string; quantity: number }[] = JSON.parse(order.products || "[]");
+    const items: { id: string; name: string; quantity: number; price?: number }[] = JSON.parse(order.products || "[]");
     const productIds = items.map(i => i.id);
     const productSpecs = await prisma.product.findMany({
       where: { id: { in: productIds } },
@@ -161,11 +161,28 @@ export async function getSalesOrderPdfData(orderId: string) {
         finish: true,
         originCountry: true,
         barrelLength: true,
+        capacity: true,
+        technicalDescription: true,
       },
     });
     const specsById = new Map(productSpecs.map(p => [p.id, p]));
 
+    const addressParts = [
+      order.customer.address,
+      order.customer.addressNumber ? `nº ${order.customer.addressNumber}` : null,
+      order.customer.addressComplement,
+      order.customer.neighborhood ? `– ${order.customer.neighborhood}` : null,
+      order.customer.city ? `– ${order.customer.city}` : null,
+      order.customer.state ? `/ ${order.customer.state}` : null,
+      order.customer.cep ? `– CEP: ${order.customer.cep}` : null,
+    ].filter(Boolean);
+
     return {
+      orderNumber: order.orderNumber,
+      orderDate: (order.proposedDate || order.createdAt).toLocaleDateString("pt-BR"),
+      sellerName: order.seller?.name || "RAUL",
+      paymentMethod: order.paymentMethod,
+      totalValue: order.totalValue,
       buyer: {
         name: order.customer.name,
         document: order.customer.cpfCnpj,
@@ -173,12 +190,17 @@ export async function getSalesOrderPdfData(orderId: string) {
         crValidity: order.customer.crValidityDate ? order.customer.crValidityDate.toLocaleDateString("pt-BR") : null,
         phone: order.customer.phone,
         email: order.customer.email,
+        address: addressParts.length > 0 ? addressParts.join(" ") : null,
+        contactName: order.customer.responsibleName || null,
       },
       items: items.map(item => {
         const specs = specsById.get(item.id);
+        const unitPrice = item.price ?? 0;
         return {
           quantity: item.quantity,
           name: item.name,
+          unitPrice,
+          totalPrice: unitPrice * item.quantity,
           species: specs?.species,
           brand: specs?.brand,
           model: specs?.model,
@@ -187,6 +209,8 @@ export async function getSalesOrderPdfData(orderId: string) {
           finish: specs?.finish,
           originCountry: specs?.originCountry,
           barrelLength: specs?.barrelLength,
+          capacity: specs?.capacity,
+          technicalDescription: specs?.technicalDescription,
         };
       }),
     };
