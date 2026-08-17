@@ -122,23 +122,6 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
         addToLot(c.importLotId, fin);
       });
     });
-
-    // Fallback: SalesOrders avulsos se ainda sem dados
-    if (totalRevenue === 0) {
-      try {
-        const salesOrders = await prisma.salesOrder.findMany({
-          where: { status: { in: ["PAGO", "ENTREGUE"] } }
-        });
-        salesOrders.forEach(o => {
-          const fin = computeUnitFinancials(o.totalValue || 0, 0, 0.5, financialDefaults);
-          totalRevenue += fin.saleValue;
-          totalTaxes += fin.taxAmount;
-          totalOperationalCosts += fin.operationalAmount;
-          totalInvestorShare += fin.investorShare;
-          totalCompanyShare += fin.companyShare;
-        });
-      } catch {}
-    }
   }
 
   // Status de armas
@@ -148,9 +131,11 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
   let weaponsImported = 0;
 
   try {
-    let weaponsWhere: any = {};
+    // Só entram armas de lotes vinculados a um projeto de investidor real —
+    // lotes "próprios" (sem investmentProjectId) não aparecem no dashboard do investidor.
+    let weaponsWhere: any = { importLot: { investmentProjectId: { not: null } } };
     if (filters?.investorId && filters.investorId !== "ALL") {
-      weaponsWhere.importLot = { investmentProject: { investorId: filters.investorId } };
+      weaponsWhere.importLot.investmentProject = { investorId: filters.investorId };
     }
     const allWeapons = await prisma.weaponMap.findMany({
       where: weaponsWhere,
@@ -179,7 +164,9 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
   // Progresso de liquidação de lotes
   const activeLotsProgress: any[] = [];
   try {
-    let lotsWhere: any = { status: { not: "LIQUIDADO" } };
+    // Idem: só lotes vinculados a um projeto de investidor real entram no
+    // painel de liquidação do dashboard. Lotes próprios ficam só na Importação.
+    let lotsWhere: any = { status: { not: "LIQUIDADO" }, investmentProjectId: { not: null } };
     if (filters?.investorId && filters.investorId !== "ALL") {
       lotsWhere.investmentProject = { investorId: filters.investorId };
     }
