@@ -7,6 +7,14 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "playwright test",
+    "test:sprint1": "playwright test tests/sprint1-auth.spec.ts",
+    "test:sprint2": "playwright test tests/sprint2-visual-tokens.spec.ts",
+    "test:sprint3": "playwright test tests/sprint3-responsive.spec.ts",
+    "test:sprint4": "playwright test tests/sprint4-investor-flow.spec.ts",
+    "test:sprint5": "playwright test tests/sprint5-admin-crm.spec.ts",
+    "test:ui": "playwright test --ui",
+    "test:with-server": "node scripts/with_server.js --server \"npm.cmd run dev\" --port 3000 -- npx.cmd playwright test",
     "import:customers": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/import-customers.ts",
     "db:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts"
   },
@@ -34,6 +42,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^8.0.1",
