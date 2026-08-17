@@ -981,6 +981,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           importLots={project.importLots}
           onClose={() => setShowCycleModal(false)}
           onSave={handleSaveCycle}
+          onRefresh={fetchProject}
         />
       )}
 

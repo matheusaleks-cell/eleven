@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { calculateCycle, getCycleName, formatMoney, TaxConfig } from "@/lib/calculations";
-import { X, Calculator } from "lucide-react";
+import { X, Calculator, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { isValidDecimalInput, parseDecimalInput } from "@/lib/masks";
+import { registerLotSerials } from "@/app/admin/importacao/lotes/actions";
 
 interface CycleModalProps {
   projectName: string;
@@ -15,6 +16,7 @@ interface CycleModalProps {
   onClose: () => void;
   onSave: (data: any) => void;
   importLots?: any[];
+  onRefresh?: () => void;
 }
 
 const inputStyle = {
@@ -58,7 +60,7 @@ function ResultRow({ label, value, accent = false, bold = false }: { label: stri
   );
 }
 
-export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plannedCapital, onClose, onSave, importLots }: CycleModalProps) {
+export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plannedCapital, onClose, onSave, importLots, onRefresh }: CycleModalProps) {
   const activeLot = importLots?.find(lot => lot.status !== "LIQUIDADO") || importLots?.[0];
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
@@ -70,6 +72,11 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
   const [diNum, setDiNum] = useState("");
   const [diDate, setDiDate] = useState("");
   const [result, setResult] = useState<any>(null);
+
+  // Números de série (registro direto no lote a partir deste modal)
+  const [serialProductId, setSerialProductId] = useState("");
+  const [serialsText, setSerialsText] = useState("");
+  const [registeringSerials, setRegisteringSerials] = useState(false);
 
   // Helper para limpar máscara
   const clean = (val: string) => {
@@ -93,6 +100,48 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
       setResult(null);
     }
   }, [qty, price, rate, fob, freight, insurance]);
+
+  // Carrega no formulário os valores reais já registrados no lote (simulação/documentos),
+  // em vez de deixar o usuário redigitar FOB/frete/câmbio que já existem no sistema.
+  const loadRealData = (lot: any, opts: { silent?: boolean } = {}) => {
+    if (lot.quantityItems) setQty(String(lot.quantityItems));
+
+    const realizedExchange = lot.exchangeRate || 5.25;
+    setRate(String(realizedExchange).replace(".", ","));
+
+    const realizedFob = lot.fobValue || 0;
+    setFob(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedFob));
+
+    const docAwb = lot.documents?.find((d: any) => d.category === "AWB EMBARQUE");
+    const realizedFreightBrl = docAwb?.realizedValue || (lot.freight * realizedExchange);
+    const realizedFreightUsd = realizedFreightBrl / realizedExchange;
+    setFreight(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedFreightUsd));
+
+    const realizedInsuranceBrl = lot.insurance * realizedExchange;
+    const realizedInsuranceUsd = realizedInsuranceBrl / realizedExchange;
+    setInsurance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedInsuranceUsd));
+
+    const firstProd = lot.products?.[0];
+    const weaponsSold = lot.weapons?.filter((w: any) => w.currentStatus === "VENDIDA") || [];
+    const realQtySold = weaponsSold.length;
+    const realGrossRevenue = weaponsSold.reduce((acc: number, w: any) => acc + (w.saleValue || 0), 0);
+    const suggestedPrice = realQtySold > 0 ? (realGrossRevenue / realQtySold) : (firstProd?.priceB2C || 6000);
+    setPrice(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(suggestedPrice));
+
+    if (lot.batchCode) setProcNum(lot.batchCode);
+    const docNfe = lot.documents?.find((d: any) => d.category === "NFe ENTRADA");
+    if (docNfe?.name) setDiNum(docNfe.name.substring(0, 20));
+    if (lot.purchaseDate) setDiDate(new Date(lot.purchaseDate).toISOString().split('T')[0]);
+
+    if (!opts.silent) toast.success(`Dados reais da importação ${lot.batchCode} carregados!`);
+  };
+
+  // Preenche automaticamente ao abrir o modal com o lote ativo — o usuário não precisa
+  // mais redigitar FOB/frete/câmbio já preenchidos na simulação/lote de importação.
+  useEffect(() => {
+    if (activeLot) loadRealData(activeLot, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeLot?.id]);
 
   const canSave = result && result.profitToSplit > 0;
 
@@ -163,39 +212,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
           </p>
           {activeLot && (
             <button
-              onClick={() => {
-                if (activeLot.quantityItems) setQty(String(activeLot.quantityItems));
-                
-                const docSwift = activeLot.documents?.find((d: any) => d.category === "SWIFT – COMPROVANTE DE PAGTO/CÂMBIO");
-                const realizedExchange = activeLot.exchangeRate || 5.25;
-                setRate(String(realizedExchange).replace(".", ","));
-
-                const realizedFob = activeLot.fobValue || 0;
-                setFob(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedFob));
-
-                const docAwb = activeLot.documents?.find((d: any) => d.category === "AWB EMBARQUE");
-                const realizedFreightBrl = docAwb?.realizedValue || (activeLot.freight * realizedExchange);
-                const realizedFreightUsd = realizedFreightBrl / realizedExchange;
-                setFreight(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedFreightUsd));
-
-                const realizedInsuranceBrl = activeLot.insurance * realizedExchange;
-                const realizedInsuranceUsd = realizedInsuranceBrl / realizedExchange;
-                setInsurance(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" }).format(realizedInsuranceUsd));
-
-                const firstProd = activeLot.products?.[0];
-                const weaponsSold = activeLot.weapons?.filter((w: any) => w.currentStatus === "VENDIDA") || [];
-                const realQtySold = weaponsSold.length;
-                const realGrossRevenue = weaponsSold.reduce((acc: number, w: any) => acc + (w.saleValue || 0), 0);
-                const suggestedPrice = realQtySold > 0 ? (realGrossRevenue / realQtySold) : (firstProd?.priceB2C || 6000);
-                setPrice(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(suggestedPrice));
-
-                if (activeLot.batchCode) setProcNum(activeLot.batchCode);
-                const docNfe = activeLot.documents?.find((d: any) => d.category === "NFe ENTRADA");
-                if (docNfe?.name) setDiNum(docNfe.name.substring(0, 20));
-                if (activeLot.purchaseDate) setDiDate(new Date(activeLot.purchaseDate).toISOString().split('T')[0]);
-
-                toast.success(`Dados reais da importação ${activeLot.batchCode} carregados!`);
-              }}
+              onClick={() => loadRealData(activeLot)}
               type="button"
               className="mb-4 px-3 py-1.5 rounded-[2px] font-bold uppercase text-[10px] flex items-center gap-1.5 transition-all"
               style={{
@@ -205,7 +222,7 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
                 cursor: "pointer"
               }}
             >
-              ★ Carregar Dados Reais da Importação ({activeLot.batchCode})
+              ★ Recarregar Dados Reais da Importação ({activeLot.batchCode})
             </button>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -240,6 +257,81 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
               <input value={price} onChange={(e) => handleBRLMask(e.target.value, setPrice)} placeholder="R$ 0,00" style={inputStyle} />
             </div>
           </div>
+
+          {/* Números de Série */}
+          {activeLot && (
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-3">
+                <p style={{ color: "#F5C400", fontSize: "11px", letterSpacing: "0.15em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 700 }}>
+                  ★ Números de Série do Lote ({activeLot.batchCode})
+                </p>
+                <span style={{ color: "#606060", fontSize: "11px", fontFamily: "'Roboto Mono', monospace" }}>
+                  {activeLot.weapons?.length || 0} cadastradas
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ background: "#0F0F0F", border: "1px solid #2A2A2A", borderRadius: 4, padding: 14 }}>
+                <div className="space-y-1">
+                  <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Produto SKU</label>
+                  <select
+                    value={serialProductId}
+                    onChange={(e) => setSerialProductId(e.target.value)}
+                    style={{ ...inputStyle, fontFamily: "'Rajdhani', sans-serif" }}
+                  >
+                    <option value="">Selecione...</option>
+                    {activeLot.products?.map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.sku} — {p.commercialName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label style={{ color: "#A0A0A0", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "'Rajdhani', sans-serif", fontWeight: 600, display: "block", marginBottom: 5 }}>Séries (1 por linha ou vírgula)</label>
+                  <textarea
+                    value={serialsText}
+                    onChange={(e) => setSerialsText(e.target.value)}
+                    rows={2}
+                    placeholder="Ex: 599-H25PD-1, 599-H25PD-2"
+                    style={{ ...inputStyle, fontFamily: "'Roboto Mono', monospace", resize: "vertical" }}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <button
+                    type="button"
+                    disabled={registeringSerials}
+                    onClick={async () => {
+                      if (!serialProductId) {
+                        toast.error("Selecione um produto.");
+                        return;
+                      }
+                      const serialsList = serialsText.split(/[\n,]/).map(s => s.trim()).filter(s => s.length > 0);
+                      if (serialsList.length === 0) {
+                        toast.error("Insira ao menos um número de série.");
+                        return;
+                      }
+                      setRegisteringSerials(true);
+                      const res = await registerLotSerials(activeLot.id, serialProductId, serialsList);
+                      if (res.success) {
+                        toast.success(`${res.count} arma(s) cadastrada(s) com sucesso!`);
+                        setSerialsText("");
+                        onRefresh?.();
+                      } else {
+                        toast.error(res.error || "Erro ao registrar.");
+                      }
+                      setRegisteringSerials(false);
+                    }}
+                    className="px-3 py-2 rounded-[2px] font-bold uppercase text-[10px] flex items-center gap-1.5 transition-all"
+                    style={{
+                      background: registeringSerials ? "#333" : "rgba(245,196,0,0.1)",
+                      color: registeringSerials ? "#606060" : "#F5C400",
+                      border: "1px solid rgba(245,196,0,0.3)",
+                      cursor: registeringSerials ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    <Plus size={12} /> Cadastrar Séries
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Preview */}
           {result ? (
