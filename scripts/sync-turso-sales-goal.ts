@@ -2,9 +2,14 @@
 // no mini-dashboard de Vendas). Não roda sozinho — o admin executa manualmente quando
 // decidir aplicar em produção: npx tsx scripts/sync-turso-sales-goal.ts
 import { createClient } from "@libsql/client";
-import * as dotenv from "dotenv";
 
-dotenv.config();
+// Pacote "dotenv" não está instalado no projeto — usa o loader nativo do Node
+// (20.6+) em vez de depender dele.
+try {
+  process.loadEnvFile();
+} catch {
+  // sem .env no cwd — segue com o que já estiver no ambiente
+}
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
