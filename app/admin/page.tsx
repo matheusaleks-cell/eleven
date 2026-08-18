@@ -119,8 +119,7 @@ export default function AdminDashboard() {
     );
   }
 
-  // Dados para os gráficos com campos reais do banco
-  // Agregação de dados para os gráficos
+  // Dados para os gráficos com campos reais de vendas
   const chartCapitalData = filteredProjects.reduce((acc: any[], p: any) => {
     p.cycles?.forEach((c: any) => {
       const existing = acc.find(x => x.name === c.cycleName);
@@ -130,16 +129,24 @@ export default function AdminDashboard() {
         acc.push({ name: c.cycleName, capital: Number(c.totalInvestment) || 0 });
       }
     });
+    if (acc.length === 0 && p.initialCapital) {
+      acc.push({ name: "Aporte", capital: p.initialCapital });
+    }
     return acc;
   }, []).sort((a, b) => a.name.localeCompare(b.name));
 
   const chartRevenueData = filteredProjects.reduce((acc: any[], p: any) => {
     p.cycles?.forEach((c: any) => {
+      const lot = p.importLots?.find((l: any) => l.id === c.importLotId);
+      const cycleRealRevenue = (lot?.weapons || [])
+        .filter((w: any) => w.currentStatus === "VENDIDA")
+        .reduce((sum: number, w: any) => sum + (w.saleValue || 0), 0);
+
       const existing = acc.find(x => x.name === c.cycleName);
       if (existing) {
-        existing.value += Number(c.grossRevenue) || 0;
+        existing.value += cycleRealRevenue;
       } else {
-        acc.push({ name: c.cycleName, value: Number(c.grossRevenue) || 0 });
+        acc.push({ name: c.cycleName, value: cycleRealRevenue });
       }
     });
     return acc;

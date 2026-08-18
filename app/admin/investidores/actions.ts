@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { requireSession } from "@/lib/auth-guard";
+import { getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
 // ─── LISTAGEM ───────────────────────────────────────────────────────────────
 
@@ -19,11 +20,18 @@ export async function getInvestors() {
         investedProjects: {
           include: {
             cycles: true,
+            importLots: {
+              include: {
+                weapons: true
+              }
+            }
           },
         },
       },
       orderBy: { name: "asc" },
     });
+
+    const financialDefaults = await getActiveFinancialRates();
 
     return investors.map((i) => {
       const totalInvested = i.investedProjects.reduce(
@@ -32,8 +40,20 @@ export async function getInvestors() {
       );
       let totalReceived = 0;
       i.investedProjects.forEach((p) => {
-        p.cycles.forEach((c) => {
-          totalReceived += c.investorShare || 0;
+        const splitPct = p.profitSplitPct || 0.50;
+        p.importLots?.forEach((lot: any) => {
+          const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+          const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
+          const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+
+          lot.weapons?.forEach((w: any) => {
+            if (w.currentStatus === "VENDIDA") {
+              const uCost = w.unitCost || uCostAvg;
+              const sValue = w.saleValue || 0;
+              const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+              totalReceived += fin.investorShare;
+            }
+          });
         });
       });
 
@@ -66,6 +86,11 @@ export async function getInvestorDetails(id: string) {
         investedProjects: {
           include: {
             cycles: { orderBy: { cycleNumber: "asc" } },
+            importLots: {
+              include: {
+                weapons: true
+              }
+            }
           },
         },
         documents: {
@@ -76,6 +101,7 @@ export async function getInvestorDetails(id: string) {
 
     if (!investor) return null;
 
+    const financialDefaults = await getActiveFinancialRates();
     let totalInvested = 0;
     let totalReceived = 0;
     let totalCicles = 0;
@@ -83,20 +109,34 @@ export async function getInvestorDetails(id: string) {
     const mappedProjects = investor.investedProjects.map((p) => {
       totalInvested += p.initialCapital || 0;
       let projectReceived = 0;
-      p.cycles.forEach((c) => {
-        if (c.status === "COMPLETED") {
-          totalReceived += c.investorShare;
-          projectReceived += c.investorShare;
-          totalCicles++;
-        }
+      const splitPct = p.profitSplitPct || 0.50;
+
+      // Lucro real de vendas físicas
+      p.importLots?.forEach((lot: any) => {
+        const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
+        const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+
+        lot.weapons?.forEach((w: any) => {
+          if (w.currentStatus === "VENDIDA") {
+            const uCost = w.unitCost || uCostAvg;
+            const sValue = w.saleValue || 0;
+            const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+            projectReceived += fin.investorShare;
+          }
+        });
       });
+
+      totalReceived += projectReceived;
+      totalCicles += p.cycles.filter(c => c.status === "COMPLETED").length;
+
       return {
         id: p.id,
         name: p.name,
         product_name: p.productName,
         currentCycle: p.cycles.length,
         max_cycles: p.maxCycles,
-        currentCapital: p.initialCapital + projectReceived,
+        currentCapital: (p.initialCapital || 0) + projectReceived,
         status: p.status,
       };
     });
@@ -119,7 +159,7 @@ export async function getInvestorDetails(id: string) {
         totalReceived,
         roi:
           totalInvested > 0
-            ? ((totalReceived - totalInvested) / totalInvested) * 100
+            ? (totalReceived / totalInvested) * 100
             : 0,
         activeProjects: investor.investedProjects.length,
         totalCycles: totalCicles,

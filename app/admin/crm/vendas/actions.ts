@@ -56,7 +56,7 @@ export async function getProductsForSale() {
 
   try {
     const products = await prisma.product.findMany({
-      where: { status: "ACTIVE", stockAvailable: { gt: 0 } },
+      where: { status: "ACTIVE" },
       select: {
         id: true,
         commercialName: true,
@@ -97,23 +97,35 @@ export async function getProductsForSale() {
       lotMap.set(w.productId, cur);
     }
 
-    return products.map((p) => {
-      const lot = lotMap.get(p.id) ?? { investor: 0, own: 0 };
-      const lotSource =
-        lot.investor === 0 && lot.own === 0
-          ? "SEM_RASTREIO"
-          : lot.investor > 0 && lot.own === 0
-          ? "INVESTIDOR"
-          : lot.investor === 0
-          ? "PROPRIO"
-          : "MISTO";
-      return {
-        ...p,
-        investorLotStock: lot.investor,
-        ownLotStock: lot.own,
-        lotSource,
-      };
-    });
+    return products
+      .map((p) => {
+        const lot = lotMap.get(p.id) ?? { investor: 0, own: 0 };
+        const serializedStock = lot.investor + lot.own;
+        const isWeapon = p.species !== "Acessório" && p.species !== "Carregador";
+        // Para armas de fogo, o estoque é estritamente a quantidade de números de série em ESTOQUE.
+        // Para acessórios sem número de série, utiliza o stockAvailable cadastrado.
+        const effectiveStock = isWeapon || lotMap.has(p.id)
+          ? serializedStock
+          : p.stockAvailable;
+
+        const lotSource =
+          lot.investor === 0 && lot.own === 0
+            ? "SEM_RASTREIO"
+            : lot.investor > 0 && lot.own === 0
+            ? "INVESTIDOR"
+            : lot.investor === 0
+            ? "PROPRIO"
+            : "MISTO";
+
+        return {
+          ...p,
+          stockAvailable: effectiveStock,
+          investorLotStock: lot.investor,
+          ownLotStock: lot.own,
+          lotSource,
+        };
+      })
+      .filter((p) => p.stockAvailable > 0);
   } catch (error) {
     console.error("Erro ao buscar produtos para venda:", error);
     return [];

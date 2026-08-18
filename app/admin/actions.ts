@@ -71,58 +71,31 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
 
   const financialDefaults = await getActiveFinancialRates();
 
-  if (totalPhysicalSold > 0) {
-    // ── MODO FÍSICO: cada arma vendida contabilizada individualmente ──
-    projects.forEach(p => {
-      const splitPct = p.profitSplitPct || 0.50;
-      p.importLots?.forEach((lot: any) => {
-        const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
-        const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
-        const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
-        lot.weapons?.forEach((w: any) => {
-          if (w.currentStatus !== "VENDIDA") return;
-          const wDate = w.saleDate ? new Date(w.saleDate) : new Date(w.updatedAt || w.createdAt);
-          if (startDateObj && wDate < startDateObj) return;
-          if (endDateObj && wDate > endDateObj) return;
-          const uCost = w.unitCost || uCostAvg;
-          const sValue = w.saleValue || 0;
-          const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
-          totalRevenue += fin.saleValue;
-          totalInvestorShare += fin.investorShare;
-          totalCompanyShare += fin.companyShare;
-          totalTaxes += fin.taxAmount;
-          totalOperationalCosts += fin.operationalAmount;
-          totalUnitCosts += fin.unitCost;
-          addToLot(lot.id, fin);
-        });
-      });
-    });
-  } else {
-    // ── MODO LEGADO: usa dados dos Cycles (grossRevenue) ──
-    projects.forEach(p => {
-      const splitPct = p.profitSplitPct || 0.50;
-      p.cycles?.forEach((c: any) => {
-        const grossRev = c.grossRevenue || 0;
-        if (grossRev === 0) return;
-        if (startDateObj && new Date(c.createdAt) < startDateObj) return;
-        if (endDateObj && new Date(c.createdAt) > endDateObj) return;
-
-        const rates = ratesFromCycleOrDefault(c, financialDefaults);
-        const lotForCycle = p.importLots?.find((l: any) => l.id === c.importLotId);
-        const uCostTotal = c.totalInvestment > 0
-          ? c.totalInvestment
-          : (lotForCycle?.totalCostNationalized || 0);
-        const fin = computeUnitFinancials(grossRev, uCostTotal, splitPct, rates);
+  // ── MODO FÍSICO EXCLUSIVO: cada arma vendida contabilizada individualmente ──
+  projects.forEach(p => {
+    const splitPct = p.profitSplitPct || 0.50;
+    p.importLots?.forEach((lot: any) => {
+      const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+      const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
+      const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+      lot.weapons?.forEach((w: any) => {
+        if (w.currentStatus !== "VENDIDA") return;
+        const wDate = w.saleDate ? new Date(w.saleDate) : new Date(w.updatedAt || w.createdAt);
+        if (startDateObj && wDate < startDateObj) return;
+        if (endDateObj && wDate > endDateObj) return;
+        const uCost = w.unitCost || uCostAvg;
+        const sValue = w.saleValue || 0;
+        const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
         totalRevenue += fin.saleValue;
         totalInvestorShare += fin.investorShare;
         totalCompanyShare += fin.companyShare;
         totalTaxes += fin.taxAmount;
         totalOperationalCosts += fin.operationalAmount;
         totalUnitCosts += fin.unitCost;
-        addToLot(c.importLotId, fin);
+        addToLot(lot.id, fin);
       });
     });
-  }
+  });
 
   // Status de armas
   let weaponsSold = 0;
@@ -147,16 +120,6 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
       else if (w.currentStatus === "RESERVADA") weaponsReserved++;
       else if (w.currentStatus === "IMPORTADA") weaponsImported++;
     });
-
-    // No modo legado, usar quantidades dos ciclos
-    if (totalPhysicalSold === 0) {
-      projects.forEach(p => {
-        p.cycles?.forEach((c: any) => {
-          if (c.status === "COMPLETED") weaponsSold += (c.quantity || 0);
-          else if (c.status === "PENDING" || c.status === "ACTIVE") weaponsInStock += (c.quantity || 0);
-        });
-      });
-    }
   } catch (err) {
     console.error("Erro ao computar status de armas:", err);
   }
@@ -179,21 +142,8 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
     });
 
     activeLots.forEach(lot => {
-      let sold = lot.weapons.filter(w => w.currentStatus === "VENDIDA").length;
-      let total = lot.quantityItems || lot.weapons.length || 1;
-
-      // Fallback para ciclos quando não há armas físicas
-      if (lot.weapons.length === 0) {
-        const proj = projects.find(p => p.id === lot.investmentProjectId);
-        if (proj) {
-          const lotCycle = proj.cycles?.find((c: any) => c.importLotId === lot.id);
-          if (lotCycle) {
-            sold = lotCycle.status === "COMPLETED" ? (lotCycle.quantity || 0) : 0;
-            total = lotCycle.quantity || lot.quantityItems || 1;
-          }
-        }
-      }
-
+      const sold = lot.weapons.filter(w => w.currentStatus === "VENDIDA").length;
+      const total = lot.quantityItems || lot.weapons.length || 1;
       const pct = total > 0 ? (sold / total) * 100 : 0;
       const lotFin = lotFinancials.get(lot.id);
       activeLotsProgress.push({
@@ -229,7 +179,7 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
     weaponsReserved,
     weaponsImported,
     activeLotsProgress,
-    dataMode: totalPhysicalSold > 0 ? "PHYSICAL" : "LEGACY"
+    dataMode: "PHYSICAL"
   };
 }
 
@@ -248,22 +198,50 @@ export async function getRecentProjects(investorId?: string) {
       orderBy: { createdAt: "desc" },
       include: {
         investor: true,
-        cycles: true
+        cycles: true,
+        importLots: {
+          include: {
+            weapons: true
+          }
+        }
       }
     });
 
-    return projects.map(p => ({
-      id: p.id,
-      name: p.name,
-      product_name: p.productName,
-      investorName: p.investor?.name ?? "Investidor",
-      currentCycle: p.cycles.length,
-      max_cycles: p.maxCycles,
-      currentCapital: p.initialCapital,
-      status: p.status,
-      createdAt: p.createdAt.toISOString(),
-      cycles: p.cycles
-    }));
+    const financialDefaults = await getActiveFinancialRates();
+
+    return projects.map(p => {
+      let realizedInvestorProfit = 0;
+      const splitPct = p.profitSplitPct || 0.50;
+
+      p.importLots?.forEach((lot: any) => {
+        const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
+        const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+
+        lot.weapons?.forEach((w: any) => {
+          if (w.currentStatus === "VENDIDA") {
+            const uCost = w.unitCost || uCostAvg;
+            const sValue = w.saleValue || 0;
+            const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+            realizedInvestorProfit += fin.investorShare;
+          }
+        });
+      });
+
+      return {
+        id: p.id,
+        name: p.name,
+        product_name: p.productName,
+        investorName: p.investor?.name ?? "Investidor",
+        currentCycle: p.cycles.length,
+        max_cycles: p.maxCycles,
+        currentCapital: (p.initialCapital || 0) + realizedInvestorProfit,
+        status: p.status,
+        createdAt: p.createdAt.toISOString(),
+        cycles: p.cycles,
+        importLots: p.importLots
+      };
+    });
   } catch (error) {
     console.error("Erro ao buscar projetos recentes:", error);
     return [];

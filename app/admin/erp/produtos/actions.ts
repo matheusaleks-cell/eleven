@@ -13,9 +13,13 @@ export async function getProducts() {
       orderBy: { commercialName: "asc" }
     });
 
-    // stockReserved no banco é um campo morto (nunca escrito por nenhuma venda) — o
-    // reservado de verdade é contado ao vivo a partir das armas com pedido tirado
-    // (status RESERVADA), a mesma fonte usada no Mapa de Armas.
+    const inStockCounts = await prisma.weaponMap.groupBy({
+      by: ["productId"],
+      where: { currentStatus: "ESTOQUE" },
+      _count: { _all: true },
+    });
+    const inStockByProduct = new Map(inStockCounts.map(r => [r.productId, r._count._all]));
+
     const reservedCounts = await prisma.weaponMap.groupBy({
       by: ["productId"],
       where: { currentStatus: "RESERVADA" },
@@ -23,10 +27,17 @@ export async function getProducts() {
     });
     const reservedByProduct = new Map(reservedCounts.map(r => [r.productId, r._count._all]));
 
-    return products.map(p => ({
-      ...p,
-      stockReserved: reservedByProduct.get(p.id) || 0,
-    }));
+    return products.map(p => {
+      const isWeapon = p.species !== "Acessório" && p.species !== "Carregador";
+      const physicalStock = inStockByProduct.get(p.id) || 0;
+      const realStock = isWeapon || inStockByProduct.has(p.id) ? physicalStock : p.stockAvailable;
+
+      return {
+        ...p,
+        stockAvailable: realStock,
+        stockReserved: reservedByProduct.get(p.id) || 0,
+      };
+    });
   } catch (error) {
     console.error("Erro ao buscar produtos:", error);
     return [];

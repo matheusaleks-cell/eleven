@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { calcImportBreakdown, SimulatorInputs } from "@/lib/calculations";
+import { getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
 export async function getProjects() {
   const session = await requireSession("ADMIN");
@@ -14,15 +15,38 @@ export async function getProjects() {
       include: {
         investor: true,
         cycles: true,
-        importLots: true
+        importLots: {
+          include: {
+            weapons: true
+          }
+        }
       },
       orderBy: { createdAt: "desc" }
     });
 
+    const financialDefaults = await getActiveFinancialRates();
+
     return projects.map(p => {
-      const totalInvestorShare = p.cycles
-        .filter(c => c.status === "COMPLETED")
-        .reduce((acc, c) => acc + (c.investorShare || 0), 0);
+      let realizedRevenue = 0;
+      let realizedInvestorProfit = 0;
+      const splitPct = p.profitSplitPct || 0.50;
+
+      p.importLots?.forEach((lot: any) => {
+        const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        const lotCycle = p.cycles?.find((c: any) => c.importLotId === lot.id);
+        const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+
+        lot.weapons?.forEach((w: any) => {
+          if (w.currentStatus === "VENDIDA") {
+            const uCost = w.unitCost || uCostAvg;
+            const sValue = w.saleValue || 0;
+            realizedRevenue += sValue;
+            const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+            realizedInvestorProfit += fin.investorShare;
+          }
+        });
+      });
+
       return {
         id: p.id,
         name: p.name,
@@ -31,8 +55,8 @@ export async function getProjects() {
         investor_id: p.investorId,
         currentCycle: p.cycles.length,
         max_cycles: p.maxCycles,
-        currentCapital: (p.initialCapital || 0) + totalInvestorShare,
-        totalRevenue: p.cycles.reduce((acc, c) => acc + (c.grossRevenue || 0), 0),
+        currentCapital: (p.initialCapital || 0) + realizedInvestorProfit,
+        totalRevenue: realizedRevenue,
         status: p.status,
         created_at: p.createdAt.toISOString()
       };
@@ -343,14 +367,36 @@ export async function getProjectById(id: string) {
 
     if (!project) return null;
 
+    const financialDefaults = await getActiveFinancialRates();
+    let totalRealizedRevenue = 0;
+    let totalRealizedInvestorShare = 0;
+    const splitPct = project.profitSplitPct || 0.50;
+
+    project.importLots?.forEach((lot: any) => {
+      const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+      const lotCycle = project.cycles?.find((c: any) => c.importLotId === lot.id);
+      const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
+
+      lot.weapons?.forEach((w: any) => {
+        if (w.currentStatus === "VENDIDA") {
+          const uCost = w.unitCost || uCostAvg;
+          const sValue = w.saleValue || 0;
+          totalRealizedRevenue += sValue;
+          const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+          totalRealizedInvestorShare += fin.investorShare;
+        }
+      });
+    });
+
     return {
       ...project,
       product_name: project.productName,
       max_cycles: project.maxCycles,
       investorName: project.investor?.name ?? "Investidor",
       currentCycle: project.cycles.length,
-      totalRevenue: project.cycles.reduce((acc, c) => acc + Number(c.grossRevenue || 0), 0),
-      totalInvestorShare: project.cycles.reduce((acc, c) => acc + Number(c.investorShare || 0), 0),
+      totalRevenue: totalRealizedRevenue,
+      totalInvestorShare: totalRealizedInvestorShare,
+      currentCapital: (project.initialCapital || 0) + totalRealizedInvestorShare,
     };
   } catch (error) {
     console.error("Erro ao buscar detalhes do projeto:", error);

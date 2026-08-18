@@ -183,14 +183,17 @@ export default function ImportBatchesPage() {
                              <h3 className="font-bold font-mono text-white text-lg leading-none">{lot.id}</h3>
                              <span className="text-[10px] text-brand-text-muted font-bold uppercase tracking-wider mt-1">{lot.supplier}</span>
                              {lot.investmentProject && (
-                                <span className="text-[9px] text-brand-accent font-bold uppercase tracking-wider mt-1.5 border border-brand-accent/20 bg-brand-accent/5 px-1.5 py-0.5 rounded w-fit">
+                                <span 
+                                  className="text-[9px] text-brand-accent font-bold uppercase tracking-wider mt-1.5 border border-brand-accent/20 bg-brand-accent/5 px-2 py-0.5 rounded max-w-[210px] truncate block"
+                                  title={`Investidor: ${lot.investmentProject.investor?.name || "N/A"} · ${lot.investmentProject.name}`}
+                                >
                                   Investidor: {lot.investmentProject.investor?.name || "N/A"} · {lot.investmentProject.name}
                                 </span>
                               )}
                            </div>
                         </div>
                         <span className={cn(
-                          "text-[9px] font-bold uppercase px-2 py-0.5 rounded border tracking-widest",
+                          "text-[9px] font-bold uppercase px-2 py-0.5 rounded border tracking-widest text-center shrink-0",
                           STATUS_MAP[lot.status]?.class
                         )}>
                           {STATUS_MAP[lot.status]?.label}
@@ -213,7 +216,7 @@ export default function ImportBatchesPage() {
                         <div className="flex flex-col gap-1">
                            <span className="text-[10px] text-brand-text-muted font-bold uppercase tracking-tighter">Valor FOB</span>
                            <span className="text-sm font-mono font-bold text-white">
-                             {lot.currency} {lot.value?.toLocaleString('pt-BR')}
+                             {lot.currency || "USD"} {Number(lot.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                            </span>
                         </div>
                      </div>
