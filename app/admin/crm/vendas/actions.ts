@@ -101,12 +101,9 @@ export async function getProductsForSale() {
       .map((p) => {
         const lot = lotMap.get(p.id) ?? { investor: 0, own: 0 };
         const serializedStock = lot.investor + lot.own;
-        const isWeapon = p.species !== "Acessório" && p.species !== "Carregador";
-        // Para armas de fogo, o estoque é estritamente a quantidade de números de série em ESTOQUE.
-        // Para acessórios sem número de série, utiliza o stockAvailable cadastrado.
-        const effectiveStock = isWeapon || lotMap.has(p.id)
-          ? serializedStock
-          : p.stockAvailable;
+        // Se houver armas com número de série em ESTOQUE, o estoque disponível é a contagem de séries.
+        // Caso contrário, utiliza o estoque cadastrado no produto.
+        const effectiveStock = serializedStock > 0 ? serializedStock : (p.stockAvailable || 0);
 
         const lotSource =
           lot.investor === 0 && lot.own === 0
@@ -120,6 +117,7 @@ export async function getProductsForSale() {
         return {
           ...p,
           stockAvailable: effectiveStock,
+          hasSerials: serializedStock > 0,
           investorLotStock: lot.investor,
           ownLotStock: lot.own,
           lotSource,
@@ -443,10 +441,15 @@ export async function createDirectSale(data: {
     const { lotPreference: globalLotPreference = "AUTO", investmentProjectId: globalInvestmentProjectId } = data;
 
     for (const item of data.items) {
-      await prisma.product.updateMany({
-        where: { id: item.id, stockAvailable: { gte: item.quantity } },
-        data: { stockAvailable: { decrement: item.quantity } },
-      });
+      // Atualiza o saldo de estoque do produto de forma segura
+      const prod = await prisma.product.findUnique({ where: { id: item.id }, select: { stockAvailable: true } });
+      if (prod) {
+        const nextStock = Math.max(0, prod.stockAvailable - item.quantity);
+        await prisma.product.update({
+          where: { id: item.id },
+          data: { stockAvailable: nextStock },
+        });
+      }
 
       // Monta filtro de lote conforme preferência (item prioritário sobre o global)
       const itemPref = item.lotPreference || globalLotPreference;
@@ -510,18 +513,22 @@ export async function createDirectSale(data: {
         const discountFactor = totalBruto > 0 ? (totalLiquido / totalBruto) : 1;
         const finalSaleValue = Number((item.price * discountFactor).toFixed(2));
 
-        await prisma.weaponMap.updateMany({
-          where: { id: { in: weaponsToSell.map((w) => w.id) } },
-          data: {
-            currentStatus: weaponStatusForOrder(data.status),
-            salesOrderId: order.id,
-            saleDate,
-            saleValue: finalSaleValue,
-            customerId: data.customerId,
-            sellingUserId: sellerId,
-            lastMovementDate: saleDate,
-          },
-        });
+        await Promise.all(
+          weaponsToSell.map((w) =>
+            prisma.weaponMap.update({
+              where: { id: w.id },
+              data: {
+                currentStatus: weaponStatusForOrder(data.status),
+                salesOrderId: order.id,
+                saleDate,
+                saleValue: finalSaleValue,
+                customerId: data.customerId,
+                sellingUserId: sellerId,
+                lastMovementDate: saleDate,
+              },
+            })
+          )
+        );
         const movType = weaponStatusForOrder(data.status) === "VENDIDA" ? "VENDA" : "RESERVA";
         await logWeaponMovements(weaponsToSell.map(w => w.id), movType, `Pedido ${orderNumber}`);
       }

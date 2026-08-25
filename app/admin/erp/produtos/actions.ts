@@ -94,6 +94,11 @@ export async function updateProduct(id: string, data: any) {
   if (!session) return { success: false, error: "Não autorizado." };
 
   try {
+    const activeWeapons = await prisma.weaponMap.count({
+      where: { productId: id, currentStatus: "ESTOQUE" }
+    });
+    const finalStock = activeWeapons > 0 ? activeWeapons : (Number(data.stockAvailable) || 0);
+
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -110,7 +115,7 @@ export async function updateProduct(id: string, data: any) {
         ncm: data.ncm,
         priceB2C: Number(data.priceB2C) || 0,
         priceB2B: Number(data.priceB2B) || 0,
-        stockAvailable: Number(data.stockAvailable) || 0,
+        stockAvailable: finalStock,
         technicalDescription: data.technicalDescription || "",
         photos: data.photos || "",
         status: data.status || "ACTIVE"

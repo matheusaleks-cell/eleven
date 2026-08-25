@@ -288,8 +288,9 @@ export async function deleteImportLot(id: string) {
         error: `Este lote possui ${weaponCount} arma(s) vinculada(s) e não pode ser excluído.`,
       };
     }
-    // Null out Cycle.importLotId references before delete (field is nullable, no cascade)
+    // Null out Cycle.importLotId and Product.importLotId references before delete (fields are nullable, no cascade)
     await prisma.cycle.updateMany({ where: { importLotId: id }, data: { importLotId: null } });
+    await prisma.product.updateMany({ where: { importLotId: id }, data: { importLotId: null } });
     // Documents auto-cascade via schema onDelete: Cascade
     await prisma.importLot.delete({ where: { id } });
 
