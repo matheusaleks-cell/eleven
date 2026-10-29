@@ -213,7 +213,9 @@ export async function getSalesOrderPdfData(orderId: string) {
     return {
       orderNumber: order.orderNumber,
       orderDate: (order.proposedDate || order.createdAt).toLocaleDateString("pt-BR"),
-      sellerName: order.seller?.name || "",
+      // O vendedor salvo no pedido é obrigatório no banco e, quando ninguém é escolhido,
+      // vira o primeiro admin (createDirectSale). Não vai impresso no pedido do cliente.
+      sellerName: "",
       paymentMethod: order.paymentMethod,
       totalValue: order.totalValue,
       buyer: {

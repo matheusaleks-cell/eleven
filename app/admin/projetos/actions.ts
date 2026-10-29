@@ -148,7 +148,8 @@ export async function createProject(data: any) {
               originCountry: "Turquia",
               ncm: "9303.20.00",
               priceB2C: salePriceBrl || costPriceBrl * 1.5,
-              priceB2B: costPriceBrl,
+              // priceB2B é o preço de ATACADO (usado na venda B2B e no faturamento do ciclo);
+              // o custo não pode ser gravado aqui. Fica vazio até o admin cadastrar no ERP.
               stockAvailable: qty,
               status: "ACTIVE"
             }
@@ -287,7 +288,7 @@ export async function createProjectFromSimulation(data: {
           originCountry: "Turquia",
           ncm: "9303.20.00",
           priceB2C: inp.salePricePerUnit,
-          priceB2B: breakdown.total / qty,
+          // priceB2B é o preço de ATACADO; o custo (breakdown.total / qty) não pode ficar aqui.
           stockAvailable: qty,
           status: "ACTIVE",
         },

@@ -127,8 +127,12 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
     const realGrossRevenue = weaponsSold.reduce((acc: number, w: any) => acc + (w.saleValue || 0), 0);
     // Faturamento do ciclo parte do preço de ATACADO do produto (priceB2B). A média das vendas
     // reais só entra se o produto não tiver preço de atacado, porque vendas B2C registram o varejo.
-    const suggestedPrice = firstProd?.priceB2B > 0
-      ? firstProd.priceB2B
+    // Produtos criados pelo simulador/assistente antigos gravaram o CUSTO unitário em priceB2B;
+    // um "atacado" que não passa do custo do lote é esse resíduo e não pode virar preço de venda.
+    const unitCost = lot.quantityItems > 0 ? (lot.totalCostNationalized || 0) / lot.quantityItems : 0;
+    const wholesale = firstProd?.priceB2B > unitCost + 0.01 ? firstProd.priceB2B : 0;
+    const suggestedPrice = wholesale > 0
+      ? wholesale
       : realQtySold > 0
         ? (realGrossRevenue / realQtySold)
         : (firstProd?.priceB2C || 6000);
