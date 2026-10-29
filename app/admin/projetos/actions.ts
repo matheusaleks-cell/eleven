@@ -549,3 +549,168 @@ export async function deleteProject(id: string) {
     return { success: false, error: "Falha ao excluir projeto." };
   }
 }
+
+// ─── VÍNCULO MANUAL DE LOTES ─────────────────────────────────────────────────
+// Excluir um projeto solta os lotes dele (viram estoque "próprio"). Estas ações permitem
+// ligar um lote existente a um projeto (e desfazer), sem mexer nas armas: elas continuam
+// presas ao lote, então vendas e números de série acompanham o vínculo.
+
+function summarizeWeapons(weapons: { currentStatus: string; saleValue: number | null }[]) {
+  const sold = weapons.filter((w) => w.currentStatus === "VENDIDA");
+  return {
+    weapons: weapons.length,
+    sold: sold.length,
+    soldValue: sold.reduce((sum, w) => sum + (w.saleValue || 0), 0),
+    reserved: weapons.filter((w) => w.currentStatus === "RESERVADA").length,
+    inStock: weapons.filter((w) => w.currentStatus === "ESTOQUE").length,
+  };
+}
+
+function revalidateProjectViews(projectId: string, investorId?: string | null) {
+  revalidatePath(`/admin/projetos/${projectId}`);
+  revalidatePath("/admin/projetos");
+  revalidatePath("/admin/importacao/lotes");
+  revalidatePath("/admin/mapa-de-armas");
+  revalidatePath("/investidor");
+  revalidatePath("/investidor/projetos");
+  if (investorId) revalidatePath(`/admin/investidores/${investorId}`);
+}
+
+// Lotes sem projeto, com o resumo das armas para o admin reconhecer o lote certo.
+export async function getUnlinkedLots() {
+  const session = await requireSession("ADMIN");
+  if (!session) return [];
+
+  try {
+    const lots = await prisma.importLot.findMany({
+      where: { investmentProjectId: null },
+      select: {
+        id: true,
+        batchCode: true,
+        status: true,
+        quantityItems: true,
+        totalCostNationalized: true,
+        createdAt: true,
+        weapons: { select: { currentStatus: true, saleValue: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return lots
+      .map((lot) => ({
+        id: lot.id,
+        batchCode: lot.batchCode,
+        status: lot.status,
+        quantityItems: lot.quantityItems,
+        totalCost: lot.totalCostNationalized,
+        createdAt: lot.createdAt.toISOString(),
+        ...summarizeWeapons(lot.weapons),
+      }))
+      // Lotes com armas primeiro: são os que de fato têm histórico para recuperar.
+      .sort((a, b) => b.weapons - a.weapons);
+  } catch (error) {
+    console.error("Erro ao listar lotes sem projeto:", error);
+    return [];
+  }
+}
+
+export async function linkLotToProject(lotId: string, projectId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    const [lot, project] = await Promise.all([
+      prisma.importLot.findUnique({ where: { id: lotId }, select: { id: true, batchCode: true, investmentProjectId: true } }),
+      prisma.investmentProject.findUnique({ where: { id: projectId }, select: { id: true, investorId: true } }),
+    ]);
+    if (!lot) return { success: false, error: "Lote não encontrado." };
+    if (!project) return { success: false, error: "Projeto não encontrado." };
+    if (lot.investmentProjectId) {
+      return {
+        success: false,
+        error: lot.investmentProjectId === projectId
+          ? "Este lote já está vinculado a este projeto."
+          : "Este lote já está vinculado a outro projeto. Desvincule-o de lá primeiro.",
+      };
+    }
+
+    await prisma.importLot.update({
+      where: { id: lotId },
+      data: { investmentProjectId: projectId },
+    });
+
+    revalidateProjectViews(projectId, project.investorId);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao vincular lote ao projeto:", error);
+    return { success: false, error: "Falha ao vincular o lote." };
+  }
+}
+
+// Desfaz o vínculo (ex.: lote ligado ao projeto errado). Bloqueia se o lote já tem ciclo
+// registrado, porque o ciclo aponta para ele e ficaria órfão.
+export async function unlinkLotFromProject(lotId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    const lot = await prisma.importLot.findUnique({
+      where: { id: lotId },
+      select: { investmentProjectId: true, investmentProject: { select: { investorId: true } } },
+    });
+    if (!lot?.investmentProjectId) return { success: false, error: "Este lote não está vinculado a nenhum projeto." };
+
+    const cycles = await prisma.cycle.count({ where: { importLotId: lotId } });
+    if (cycles > 0) {
+      return { success: false, error: "Este lote tem ciclo registrado. Não é possível desvincular." };
+    }
+
+    await prisma.importLot.update({
+      where: { id: lotId },
+      data: { investmentProjectId: null },
+    });
+
+    revalidateProjectViews(lot.investmentProjectId, lot.investmentProject?.investorId);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao desvincular lote:", error);
+    return { success: false, error: "Falha ao desvincular o lote." };
+  }
+}
+
+// O que a exclusão de um projeto apaga/solta, para o aviso de confirmação na tela.
+export async function getProjectDeletionImpact(projectId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false as const, error: "Não autorizado." };
+
+  try {
+    const project = await prisma.investmentProject.findUnique({
+      where: { id: projectId },
+      select: {
+        name: true,
+        _count: { select: { cycles: true, documents: true } },
+        importLots: {
+          select: {
+            batchCode: true,
+            weapons: { select: { currentStatus: true, saleValue: true } },
+          },
+        },
+      },
+    });
+    if (!project) return { success: false as const, error: "Projeto não encontrado." };
+
+    return {
+      success: true as const,
+      name: project.name,
+      cycles: project._count.cycles,
+      documents: project._count.documents,
+      lots: project.importLots.map((lot) => ({
+        batchCode: lot.batchCode,
+        ...summarizeWeapons(lot.weapons),
+      })),
+    };
+  } catch (error) {
+    console.error("Erro ao calcular impacto da exclusão do projeto:", error);
+    return { success: false as const, error: "Falha ao verificar o projeto." };
+  }
+}

@@ -7,8 +7,9 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { getCycleName, formatMoney } from "@/lib/calculations";
-import { ArrowLeft, ChevronDown, ChevronUp, Plus, CheckCircle, Clock, FileText, Download, Trash2, DollarSign, Ship, Globe } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Plus, CheckCircle, Clock, FileText, Download, Trash2, DollarSign, Ship, Globe, Link2 } from "lucide-react";
 import { CycleModal } from "@/components/cycles/CycleModal";
+import { LinkLotDialog } from "@/components/projects/LinkLotDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
@@ -319,6 +320,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [session, setSession] = useState<any>(null);
   const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
   const [showCycleModal, setShowCycleModal] = useState(false);
+  const [showLinkLot, setShowLinkLot] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycles" | "import" | "docs">("cycles");
   const [updatingLotDoc, setUpdatingLotDoc] = useState(false);
 
@@ -527,14 +529,25 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
             <p style={{ color: "#A0A0A0", fontSize: "14px", fontFamily: "'Rajdhani', sans-serif" }}>{project.product_name} · Investidor: {project.investorName}</p>
           </div>
-          {isAdmin && project.status === "ACTIVE" && (
-            <button
-              onClick={() => setShowCycleModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[2px] font-bold uppercase whitespace-nowrap"
-              style={{ background: "#F5C400", color: "#1A1A1A", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif", border: "none", cursor: "pointer" }}
-            >
-              <Plus size={15} /> Registrar Ciclo
-            </button>
+          {isAdmin && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowLinkLot(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[2px] font-bold uppercase whitespace-nowrap"
+                style={{ background: "transparent", color: "#F5C400", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif", border: "1px solid #F5C400", cursor: "pointer" }}
+              >
+                <Link2 size={15} /> Vincular Lote
+              </button>
+              {project.status === "ACTIVE" && (
+                <button
+                  onClick={() => setShowCycleModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[2px] font-bold uppercase whitespace-nowrap"
+                  style={{ background: "#F5C400", color: "#1A1A1A", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif", border: "none", cursor: "pointer" }}
+                >
+                  <Plus size={15} /> Registrar Ciclo
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -960,6 +973,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </Card>
         </div>
+      )}
+
+      {isAdmin && (
+        <LinkLotDialog
+          isOpen={showLinkLot}
+          onClose={() => setShowLinkLot(false)}
+          projectId={project.id}
+          projectName={project.name}
+          investorName={project.investorName}
+          linkedLots={project.importLots || []}
+          onChanged={fetchProject}
+        />
       )}
 
       {showCycleModal && (

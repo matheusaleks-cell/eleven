@@ -16,6 +16,8 @@ import { formatMoney } from "@/lib/calculations";
 import {
   getInvestorDetails, updateInvestor, deleteInvestorProject, updateInvestorPassword
 } from "../actions";
+import { getProjectDeletionImpact } from "../../projetos/actions";
+import { buildProjectDeletionMessage } from "@/lib/project-deletion";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -192,13 +194,15 @@ export default function InvestorDetailPage({ params }: { params: Promise<{ id: s
   };
 
   const handleDeleteProject = async (projectId: string, projectName: string) => {
-    if (confirm(`Deseja realmente remover o projeto "${projectName}"?`)) {
-      try {
-        const res = await deleteInvestorProject(projectId);
-        if (res.success) { toast.success("Projeto removido!"); fetchInvestor(); }
-        else toast.error(res.error);
-      } catch { toast.error("Erro ao remover projeto."); }
-    }
+    try {
+      const impact = await getProjectDeletionImpact(projectId);
+      if (!impact.success) { toast.error(impact.error); return; }
+      if (!confirm(buildProjectDeletionMessage(impact))) return;
+
+      const res = await deleteInvestorProject(projectId);
+      if (res.success) { toast.success("Projeto removido!"); fetchInvestor(); }
+      else toast.error(res.error);
+    } catch { toast.error("Erro ao remover projeto."); }
   };
 
   const handlePrint = () => {

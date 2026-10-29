@@ -8,7 +8,8 @@ import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { Plus, Search, Filter, ArrowRight, Eye, Trash2 } from "lucide-react";
-import { getProjects, deleteProject } from "./actions";
+import { getProjects, deleteProject, getProjectDeletionImpact } from "./actions";
+import { buildProjectDeletionMessage } from "@/lib/project-deletion";
 import { getInvestors } from "../investidores/actions";
 import { toast } from "sonner";
 
@@ -57,8 +58,14 @@ export default function AdminProjectsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Tem certeza que deseja excluir este projeto?")) return;
     try {
+      const impact = await getProjectDeletionImpact(id);
+      if (!impact.success) {
+        toast.error(impact.error || "Erro ao verificar o projeto.");
+        return;
+      }
+      if (!confirm(buildProjectDeletionMessage(impact))) return;
+
       const res = await deleteProject(id);
       if (res.success) {
         toast.success("Projeto excluído com sucesso.");
