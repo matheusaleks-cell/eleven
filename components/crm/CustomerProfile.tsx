@@ -6,6 +6,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
+import { PaymentTermsSelect } from "@/components/shared/PaymentTermsSelect";
 import {
   User, Building2, Mail, Phone, MapPin, ShoppingBag,
   Clock, FileText, Download, ExternalLink, ShieldCheck,
@@ -1342,19 +1343,12 @@ export function CustomerProfile({ customer, isOpen, onClose, onRefresh }: Custom
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Forma de Pagamento</label>
-                        <select
-                          className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                        <PaymentTermsSelect
+                          className="bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
                           value={editPayment}
-                          onChange={e => setEditPayment(e.target.value)}
+                          onChange={setEditPayment}
                           style={{ background: "#1A1A1A" }}
-                        >
-                          <option value="PIX">PIX</option>
-                          <option value="CARTÃO CRÉDITO">CARTÃO CRÉDITO</option>
-                          <option value="BOLETO">BOLETO</option>
-                          <option value="DINHEIRO">DINHEIRO</option>
-                          <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
-                          <option value="CHEQUE">CHEQUE</option>
-                        </select>
+                        />
                       </div>
                     </div>
 

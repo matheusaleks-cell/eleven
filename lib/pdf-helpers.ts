@@ -1,5 +1,6 @@
 // Helpers compartilhados pelos geradores de PDF (Anexo P / Pedido) do SaleModal, LeadWorkspace e da tela de Vendas.
 import { jsPDF } from "jspdf";
+import { parsePaymentLabel } from "@/lib/payment-terms";
 
 // Aceita Date, string ISO ou vazio (formatos que variam conforme a origem do dado: perfil x seletor do PDV)
 export const fmtDate = (v: unknown) => {
@@ -257,12 +258,17 @@ export const generatePedidoPdf = async (
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const timestamp = options?.orderDate || new Date().toLocaleDateString("pt-BR");
   const orderNumber = options?.orderNumber || "N/A";
-  const sellerName = (options?.sellerName || "Raul Fiuza").toUpperCase();
-  const paymentMethod = options?.paymentMethod || "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO";
+  // Vendedor só aparece se informado; nenhum nome é assumido por padrão.
+  const sellerName = (options?.sellerName || "").toUpperCase();
+  const paymentMethod = options?.paymentMethod || "A COMBINAR";
+  const payment = parsePaymentLabel(paymentMethod);
 
   const totalCalculated = items.reduce((sum, i) => sum + ((i.unitPrice ?? 0) * (i.quantity ?? 1)), 0);
   const totalValue = options?.totalValue ?? totalCalculated;
-  const downPayment = options?.downPayment ?? (totalValue * 0.5);
+  // Entrada/Saldo só existem quando o pedido foi fechado assim (rótulo antigo "ENTRADA 50%..."
+  // ou valor de entrada informado). PIX, cartão etc. não ganham parcelas inventadas.
+  const hasDownPayment = payment.hasDownPayment || options?.downPayment != null;
+  const downPayment = options?.downPayment ?? (hasDownPayment ? totalValue * 0.5 : 0);
   const remainingBalance = totalValue - downPayment;
 
   // --- CABEÇALHO DA EMPRESA (Topo) ---
@@ -492,7 +498,7 @@ export const generatePedidoPdf = async (
   const totalsValW = 40;
   const rowH = 5.2;
 
-  const drawTotalRow = (label: string, val: number) => {
+  const drawTotalRow = (label: string, val: number | string) => {
     // Label cinza
     doc.setFillColor(...GRAY_COLOR);
     doc.setDrawColor(...BORDER_COLOR);
@@ -509,14 +515,18 @@ export const generatePedidoPdf = async (
 
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0, 0, 0);
-    doc.text(formatCurrency(val), totalsBoxX + totalsLabelW + totalsValW - 3, gridY + 3.6, { align: "right" });
+    doc.text(typeof val === "number" ? formatCurrency(val) : val, totalsBoxX + totalsLabelW + totalsValW - 3, gridY + 3.6, { align: "right" });
 
     gridY += rowH;
   };
 
   drawTotalRow("Total", totalValue);
-  drawTotalRow("Entrada", downPayment);
-  drawTotalRow("Saldo Remanescente", remainingBalance);
+  if (hasDownPayment) {
+    drawTotalRow("Entrada", downPayment);
+    drawTotalRow("Saldo Remanescente", remainingBalance);
+  } else if (payment.isCard && payment.installments > 1) {
+    drawTotalRow("Parcelas", `${payment.installments}x de ${formatCurrency(totalValue / payment.installments)}`);
+  }
 
   // --- OBRIGADO PELA PREFERÊNCIA (Banner) ---
   gridY += 3;

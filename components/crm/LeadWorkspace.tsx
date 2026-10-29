@@ -29,6 +29,7 @@ import { Dialog } from "@/components/ui/Dialog";
 import { Input } from "@/components/ui/Input";
 import { jsPDF } from "jspdf";
 import { getMissingAnexoPSpecs, generateAnexoPPdf, generatePedidoPdf, AnexoPBuyer, AnexoPItemSpec } from "@/lib/pdf-helpers";
+import { PaymentTermsSelect } from "@/components/shared/PaymentTermsSelect";
 import { convertToOrder, convertToCustomer, addLeadLog } from "@/app/admin/crm/funil/actions";
 
 interface LeadWorkspaceProps {
@@ -98,6 +99,7 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGeneratingPedido, setIsGeneratingPedido] = useState(false);
+  const [paymentTerms, setPaymentTerms] = useState("PIX");
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productSearch, setProductSearch] = useState("");
 
@@ -338,8 +340,10 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
         {
           orderNumber: `LEAD-${lead.id.slice(0, 6).toUpperCase()}`,
           orderDate: new Date().toLocaleDateString("pt-BR"),
-          sellerName: lead.assignedTo || "Raul Fiuza",
-          paymentMethod: "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO",
+          // O responsável do lead é um campo interno (LeadForm preenche "Raul Fiuza" por
+          // padrão); não vai impresso no pedido que o cliente recebe.
+          sellerName: "",
+          paymentMethod: paymentTerms,
           totalValue: totalValue,
         }
       );
@@ -579,9 +583,17 @@ export function LeadWorkspace({ lead, products = [], onUpdate, onClose }: LeadWo
                   </div>
                </Card>
                <div className="flex flex-col gap-2">
-                 <Button 
-                  variant="secondary" 
-                  className="h-auto py-3 px-6 gap-3 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl" 
+                 <div className="space-y-1">
+                   <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Pagamento do pedido</label>
+                   <PaymentTermsSelect
+                     className="bg-brand-input border border-brand-border rounded px-3 py-2 text-xs text-white outline-none focus:border-brand-accent"
+                     value={paymentTerms}
+                     onChange={setPaymentTerms}
+                   />
+                 </div>
+                 <Button
+                  variant="secondary"
+                  className="h-auto py-3 px-6 gap-3 text-[11px] font-black uppercase tracking-[0.2em] shadow-xl"
                   onClick={handleGenerateProposal}
                   disabled={isGenerating}
                  >

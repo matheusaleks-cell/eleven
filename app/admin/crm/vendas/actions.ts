@@ -213,7 +213,7 @@ export async function getSalesOrderPdfData(orderId: string) {
     return {
       orderNumber: order.orderNumber,
       orderDate: (order.proposedDate || order.createdAt).toLocaleDateString("pt-BR"),
-      sellerName: order.seller?.name || "Raul Fiuza",
+      sellerName: order.seller?.name || "",
       paymentMethod: order.paymentMethod,
       totalValue: order.totalValue,
       buyer: {

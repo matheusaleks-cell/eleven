@@ -27,6 +27,7 @@ import {
 } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { fmtDate, getMissingAnexoPSpecs, generateAnexoPPdf, generatePedidoPdf, AnexoPBuyer, AnexoPItemSpec } from "@/lib/pdf-helpers";
+import { PaymentTermsSelect } from "@/components/shared/PaymentTermsSelect";
 import { toast } from "sonner";
 
 interface SaleModalProps {
@@ -421,8 +422,8 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
         {
           orderNumber: `ORC-${Date.now().toString().slice(-4)}`,
           orderDate: new Date().toLocaleDateString("pt-BR"),
-          sellerName: sellers.find(s => s.id === selectedSellerId)?.name || "Raul Fiuza",
-          paymentMethod: paymentMethod || "ENTRADA 50% DO VALOR - RESTANTE EM 6X NO CARTÃO DE CRÉDITO",
+          sellerName: sellers.find(s => s.id === selectedSellerId)?.name || "",
+          paymentMethod,
           totalValue: totalValue,
         }
       );
@@ -792,7 +793,7 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
                       value={selectedSellerId}
                       onChange={e => setSelectedSellerId(e.target.value)}
                     >
-                      {sellers.length === 0 && <option value="">Carregando vendedores...</option>}
+                      <option value="">{sellers.length === 0 ? "Carregando vendedores..." : "Não informar no pedido"}</option>
                       {sellers.map(s => (
                         <option key={s.id} value={s.id}>{s.name}</option>
                       ))}
@@ -813,17 +814,11 @@ export function SaleModal({ isOpen, onClose, customer: fixedCustomer, customers 
                 <div className="grid grid-cols-2 gap-2.5">
                   <div className="space-y-0.5">
                     <label className="text-[9px] font-black text-brand-text-muted uppercase">Forma de Pagamento</label>
-                    <select
-                      className="w-full bg-brand-input border border-brand-border rounded px-2.5 py-1 text-xs text-white outline-none focus:border-brand-accent"
+                    <PaymentTermsSelect
+                      className="bg-brand-input border border-brand-border rounded px-2.5 py-1 text-xs text-white outline-none focus:border-brand-accent"
                       value={paymentMethod}
-                      onChange={e => setPaymentMethod(e.target.value)}
-                    >
-                      <option value="PIX">PIX</option>
-                      <option value="CARTÃO CRÉDITO">CARTÃO CRÉDITO</option>
-                      <option value="BOLETO">BOLETO</option>
-                      <option value="DINHEIRO">DINHEIRO</option>
-                      <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
-                    </select>
+                      onChange={setPaymentMethod}
+                    />
                   </div>
                   <div className="space-y-0.5">
                     <label className="text-[9px] font-black text-brand-text-muted uppercase">Status do Pedido</label>

@@ -125,7 +125,13 @@ export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plan
     const weaponsSold = lot.weapons?.filter((w: any) => w.currentStatus === "VENDIDA") || [];
     const realQtySold = weaponsSold.length;
     const realGrossRevenue = weaponsSold.reduce((acc: number, w: any) => acc + (w.saleValue || 0), 0);
-    const suggestedPrice = realQtySold > 0 ? (realGrossRevenue / realQtySold) : (firstProd?.priceB2C || 6000);
+    // Faturamento do ciclo parte do preço de ATACADO do produto (priceB2B). A média das vendas
+    // reais só entra se o produto não tiver preço de atacado, porque vendas B2C registram o varejo.
+    const suggestedPrice = firstProd?.priceB2B > 0
+      ? firstProd.priceB2B
+      : realQtySold > 0
+        ? (realGrossRevenue / realQtySold)
+        : (firstProd?.priceB2C || 6000);
     setPrice(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(suggestedPrice));
 
     if (lot.batchCode) setProcNum(lot.batchCode);

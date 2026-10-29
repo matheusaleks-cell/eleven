@@ -45,6 +45,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { generateAnexoPPdf, generatePedidoPdf } from "@/lib/pdf-helpers";
+import { PaymentTermsSelect } from "@/components/shared/PaymentTermsSelect";
 
 const MONTH_NAMES_LONG = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -841,18 +842,11 @@ export default function VendasPage() {
                       </div>
                       <div className="space-y-1.5">
                         <label className="text-[9px] font-black text-brand-text-muted uppercase tracking-widest">Forma de Pagamento</label>
-                        <select
-                          className="w-full bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
+                        <PaymentTermsSelect
+                          className="bg-brand-input border border-brand-border rounded px-3 py-2 text-sm text-white outline-none focus:border-brand-accent"
                           value={editPayment}
-                          onChange={e => setEditPayment(e.target.value)}
-                        >
-                          <option value="PIX">PIX</option>
-                          <option value="CARTÃO CRÉDITO">CARTÃO CRÉDITO</option>
-                          <option value="BOLETO">BOLETO</option>
-                          <option value="DINHEIRO">DINHEIRO</option>
-                          <option value="TRANSFERÊNCIA">TRANSFERÊNCIA</option>
-                          <option value="CHEQUE">CHEQUE</option>
-                        </select>
+                          onChange={setEditPayment}
+                        />
                       </div>
                     </div>
 
