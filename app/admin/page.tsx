@@ -505,12 +505,19 @@ export default function AdminDashboard() {
                     </div>
                     <div className="flex justify-between items-center text-[10px] font-bold text-[#A0A0A0] uppercase">
                       <span>Progresso de Vendas</span>
-                      <span style={{ color: "#F5C400" }}>{lot.sold} / {lot.total} unidades ({lot.percentage}%)</span>
+                      <span style={{ color: "#F5C400" }}>
+                        {lot.sold} / {lot.total} vendidas ({lot.percentage}%)
+                        {lot.reserved > 0 && <span style={{ color: "#FF9800" }}> · {lot.reserved} reservadas</span>}
+                      </span>
                     </div>
-                    <div className="h-1.5 rounded-full bg-brand-border overflow-hidden">
+                    <div className="h-1.5 rounded-full bg-brand-border overflow-hidden flex">
                       <div
-                        className="h-full rounded-full"
+                        className="h-full"
                         style={{ width: `${lot.percentage}%`, background: "linear-gradient(90deg, #F5C400, #FFD740)" }}
+                      />
+                      <div
+                        className="h-full"
+                        style={{ width: `${lot.reservedPercentage || 0}%`, background: "#FF9800" }}
                       />
                     </div>
                     {lot.grossRevenue > 0 && (

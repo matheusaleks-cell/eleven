@@ -86,6 +86,7 @@ export async function getInvestorDashboardData() {
       
       // Nova contabilidade baseada estritamente em armas vendidas
       let activeCycleSoldWeapons = 0;
+      let activeCycleReservedWeapons = 0;
       let activeCycleTotalWeapons = 0;
       let activeCycleInventoryValue = 0;
       let activeCycleRealizedProfit = 0;
@@ -137,6 +138,7 @@ export async function getInvestorDashboardData() {
           } else if (w.currentStatus === "ESTOQUE" || w.currentStatus === "RESERVADA" || w.currentStatus === "IMPORTADA") {
             if (lot.status !== "LIQUIDADO") {
               activeCycleInventoryValue += uCost;
+              if (w.currentStatus === "RESERVADA") activeCycleReservedWeapons++;
             }
           }
         });
@@ -216,6 +218,7 @@ export async function getInvestorDashboardData() {
         yield: yieldPercentage.toFixed(1),
         cycle: project.cycles.length,
         activeCycleSoldWeapons,
+        activeCycleReservedWeapons,
         activeCycleTotalWeapons,
         activeCycleInventoryValue,
         activeCycleRealizedProfit,

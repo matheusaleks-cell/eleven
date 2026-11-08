@@ -41,6 +41,7 @@ import {
   saveSalesGoal,
   swapWeaponSerial,
   getAvailableSerialsForProduct,
+  updateOrderItemQuantity,
 } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -83,6 +84,10 @@ export default function VendasPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletingOrder, setDeletingOrder] = useState(false);
+
+  // Quantidade por item do pedido em edição (productId -> valor digitado) e item sendo aplicado
+  const [qtyDraft, setQtyDraft] = useState<Record<string, string>>({});
+  const [applyingQtyFor, setApplyingQtyFor] = useState<string | null>(null);
 
   // Emissão de Anexo P / Pedido para um pedido já concluído (id do pedido + tipo em geração no momento)
   const [generatingDoc, setGeneratingDoc] = useState<{ orderId: string; type: "anexo" | "pedido" } | null>(null);
@@ -151,12 +156,14 @@ export default function VendasPage() {
     }).format(order.totalValue || 0);
     setEditTotal(formatted);
     setConfirmDelete(false);
+    setQtyDraft({});
     loadOrderDocuments(order.id);
   };
 
   const closeEdit = () => {
     setEditingOrder(null);
     setConfirmDelete(false);
+    setQtyDraft({});
     setOrderDocuments([]);
     setSwappingWeaponId(null);
     setAvailableSerials([]);
@@ -217,6 +224,49 @@ export default function VendasPage() {
       }
     } finally {
       setSwappingInProgress(false);
+    }
+  };
+
+  // Aplica a nova quantidade de um item na hora (mesmo padrão da troca de série): o servidor
+  // devolve/reserva as unidades e refaz o total; aqui só recarregamos o pedido aberto.
+  const handleApplyQuantity = async (productId: string) => {
+    if (!editingOrder) return;
+    const qty = Number(qtyDraft[productId]);
+    setApplyingQtyFor(productId);
+    try {
+      const res = await updateOrderItemQuantity(editingOrder.id, productId, qty);
+      if (!res.success) {
+        toast.error(res.error || "Erro ao alterar a quantidade.");
+        return;
+      }
+      const shortage = res.shortage ?? 0;
+      const allocated = res.allocated ?? 0;
+      const released = res.released ?? 0;
+      if (shortage > 0) {
+        toast.warning(`Quantidade alterada, mas só havia estoque para ${allocated} de ${allocated + shortage} unidades a mais.`);
+      } else if (released > 0) {
+        toast.success(`Quantidade alterada. ${released} unidade(s) devolvida(s) ao estoque.`);
+      } else {
+        toast.success("Quantidade alterada.");
+      }
+
+      const refreshed = await getSalesOrders();
+      setOrders(refreshed);
+      const updated = refreshed.find((o: any) => o.id === editingOrder.id);
+      if (updated) {
+        setEditingOrder(updated);
+        setEditNotes(updated.notes || "");
+        setEditTotal(new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(updated.totalValue || 0));
+      }
+      setQtyDraft((prev) => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
+    } catch {
+      toast.error("Erro na comunicação com o servidor.");
+    } finally {
+      setApplyingQtyFor(null);
     }
   };
 
@@ -722,7 +772,32 @@ export default function VendasPage() {
                                 <p className="text-[9px] font-mono text-brand-text-muted">{item.sku}</p>
                               </td>
                               <td className="px-3 py-2 text-center">
-                                <span className="text-xs font-bold text-white">{item.quantity}</span>
+                                {editingOrder.status === "CANCELADO" ? (
+                                  <span className="text-xs font-bold text-white">{item.quantity}</span>
+                                ) : (
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      step={1}
+                                      aria-label={`Quantidade de ${item.name}`}
+                                      className="w-14 bg-brand-input border border-brand-border rounded px-1.5 py-1 text-xs text-center font-bold text-white outline-none focus:border-brand-accent"
+                                      value={qtyDraft[item.id] ?? String(item.quantity)}
+                                      onChange={e => setQtyDraft(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                      disabled={applyingQtyFor !== null}
+                                    />
+                                    {qtyDraft[item.id] !== undefined && Number(qtyDraft[item.id]) !== Number(item.quantity) && (
+                                      <Button
+                                        size="sm"
+                                        className="text-[9px] shrink-0"
+                                        disabled={applyingQtyFor !== null}
+                                        onClick={() => handleApplyQuantity(item.id)}
+                                      >
+                                        {applyingQtyFor === item.id ? "..." : "APLICAR"}
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-3 py-2 text-right">
                                 <span className="text-xs font-mono text-brand-text-secondary">{fmtBRL(item.price)}</span>
@@ -932,7 +1007,7 @@ export default function VendasPage() {
                       <div>
                         <p className="text-xs font-black text-brand-danger uppercase">Confirmar Exclusão</p>
                         <p className="text-[10px] text-brand-text-muted mt-0.5">
-                          O pedido será excluído e as armas vinculadas voltarão ao estoque. Esta ação não pode ser desfeita.
+                          O pedido será excluído, as armas vinculadas voltarão ao estoque e os documentos anexados (Anexo P, NF, guias) serão apagados. Esta ação não pode ser desfeita.
                         </p>
                       </div>
                     </div>

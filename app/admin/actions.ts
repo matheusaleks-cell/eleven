@@ -143,8 +143,11 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
 
     activeLots.forEach(lot => {
       const sold = lot.weapons.filter(w => w.currentStatus === "VENDIDA").length;
+      // Reservadas = pedido pendente já segurando a arma; não é venda, mas precisa aparecer no lote.
+      const reserved = lot.weapons.filter(w => w.currentStatus === "RESERVADA").length;
       const total = lot.quantityItems || lot.weapons.length || 1;
       const pct = total > 0 ? (sold / total) * 100 : 0;
+      const reservedPct = total > 0 ? Math.min(100 - pct, (reserved / total) * 100) : 0;
       const lotFin = lotFinancials.get(lot.id);
       activeLotsProgress.push({
         id: lot.id,
@@ -152,8 +155,10 @@ export async function getDashboardStats(filters?: { investorId?: string; startDa
         projectName: lot.investmentProject?.name || "Lote Próprio",
         investorName: lot.investmentProject?.investor?.name || "Eleven Armas",
         sold,
+        reserved,
         total,
         percentage: parseFloat(pct.toFixed(1)),
+        reservedPercentage: parseFloat(reservedPct.toFixed(1)),
         grossRevenue: lotFin?.grossRevenue || 0,
         investorShare: lotFin?.investorShare || 0,
         companyShare: lotFin?.companyShare || 0,

@@ -202,7 +202,12 @@ export default function InvestorDashboard() {
                          />
                        </div>
                        <div className="flex justify-between text-[8px] font-bold text-brand-text-muted mt-1 uppercase">
-                         <span>Em estoque: {project.activeCycleTotalWeapons - project.activeCycleSoldWeapons} un.</span>
+                         <span>
+                           Em estoque: {project.activeCycleTotalWeapons - project.activeCycleSoldWeapons} un.
+                           {project.activeCycleReservedWeapons > 0 && (
+                             <span className="text-brand-warning"> · {project.activeCycleReservedWeapons} reservadas</span>
+                           )}
+                         </span>
                          <span>Giro: R$ {project.activeCycleInventoryValue.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>
                        </div>
                      </div>

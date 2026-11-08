@@ -590,6 +590,11 @@ export async function deleteSalesOrder(id: string) {
       }
     }
 
+    // Documentos do pedido (Anexo P automático, NF, guia...) precisam sair antes: no banco real
+    // a FK documents.sales_order_id é NO ACTION (o schema.prisma diz Cascade, mas o Turso não),
+    // e todo pedido tem ao menos o Anexo P — sem isso a exclusão falha com FOREIGN KEY constraint.
+    await prisma.document.deleteMany({ where: { salesOrderId: id } });
+
     await prisma.salesOrder.delete({ where: { id } });
 
     revalidatePath("/admin/vendas");
@@ -879,6 +884,170 @@ export async function swapWeaponSerial(salesOrderId: string, oldWeaponId: string
   } catch (error: any) {
     console.error("Erro ao trocar número de série:", error);
     return { success: false, error: error.message || "Falha ao trocar número de série." };
+  }
+}
+
+// Altera a quantidade de UM item de um pedido já lançado (ex.: o cliente pediu para diminuir).
+// Mantém o preço unitário e o mesmo percentual de desconto: o total é refeito proporcionalmente.
+// Diminuir devolve ao estoque as unidades que passam do novo total; aumentar reserva/vende mais
+// unidades do estoque (mesma preferência de lote do item) e informa se faltar estoque.
+export async function updateOrderItemQuantity(orderId: string, productId: string, newQuantity: number) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  if (!Number.isInteger(newQuantity) || newQuantity < 1) {
+    return {
+      success: false,
+      error: "A quantidade deve ser um número inteiro maior que zero. Para remover o item, cancele ou exclua o pedido.",
+    };
+  }
+
+  try {
+    const order = await prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      include: { weapons: { select: { id: true, productId: true, serialNumber: true, lastMovementDate: true } } },
+    });
+    if (!order) return { success: false, error: "Pedido não encontrado." };
+    if (order.status === "CANCELADO") {
+      return { success: false, error: "Pedido cancelado. Reative o pedido antes de alterar a quantidade." };
+    }
+
+    const items: any[] = JSON.parse(order.products || "[]");
+    const item = items.find((i) => i.id === productId);
+    if (!item) return { success: false, error: "Item não encontrado neste pedido." };
+
+    const oldQuantity = Number(item.quantity) || 0;
+    if (newQuantity === oldQuantity) {
+      return { success: true, oldQuantity, newQuantity, released: 0, allocated: 0, shortage: 0, newTotal: order.totalValue };
+    }
+
+    // Mesmo percentual de desconto do pedido: total novo proporcional ao bruto.
+    const oldBruto = items.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 0), 0);
+    const factor = oldBruto > 0 ? order.totalValue / oldBruto : 1;
+
+    const allocated = order.weapons.filter((w) => w.productId === productId);
+
+    // Diminuir: libera as unidades que passam do novo total (as últimas a entrar no pedido).
+    const toRelease = [...allocated]
+      .sort((a, b) => b.lastMovementDate.getTime() - a.lastMovementDate.getTime() || b.serialNumber.localeCompare(a.serialNumber))
+      .slice(0, Math.max(0, allocated.length - newQuantity));
+
+    // Aumentar: reserva/vende mais do estoque, respeitando a preferência de lote do item.
+    const wantExtra = newQuantity > oldQuantity ? newQuantity - oldQuantity : 0;
+    let extras: { id: string; serialNumber: string }[] = [];
+    if (wantExtra > 0) {
+      let lotFilter: any = {};
+      if (item.lotPreference === "PROPRIO") {
+        lotFilter = { importLot: { investmentProjectId: null } };
+      } else if (item.lotPreference === "INVESTIDOR" && item.investmentProjectId) {
+        lotFilter = { importLot: { investmentProjectId: item.investmentProjectId } };
+      }
+
+      extras = await prisma.weaponMap.findMany({
+        where: { productId, currentStatus: "ESTOQUE", ...lotFilter },
+        take: wantExtra,
+        orderBy: { entryDate: "asc" },
+        select: { id: true, serialNumber: true },
+      });
+
+      if (extras.length < wantExtra && Object.keys(lotFilter).length > 0) {
+        const taken = extras.map((w) => w.id);
+        const backup = await prisma.weaponMap.findMany({
+          where: { productId, currentStatus: "ESTOQUE", id: taken.length > 0 ? { notIn: taken } : undefined },
+          take: wantExtra - extras.length,
+          orderBy: { entryDate: "asc" },
+          select: { id: true, serialNumber: true },
+        });
+        extras = [...extras, ...backup];
+      }
+    }
+
+    const now = new Date();
+
+    if (toRelease.length > 0) {
+      const ids = toRelease.map((w) => w.id);
+      await prisma.weaponMap.updateMany({
+        where: { id: { in: ids } },
+        data: {
+          currentStatus: "ESTOQUE",
+          salesOrderId: null,
+          saleDate: null,
+          saleValue: null,
+          customerId: null,
+          sellingUserId: null,
+          lastMovementDate: now,
+        },
+      });
+      await logWeaponMovements(ids, "DEVOLUCAO_ESTOQUE", `Pedido ${order.orderNumber} — quantidade reduzida, devolvida ao estoque`);
+      await prisma.product.update({
+        where: { id: productId },
+        data: { stockAvailable: { increment: ids.length } },
+      });
+    }
+
+    if (extras.length > 0) {
+      const ids = extras.map((w) => w.id);
+      await prisma.weaponMap.updateMany({
+        where: { id: { in: ids } },
+        data: {
+          currentStatus: weaponStatusForOrder(order.status),
+          salesOrderId: order.id,
+          saleDate: now,
+          saleValue: Number(((item.price || 0) * factor).toFixed(2)),
+          customerId: order.customerId,
+          sellingUserId: order.sellerId,
+          lastMovementDate: now,
+        },
+      });
+      const movType = weaponStatusForOrder(order.status) === "VENDIDA" ? "VENDA" : "RESERVA";
+      await logWeaponMovements(ids, movType, `Pedido ${order.orderNumber} — quantidade aumentada`);
+      const prod = await prisma.product.findUnique({ where: { id: productId }, select: { stockAvailable: true } });
+      if (prod) {
+        await prisma.product.update({
+          where: { id: productId },
+          data: { stockAvailable: Math.max(0, prod.stockAvailable - ids.length) },
+        });
+      }
+    }
+
+    // Atualiza o snapshot do pedido (itens, séries escolhidas, total e uma nota de rastreio).
+    item.quantity = newQuantity;
+    if (Array.isArray(item.serialNumbers) && item.serialNumbers.length > 0) {
+      const released = new Set(toRelease.map((w) => w.id));
+      item.serialNumbers = [
+        ...allocated.filter((w) => !released.has(w.id)).map((w) => w.serialNumber),
+        ...extras.map((w) => w.serialNumber),
+      ];
+    }
+    const newBruto = items.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 0), 0);
+    const newTotal = Number((newBruto * factor).toFixed(2));
+    const trace = `[Quantidade de "${item.name || "item"}" alterada de ${oldQuantity} para ${newQuantity} em ${now.toLocaleDateString("pt-BR")}]`;
+
+    await prisma.salesOrder.update({
+      where: { id: orderId },
+      data: {
+        products: JSON.stringify(items),
+        totalValue: newTotal,
+        notes: order.notes ? `${order.notes}\n${trace}` : trace,
+      },
+    });
+
+    revalidatePath("/admin/vendas");
+    revalidatePath("/admin");
+    revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
+    return {
+      success: true,
+      oldQuantity,
+      newQuantity,
+      released: toRelease.length,
+      allocated: extras.length,
+      shortage: wantExtra - extras.length,
+      newTotal,
+    };
+  } catch (error: any) {
+    console.error("Erro ao alterar quantidade do pedido:", error);
+    return { success: false, error: error.message || "Falha ao alterar a quantidade." };
   }
 }
 
