@@ -252,6 +252,29 @@ export async function getRecentProjects(investorId?: string) {
     return [];
   }
 }
+// Cotação do dólar: API externa com timeout curto; se falhar, usa o câmbio do último lote em USD.
+async function fetchUsdRate(): Promise<number> {
+  try {
+    const response = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", {
+      next: { revalidate: 3600 },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    const rate = parseFloat(data.USDBRL.bid);
+    if (!Number.isFinite(rate)) throw new Error("cotação inválida");
+    return rate;
+  } catch {
+    console.warn("[USD API] Falha ao buscar cotação real, tentando banco de dados...");
+    const lastLot = await prisma.importLot.findFirst({
+      where: { currency: "USD" },
+      orderBy: { createdAt: "desc" },
+      select: { exchangeRate: true },
+    });
+    return lastLot?.exchangeRate || 5.82;
+  }
+}
+
 export async function getGlobalHeaderStats() {
   const session = await requireSession("ADMIN");
   if (!session) return { monthlySales: 0, inventoryValue: 0, averageMargin: 0, lastUsdRate: 5.82 };
@@ -260,55 +283,27 @@ export async function getGlobalHeaderStats() {
     const now = new Date();
     const firstDayMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // 1. Vendas do Mês
-    const monthOrders = await prisma.salesOrder.findMany({
-      where: {
-        createdAt: { gte: firstDayMonth }
-      }
-    });
-    const monthlySales = monthOrders.reduce((acc, o) => acc + (o.totalValue || 0), 0);
+    // Este cabeçalho carrega em TODA página do admin. As somas são feitas no banco (antes eram 3
+    // findMany trazendo todas as linhas para somar em JS, em série) e as 4 leituras rodam em paralelo.
+    const [monthOrders, stock, sold, lastUsdRate] = await Promise.all([
+      // 1. Vendas do mês
+      prisma.salesOrder.aggregate({ _sum: { totalValue: true }, where: { createdAt: { gte: firstDayMonth } } }),
+      // 2. Patrimônio em estoque (custo imobilizado)
+      prisma.weaponMap.aggregate({ _sum: { unitCost: true }, where: { currentStatus: { in: ["ESTOQUE", "RESERVADA"] } } }),
+      // 3. Margem média real (lucro sobre o que já foi vendido)
+      prisma.weaponMap.aggregate({ _sum: { saleValue: true, unitCost: true }, where: { currentStatus: "VENDIDA" } }),
+      // 4. Cotação do dólar
+      fetchUsdRate(),
+    ]);
 
-    // 2. Patrimônio em Estoque (Custo Imobilizado)
-    const stockWeapons = await prisma.weaponMap.findMany({
-      where: {
-        currentStatus: { in: ["ESTOQUE", "RESERVADA"] }
-      }
-    });
-    const inventoryValue = stockWeapons.reduce((acc, w) => acc + (w.unitCost || 0), 0);
+    const monthlySales = monthOrders._sum.totalValue ?? 0;
+    const inventoryValue = stock._sum.unitCost ?? 0;
+    const totalSaleValue = sold._sum.saleValue ?? 0;
+    const totalCostValue = sold._sum.unitCost ?? 0;
 
-    // 3. Margem Média Real (Lucro sobre o que já foi vendido)
-    const soldWeapons = await prisma.weaponMap.findMany({
-      where: {
-        currentStatus: "VENDIDA"
-      }
-    });
-    
-    let totalSaleValue = 0;
-    let totalCostValue = 0;
-    
-    soldWeapons.forEach(w => {
-      totalSaleValue += (w.saleValue || 0);
-      totalCostValue += (w.unitCost || 0);
-    });
-
-    const averageMargin = totalSaleValue > 0 
-      ? ((totalSaleValue - totalCostValue) / totalSaleValue) * 100 
+    const averageMargin = totalSaleValue > 0
+      ? ((totalSaleValue - totalCostValue) / totalSaleValue) * 100
       : 32.5; // Fallback para margem projetada se não houver vendas
-
-    // 4. Cotação do Dólar em Tempo Real (via AwesomeAPI)
-    let lastUsdRate = 5.82;
-    try {
-      const response = await fetch("https://economia.awesomeapi.com.br/json/last/USD-BRL", { next: { revalidate: 3600 } });
-      const data = await response.json();
-      lastUsdRate = parseFloat(data.USDBRL.bid);
-    } catch (apiError) {
-      console.warn("[USD API] Falha ao buscar cotação real, tentando banco de dados...");
-      const lastLot = await prisma.importLot.findFirst({
-        where: { currency: "USD" },
-        orderBy: { createdAt: "desc" }
-      });
-      lastUsdRate = lastLot?.exchangeRate || 5.82;
-    }
 
     return {
       monthlySales,

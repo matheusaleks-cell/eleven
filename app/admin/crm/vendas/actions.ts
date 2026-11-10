@@ -515,22 +515,19 @@ export async function createDirectSale(data: {
         const discountFactor = totalBruto > 0 ? (totalLiquido / totalBruto) : 1;
         const finalSaleValue = Number((item.price * discountFactor).toFixed(2));
 
-        await Promise.all(
-          weaponsToSell.map((w) =>
-            prisma.weaponMap.update({
-              where: { id: w.id },
-              data: {
-                currentStatus: weaponStatusForOrder(data.status),
-                salesOrderId: order.id,
-                saleDate,
-                saleValue: finalSaleValue,
-                customerId: data.customerId,
-                sellingUserId: sellerId,
-                lastMovementDate: saleDate,
-              },
-            })
-          )
-        );
+        // Mesmos dados para todas as armas do item: uma única query em vez de uma por arma.
+        await prisma.weaponMap.updateMany({
+          where: { id: { in: weaponsToSell.map((w) => w.id) } },
+          data: {
+            currentStatus: weaponStatusForOrder(data.status),
+            salesOrderId: order.id,
+            saleDate,
+            saleValue: finalSaleValue,
+            customerId: data.customerId,
+            sellingUserId: sellerId,
+            lastMovementDate: saleDate,
+          },
+        });
         const movType = weaponStatusForOrder(data.status) === "VENDIDA" ? "VENDA" : "RESERVA";
         await logWeaponMovements(weaponsToSell.map(w => w.id), movType, `Pedido ${orderNumber}`);
       }
@@ -742,16 +739,22 @@ export async function updateSalesOrder(
         const totalLiquido = data.totalValue;
         const discountFactor = totalBruto > 0 ? (totalLiquido / totalBruto) : 1;
 
+        // O valor depende só do produto: uma query por produto em vez de uma por arma.
+        const valueByProduct = new Map<string, number>();
         for (const w of weapons) {
+          if (valueByProduct.has(w.productId)) continue;
           const orderItem = items.find((item: any) => item.id === w.productId);
           const originalPrice = orderItem ? orderItem.price : (w.product?.priceB2C || 0);
-          const finalSaleValue = Number((originalPrice * discountFactor).toFixed(2));
-
-          await prisma.weaponMap.update({
-            where: { id: w.id },
-            data: { saleValue: finalSaleValue }
-          });
+          valueByProduct.set(w.productId, Number((originalPrice * discountFactor).toFixed(2)));
         }
+        await Promise.all(
+          [...valueByProduct].map(([productId, saleValue]) =>
+            prisma.weaponMap.updateMany({
+              where: { salesOrderId: id, productId },
+              data: { saleValue },
+            })
+          )
+        );
       }
     }
 

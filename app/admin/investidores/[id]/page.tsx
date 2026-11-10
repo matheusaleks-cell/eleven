@@ -120,7 +120,7 @@ export default function InvestorDetailPage({ params }: { params: Promise<{ id: s
     const clean = cep.replace(/\D/g, "");
     if (clean.length !== 8) return;
     try {
-      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`, { signal: AbortSignal.timeout(8000) });
       const data = await res.json();
       if (!data.erro) {
         setFormData((prev: any) => ({

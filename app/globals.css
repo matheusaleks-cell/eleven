@@ -200,6 +200,23 @@ p, span, label, input, textarea, select, td {
   animation: fadeIn 0.3s ease forwards;
 }
 
+/* Skeleton: pulso só de opacidade. Não usar `animate-pulse` do Tailwind aqui, porque o
+   @keyframes pulse deste arquivo (scale 1.15) sobrescreve o dele e os blocos "cresceriam". */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.85; }
+}
+
+.skeleton {
+  background: var(--color-border);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
 .animate-slide-left {
   animation: slideInLeft 0.25s ease forwards;
 }

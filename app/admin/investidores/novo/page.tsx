@@ -168,7 +168,7 @@ export default function NovoInvestidorPage() {
     const cleanCep = cep.replace(/\D/g, "");
     if (cleanCep.length === 8) {
       try {
-        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+        const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
         if (!data.erro) {
           setEndereco(prev => ({

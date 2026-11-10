@@ -107,7 +107,7 @@ export default function ClientesPage() {
 
     toast.loading("Buscando dados do CNPJ...", { id: "cnpj-lookup" });
     try {
-      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCNPJ}`);
+      const response = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cleanCNPJ}`, { signal: AbortSignal.timeout(8000) });
       if (!response.ok) throw new Error("CNPJ não encontrado.");
       const data = await response.json();
       
@@ -704,7 +704,7 @@ export default function ClientesPage() {
                            setNewCliente({...newCliente, cep: formattedCep});
                            if (val.length === 8) {
                              try {
-                               const res = await fetch(`https://viacep.com.br/ws/${val}/json/`);
+                               const res = await fetch(`https://viacep.com.br/ws/${val}/json/`, { signal: AbortSignal.timeout(8000) });
                                const data = await res.json();
                                if (!data.erro) {
                                  setNewCliente({
