@@ -14,6 +14,8 @@ import { TrendingUp, FolderKanban, Users, ArrowRight, Plus, Activity, Eye } from
 import { getDashboardStats, getRecentProjects } from "./actions";
 import { getInvestors } from "./investidores/actions";
 import { toast } from "sonner";
+import { getSession } from "next-auth/react";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 const fmtBRL = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -34,32 +36,59 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<any>(null);
 
   useEffect(() => {
-    const s = localStorage.getItem("eleven_session");
-    if (s) {
-      setSession(JSON.parse(s));
-    }
+    // A sessão vale se existir no localStorage OU no cookie do NextAuth (o servidor já validou o
+    // cookie no layout). Antes só o localStorage contava: com ele vazio a tela ficava parada em
+    // "Redirecionando..." para sempre, sem nunca redirecionar.
+    const resolveSession = async () => {
+      try {
+        const raw = localStorage.getItem("eleven_session");
+        if (raw) return JSON.parse(raw);
+      } catch {}
+      try {
+        const s = await getSession();
+        if (s?.user?.role === "ADMIN") {
+          const info = { id: (s.user as any).id, email: s.user.email, name: s.user.name, role: s.user.role };
+          try { localStorage.setItem("eleven_session", JSON.stringify(info)); } catch {}
+          return info;
+        }
+      } catch {}
+      return null;
+    };
+
+    // Nunca deixa a tela carregando indefinidamente: passou do limite, libera com aviso.
+    const withTimeout = <T,>(p: Promise<T>, ms: number) =>
+      Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), ms))]);
 
     // Carregar dados iniciais do banco
     const loadData = async () => {
       setLoading(true);
+      const s = await resolveSession();
+      if (!s) {
+        router.replace("/admin/login");
+        return;
+      }
+      setSession(s);
       try {
-        const [sData, pData, iData] = await Promise.all([
-          getDashboardStats(),
-          getRecentProjects(),
-          getInvestors()
-        ]);
+        const [sData, pData, iData] = await withTimeout(
+          Promise.all([getDashboardStats(), getRecentProjects(), getInvestors()]),
+          30000
+        );
         setStats(sData);
         setFilteredProjects(pData);
         setInvestors(iData);
       } catch (error) {
-        toast.error("Erro ao sincronizar dados com o banco.");
+        toast.error(
+          (error as Error)?.message === "timeout"
+            ? "O servidor demorou para responder. Recarregue a página."
+            : "Erro ao sincronizar dados com o banco."
+        );
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [router]);
 
   const applyFilters = async () => {
     setLoading(true);
@@ -100,22 +129,22 @@ export default function AdminDashboard() {
     }
   };
 
-  if (loading) {
+  // Mantém menu e cabeçalho na tela e mostra só o conteúdo carregando (antes era uma tela cheia
+  // "Sincronizando Sessão..." que escondia tudo, mesmo quando o que demora são os dados).
+  if (loading || !session) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-brand-bg">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-brand-accent border-t-transparent rounded-full animate-spin" />
-          <p className="text-brand-accent font-bold uppercase tracking-widest text-[10px] animate-pulse">Sincronizando Sessão...</p>
+      <DashboardLayout role="ADMIN" userName={session?.name ?? "Administrador"} userEmail={session?.email ?? ""} pageTitle="Dashboard">
+        <div role="status" aria-busy="true" aria-label="Carregando painel" className="flex flex-col gap-6">
+          <div className="space-y-3">
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 w-full" />)}
+          </div>
+          <Skeleton className="h-[320px] w-full" />
         </div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-brand-bg">
-        <p className="text-brand-text-muted font-bold uppercase tracking-widest text-[10px]">Acesso Restrito. Redirecionando...</p>
-      </div>
+      </DashboardLayout>
     );
   }
 
