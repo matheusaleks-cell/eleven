@@ -469,11 +469,23 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
                       "w-10 h-10 rounded-lg flex items-center justify-center font-black text-xs",
                       cycle.status === "COMPLETED" ? "bg-brand-success/10 text-brand-success border border-brand-success/20" : "bg-brand-accent/10 text-brand-accent border border-brand-accent/20"
                     )}>
-                      {cycle.status === "COMPLETED" ? "✓" : `C${project.cycles.length - index}`}
+                      {cycle.status === "COMPLETED" ? "✓" : `C${cycle.cycleNumber ?? project.cycles.length - index}`}
                     </div>
                     <div className="text-left">
-                      <p className="text-sm font-bold text-white uppercase tracking-tight">{cycle.cycleName}</p>
-                      <p className="text-[10px] font-bold text-brand-text-muted uppercase mt-0.5">{cycle.startDate} • {cycle.quantity} Unidades</p>
+                      <p className="text-sm font-bold text-white uppercase tracking-tight">
+                        {cycle.cycleNumber ? `Ciclo ${cycle.cycleNumber} · ` : ""}{cycle.cycleName}
+                      </p>
+                      <p className="text-[10px] font-bold text-brand-text-muted uppercase mt-0.5">
+                        {cycle.lotCode ? `${cycle.lotCode} · ${cycle.lotStatus} · ` : ""}{cycle.startDate} • {cycle.quantity} unidades
+                      </p>
+                      {cycle.units && (
+                        <p className="text-[10px] font-bold uppercase mt-1 flex flex-wrap gap-x-3">
+                          <span className="text-brand-success">{cycle.units.sold} vendidas</span>
+                          <span className="text-brand-warning">{cycle.units.reserved} reservadas</span>
+                          <span className="text-white">{cycle.units.inStock} em estoque</span>
+                          {cycle.units.incoming > 0 && <span className="text-brand-text-secondary">{cycle.units.incoming} a chegar</span>}
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -493,9 +505,9 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {[
                         { label: "Investimento do Lote", value: formatMoney(cycle.total_investment) },
-                        { label: "Expectativa de Faturamento", value: formatMoney(cycle.gross_revenue) },
-                        { label: "Seu Lucro Líquido", value: formatMoney(cycle.investor_profit_share), highlight: true },
-                        { label: "Saldo para Reinvestimento", value: formatMoney(cycle.next_cycle_capital) },
+                        { label: cycle.status === "COMPLETED" ? "Faturamento do Ciclo" : "Faturado até agora", value: formatMoney(cycle.gross_revenue) },
+                        { label: cycle.status === "COMPLETED" ? "Seu Lucro Líquido" : "Seu Lucro até agora", value: formatMoney(cycle.investor_profit_share), highlight: true },
+                        { label: "Saldo para Reinvestimento", value: cycle.status === "COMPLETED" ? formatMoney(cycle.next_cycle_capital) : "No fechamento" },
                       ].map((stat) => (
                         <div key={stat.label} className="p-3 bg-brand-bg/40 rounded-lg border border-brand-border/50">
                           <p className="text-[9px] font-black text-brand-text-muted uppercase mb-1 tracking-tight">{stat.label}</p>
@@ -504,8 +516,40 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
                       ))}
                     </div>
 
-                    {/* Sales Thermometer (Only for active or recently completed) */}
-                    {cycle.status !== "PENDING" && (
+                    {/* Unidades do ciclo: vendidas / reservadas / em estoque / a chegar */}
+                    {cycle.units && (
+                      <div className="space-y-3 p-4 bg-brand-input/30 rounded-xl border border-brand-border/40">
+                        <div className="flex justify-between items-end">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp size={14} className="text-brand-success" />
+                            <span className="text-[10px] font-black text-white uppercase tracking-widest">Andamento das Vendas</span>
+                          </div>
+                          <span className="text-[10px] font-black text-brand-success uppercase">
+                            {cycle.units.sold} de {cycle.quantity} vendidas ({cycle.quantity > 0 ? ((cycle.units.sold / cycle.quantity) * 100).toFixed(0) : 0}%)
+                          </span>
+                        </div>
+                        <div className="h-2 w-full bg-brand-bg rounded-full overflow-hidden border border-brand-border/50 flex">
+                          <div className="h-full bg-brand-success" style={{ width: `${cycle.quantity > 0 ? (cycle.units.sold / cycle.quantity) * 100 : 0}%` }} />
+                          <div className="h-full bg-brand-warning" style={{ width: `${cycle.quantity > 0 ? (cycle.units.reserved / cycle.quantity) * 100 : 0}%` }} />
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[
+                            { label: "Vendidas", value: cycle.units.sold, cls: "text-brand-success" },
+                            { label: "Reservadas", value: cycle.units.reserved, cls: "text-brand-warning" },
+                            { label: "Em estoque", value: cycle.units.inStock, cls: "text-white" },
+                            { label: "A chegar", value: cycle.units.incoming, cls: "text-brand-text-secondary" },
+                          ].map((u) => (
+                            <div key={u.label} className="p-2 rounded border border-brand-border/50 bg-brand-bg/40">
+                              <p className="text-[9px] font-black text-brand-text-muted uppercase">{u.label}</p>
+                              <p className={cn("text-lg font-mono font-bold", u.cls)}>{u.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Termômetro por faturamento: só para ciclos antigos (sem unidades), com alvo definido */}
+                    {!cycle.units && cycle.status !== "PENDING" && (
                       <div className="space-y-4 p-4 bg-brand-input/30 rounded-xl border border-brand-border/40">
                          <div className="flex justify-between items-end">
                             <div className="flex items-center gap-2">

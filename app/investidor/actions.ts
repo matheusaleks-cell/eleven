@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { requireSession } from "@/lib/auth-guard";
 import { stripLargeDocuments } from "@/lib/document-transfer-shared";
+import { getCycleName } from "@/lib/calculations";
 import { FinancialRates, getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
 // Lote já apurado financeiramente = tem ciclo COMPLETED registrado para ele. O lucro dele
@@ -244,7 +245,7 @@ export async function getInvestorDashboardData() {
         invested: projectInvested,
         current: projectCurrent,
         yield: yieldPercentage.toFixed(1),
-        cycle: project.cycles.length,
+        cycle: Math.max(project.importLots.length, project.cycles.length), // cada lote é um ciclo
         activeCycleSoldWeapons,
         activeCycleReservedWeapons,
         activeCycleTotalWeapons,
@@ -450,7 +451,7 @@ export async function getInvestorProjects() {
         initial_capital: p.initialCapital,
         currentCapital: p.initialCapital + totalReceived,
         totalInvestorShare: totalReceived,
-        currentCycle: p.cycles.length,
+        currentCycle: Math.max(p.importLots.length, p.cycles.length), // cada lote é um ciclo
         max_cycles: p.maxCycles
       };
     });
@@ -494,7 +495,53 @@ export async function getInvestorProjectDetails(id: string) {
     const financialDefaults = await getActiveFinancialRates();
     const { totalReceived } = computeProjectYield(project, financialDefaults);
 
-    const mappedCycles = project.cycles.map(c => {
+    // Cada lote do projeto é um ciclo (ordem de abertura), igual à timeline do admin. Antes só
+    // apareciam ciclos com registro na tabela de ciclos — lote vendendo sem fechamento registrado
+    // (o caso normal) não aparecia para o investidor.
+    const LOT_STATUS_LABEL: Record<string, string> = {
+      PEDIDO_FEITO: "Pedido feito", TRANSITO: "Em trânsito", NACIONALIZANDO: "Nacionalizando",
+      DISPONIVEL: "À venda", LIQUIDADO: "Vendido",
+    };
+    const lotsAsc = [...project.importLots].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const lotCycles = lotsAsc.map((lot, idx) => {
+      const record = project.cycles.find(c => c.importLotId === lot.id && c.status === "COMPLETED")
+        || project.cycles.find(c => c.importLotId === lot.id);
+      const closed = record?.status === "COMPLETED";
+      const rates = ratesFromCycleOrDefault(record, financialDefaults);
+      const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+
+      let sold = 0, reserved = 0, inStock = 0, soldValue = 0, liveProfit = 0;
+      for (const w of lot.weapons) {
+        if (w.currentStatus === "VENDIDA") {
+          sold++;
+          soldValue += w.saleValue || 0;
+          liveProfit += computeUnitFinancials(w.saleValue || 0, w.unitCost || uCostAvg, project.profitSplitPct, rates).investorShare;
+        } else if (w.currentStatus === "RESERVADA") reserved++;
+        else inStock++;
+      }
+      const incoming = Math.max(0, (lot.quantityItems || 0) - lot.weapons.length);
+
+      return {
+        id: lot.id,
+        cycleNumber: idx + 1,
+        cycleName: getCycleName(idx),
+        lotCode: lot.batchCode,
+        lotStatus: LOT_STATUS_LABEL[lot.status] || lot.status,
+        quantity: lot.quantityItems || lot.weapons.length,
+        startDate: lot.createdAt.toLocaleDateString("pt-BR"),
+        units: { sold, reserved, inStock, incoming },
+        sold_value: soldValue,
+        expected_revenue: record?.grossRevenue || 0,
+        investor_profit_share: closed ? (record!.investorShare || 0) : liveProfit,
+        total_investment: closed ? record!.totalInvestment : (lot.totalCostNationalized || 0),
+        gross_revenue: closed ? (record!.grossRevenue || 0) : soldValue,
+        next_cycle_capital: closed ? (record!.reinvestmentShare || 0) : 0,
+        status: closed ? "COMPLETED" : "IN_PROGRESS",
+      };
+    });
+
+    // Registros de ciclo antigos sem lote vinculado continuam aparecendo como antes.
+    const legacyCycles = project.cycles.filter(c => !c.importLotId || !project.importLots.some(l => l.id === c.importLotId)).map(c => {
       // Ciclo fechado: usa o valor oficial gravado pelo admin (mesma fonte da Dashboard).
       if (c.status === "COMPLETED") {
         return {
@@ -553,9 +600,10 @@ export async function getInvestorProjectDetails(id: string) {
         initial_capital: project.initialCapital,
         currentCapital: project.initialCapital + totalReceived,
         totalInvestorShare: totalReceived,
-        currentCycle: project.cycles.length,
+        currentCycle: lotCycles.length + legacyCycles.length,
         max_cycles: project.maxCycles,
-        cycles: mappedCycles,
+        // Mais recente primeiro (a tela abre o primeiro da lista).
+        cycles: [...lotCycles.reverse(), ...legacyCycles],
         importLots: project.importLots.map((l) => ({ ...l, documents: stripLargeDocuments(l.documents) })),
         documents: stripLargeDocuments(project.documents)
       }
@@ -571,6 +619,42 @@ export async function getCycleSales(cycleId: string) {
     const session = await requireSession("INVESTOR");
     if (!session?.user?.email) return { success: false, sales: [] };
     const email = session.user.email;
+
+    // Agora o "ciclo" da tela é o lote do projeto: aceita o id do lote (com o ciclo registrado,
+    // se houver, para as taxas). Mantém o caminho antigo por id de ciclo.
+    const lotAsCycle = await prisma.importLot.findFirst({
+      where: { id: cycleId, investmentProject: { investor: { email } } },
+      include: {
+        investmentProject: { select: { profitSplitPct: true, cycles: true } },
+        weapons: { where: { currentStatus: "VENDIDA" }, include: { product: true, customer: true } },
+      },
+    });
+    if (lotAsCycle) {
+      const financialDefaults = await getActiveFinancialRates();
+      const record = lotAsCycle.investmentProject?.cycles.find(c => c.importLotId === lotAsCycle.id && c.status === "COMPLETED")
+        || lotAsCycle.investmentProject?.cycles.find(c => c.importLotId === lotAsCycle.id);
+      const rates = ratesFromCycleOrDefault(record, financialDefaults);
+      const splitPct = lotAsCycle.investmentProject?.profitSplitPct || 0.5;
+      const uCostAvg = lotAsCycle.quantityItems > 0 ? lotAsCycle.totalCostNationalized / lotAsCycle.quantityItems : 0;
+      const sales = lotAsCycle.weapons
+        .sort((a, b) => (b.saleDate?.getTime() || 0) - (a.saleDate?.getTime() || 0))
+        .map(w => {
+          const uCost = w.unitCost || uCostAvg;
+          const sValue = w.saleValue || 0;
+          const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
+          return {
+            id: w.id,
+            productName: w.product?.commercialName || "Produto",
+            serialNumber: w.serialNumber,
+            saleDate: w.saleDate?.toLocaleDateString("pt-BR"),
+            saleValue: sValue,
+            customerName: w.customer?.name || "Cliente Final",
+            unitCost: uCost,
+            investorReturn: uCost + fin.investorShare,
+          };
+        });
+      return { success: true, sales, totalSoldValue: sales.reduce((acc, s) => acc + s.saleValue, 0) };
+    }
 
     const cycle = await prisma.cycle.findFirst({
       where: { id: cycleId, project: { investor: { email } } },
