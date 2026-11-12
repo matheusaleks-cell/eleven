@@ -365,10 +365,13 @@ export async function getProjectById(id: string) {
             weapons: {
               select: {
                 id: true,
+                serialNumber: true,
+                productId: true,
                 currentStatus: true,
                 saleValue: true,
                 unitCost: true
-              }
+              },
+              orderBy: { serialNumber: "asc" }
             }
           }
         }

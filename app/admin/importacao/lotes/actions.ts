@@ -334,6 +334,20 @@ export async function registerLotSerials(lotId: string, productId: string, seria
       return { success: false, error: "Nenhum número de série válido fornecido." };
     }
 
+    const repeated = cleanSerials.filter((s, i) => cleanSerials.indexOf(s) !== i);
+    if (repeated.length > 0) {
+      return { success: false, error: `Série repetida na lista: ${[...new Set(repeated)].join(", ")}` };
+    }
+
+    // Não deixa o lote passar da quantidade prevista (ajuste a quantidade do lote se vier mais).
+    const alreadyInLot = await prisma.weaponMap.count({ where: { importLotId: lot.id } });
+    if (lot.quantityItems > 0 && alreadyInLot + cleanSerials.length > lot.quantityItems) {
+      return {
+        success: false,
+        error: `O lote prevê ${lot.quantityItems} unidade(s) e já tem ${alreadyInLot} série(s). Dá para cadastrar no máximo ${Math.max(0, lot.quantityItems - alreadyInLot)} agora.`,
+      };
+    }
+
     const existing = await prisma.weaponMap.findMany({
       where: {
         serialNumber: { in: cleanSerials }

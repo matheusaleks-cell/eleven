@@ -11,6 +11,7 @@ import { ArrowLeft, ChevronDown, ChevronUp, Plus, CheckCircle, Clock, FileText, 
 import { CycleModal } from "@/components/cycles/CycleModal";
 import { LinkLotDialog } from "@/components/projects/LinkLotDialog";
 import { EditProjectDialog } from "@/components/projects/EditProjectDialog";
+import { SerialRegistrationDialog } from "@/components/cycles/SerialRegistrationDialog";
 import { parseProductMix, productMixLabel } from "@/lib/product-mix";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -324,6 +325,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [showCycleModal, setShowCycleModal] = useState(false);
   const [showLinkLot, setShowLinkLot] = useState(false);
   const [showEditProject, setShowEditProject] = useState(false);
+  // Lote cujo cadastro de séries está aberto (card do ciclo em andamento).
+  const [serialsLotId, setSerialsLotId] = useState<string | null>(null);
   // Lote do ciclo a fechar no modal (null = o ciclo aberto mais antigo).
   const [cycleLotId, setCycleLotId] = useState<string | null>(null);
   // Lote exibido na aba "Processo de Importação" (null = o mais recente).
@@ -806,6 +809,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 {isAdmin && (
                   <div className="sm:ml-auto flex gap-2 flex-wrap">
                     <button
+                      onClick={() => setSerialsLotId(lot.id)}
+                      className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm"
+                      style={{ background: "transparent", color: "#F5C400", border: "1px solid rgba(245,196,0,0.4)", cursor: "pointer" }}
+                      title="Cadastrar os números de série das armas deste ciclo"
+                    >
+                      Cadastrar séries{total > 0 ? ` (${registered}/${total})` : ""}
+                    </button>
+                    <button
                       onClick={() => { setSelectedLotId(lot.id); setActiveTab("import"); }}
                       className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm"
                       style={{ background: "transparent", color: "#A0A0A0", border: "1px solid #333", cursor: "pointer" }}
@@ -1178,6 +1189,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       )}
 
       <EditProjectDialog projectId={showEditProject ? project.id : null} onClose={() => setShowEditProject(false)} onSaved={fetchProject} />
+
+      <SerialRegistrationDialog
+        lot={projectLots.find((l: any) => l.id === serialsLotId) || null}
+        cycleLabel={serialsLotId ? lotCycleLabel(serialsLotId) : ""}
+        onClose={() => setSerialsLotId(null)}
+        onSaved={fetchProject}
+      />
 
       {isAdmin && (
         <LinkLotDialog
