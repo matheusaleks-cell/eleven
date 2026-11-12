@@ -333,7 +333,7 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
       onRefresh?.();
       onClose();
     } else {
-      toast.error("Falha ao atualizar status.");
+      toast.error((res as any).error || "Falha ao atualizar status.");
     }
     setUpdating(false);
   };

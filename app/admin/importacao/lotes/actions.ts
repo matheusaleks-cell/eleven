@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { syncLotLiquidation, countUnsoldWeapons } from "@/lib/lot-liquidation";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { CATEGORY_TO_STAGE } from "@/lib/import-stages";
@@ -264,6 +265,16 @@ export async function updateLotStatus(id: string, newStatus: string) {
   if (!session) return { success: false };
 
   try {
+    // Lote só fica LIQUIDADO quando todas as armas foram vendidas (ver lib/lot-liquidation.ts).
+    if (newStatus === "LIQUIDADO") {
+      const unsold = await countUnsoldWeapons(id);
+      if (unsold > 0) {
+        return {
+          success: false,
+          error: `Este lote ainda tem ${unsold} arma(s) não vendida(s). Ele fica liquidado automaticamente quando a última for vendida.`,
+        };
+      }
+    }
     const lot = await prisma.importLot.update({
       where: { id },
       data: { status: newStatus }
@@ -364,6 +375,7 @@ export async function registerLotSerials(lotId: string, productId: string, seria
     });
 
     revalidatePath("/admin/importacao/lotes");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
 

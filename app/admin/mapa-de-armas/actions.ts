@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { syncLotLiquidation } from "@/lib/lot-liquidation";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { logWeaponMovement } from "@/lib/weapon-movement";
@@ -140,6 +141,7 @@ export async function updateWeaponStatus(id: string, status: string) {
         lastMovementDate: new Date(),
       },
     });
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     return weapon;
   } catch (error) {
@@ -187,6 +189,7 @@ export async function createWeapon(data: any) {
       data: { stockAvailable: { increment: 1 } },
     });
     await logWeaponMovement(weapon.id, "ENTRADA", "Entrada em estoque via cadastro manual");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
     return { success: true, weapon };
@@ -213,6 +216,7 @@ export async function deleteWeapon(id: string) {
         data: { stockAvailable: { decrement: 1 } },
       });
     }
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
     return { success: true };

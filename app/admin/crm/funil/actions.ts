@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { syncLotLiquidation } from "@/lib/lot-liquidation";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { weaponStatusForOrder } from "@/lib/order-status";
@@ -300,6 +301,7 @@ export async function convertToOrder(leadId: string, data: any) {
     revalidatePath("/admin");
     revalidatePath("/admin/vendas");
     revalidatePath("/admin/crm/clientes");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
 

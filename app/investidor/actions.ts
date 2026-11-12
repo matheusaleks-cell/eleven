@@ -5,6 +5,14 @@ import bcrypt from "bcryptjs";
 import { requireSession } from "@/lib/auth-guard";
 import { FinancialRates, getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
+// Lote já apurado financeiramente = tem ciclo COMPLETED registrado para ele. O lucro dele
+// vem do Cycle.investorShare oficial; os demais são calculados ao vivo, venda a venda.
+// (Antes isso usava status LIQUIDADO, mas agora o lote só liquida quando a última arma é
+// vendida, que pode ser depois ou antes do registro do ciclo.)
+function isLotSettled(lot: any, cycles: any[]): boolean {
+  return (cycles || []).some((c: any) => c.importLotId === lot.id && c.status === "COMPLETED");
+}
+
 // Fonte única de verdade para "quanto o investidor já recebeu" de um projeto: ciclos COMPLETED
 // usam o valor oficial já gravado (Cycle.investorShare, fechado pelo admin), o lote ainda não
 // liquidado é recalculado ao vivo a partir das armas vendidas. Mesma regra usada em
@@ -20,7 +28,7 @@ function computeProjectYield(project: any, financialDefaults: FinancialRates) {
   let activeRealizedProfit = 0;
 
   (project.importLots || []).forEach((lot: any) => {
-    if (lot.status === "LIQUIDADO") return; // já contabilizado acima via Cycle.investorShare
+    if (isLotSettled(lot, project.cycles)) return; // já contabilizado acima via Cycle.investorShare
 
     const lotCycle = (project.cycles || []).find((c: any) => c.importLotId === lot.id);
     const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
@@ -123,22 +131,23 @@ export async function getInvestorDashboardData() {
         const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);
         const splitPct = project.profitSplitPct || 0.50;
         const uCostAvg = lot.quantityItems > 0 ? (lot.totalCostNationalized / lot.quantityItems) : 0;
+        const settled = isLotSettled(lot, project.cycles);
 
-        if (lot.status !== "LIQUIDADO") {
+        if (!settled) {
           activeCycleTotalWeapons += lot.quantityItems || lot.weapons.length || 0;
         }
 
         lot.weapons.forEach(w => {
           const uCost = w.unitCost || uCostAvg;
           if (w.currentStatus === "VENDIDA") {
-            if (lot.status !== "LIQUIDADO") {
+            if (!settled) {
               activeCycleSoldWeapons++;
             }
             const sValue = w.saleValue || 0;
             const fin = computeUnitFinancials(sValue, uCost, splitPct, rates);
             const investorProfit = fin.investorShare;
 
-            if (lot.status !== "LIQUIDADO") {
+            if (!settled) {
               activeCycleRealizedProfit += investorProfit;
             }
 
@@ -152,7 +161,7 @@ export async function getInvestorDashboardData() {
               projectName: project.name
             });
           } else if (w.currentStatus === "ESTOQUE" || w.currentStatus === "RESERVADA" || w.currentStatus === "IMPORTADA") {
-            if (lot.status !== "LIQUIDADO") {
+            if (!settled) {
               activeCycleInventoryValue += uCost;
               if (w.currentStatus === "RESERVADA") activeCycleReservedWeapons++;
             }
@@ -346,7 +355,7 @@ export async function getInvestorStatement() {
         });
 
       project.importLots.forEach(lot => {
-        if (lot.status === "LIQUIDADO") return; // já contabilizado acima via ciclo fechado
+        if (isLotSettled(lot, project.cycles)) return; // já contabilizado acima via ciclo fechado
         if (lot.weapons && lot.weapons.length > 0) {
           const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
           const rates = ratesFromCycleOrDefault(lotCycle, financialDefaults);

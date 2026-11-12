@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { syncLotLiquidation } from "@/lib/lot-liquidation";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { weaponStatusForOrder } from "@/lib/order-status";
@@ -538,6 +539,7 @@ export async function createDirectSale(data: {
     revalidatePath("/admin/financeiro");
     revalidatePath("/admin/crm/clientes");
     revalidatePath("/admin/erp/produtos");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
 
     await generateAndSendAnexoP(order.id);
@@ -596,6 +598,7 @@ export async function deleteSalesOrder(id: string) {
 
     revalidatePath("/admin/vendas");
     revalidatePath("/admin");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
     return { success: true };
@@ -771,6 +774,7 @@ export async function updateSalesOrder(
 
     revalidatePath("/admin/vendas");
     revalidatePath("/admin");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
     return { success: true };
@@ -882,6 +886,7 @@ export async function swapWeaponSerial(salesOrderId: string, oldWeaponId: string
 
     revalidatePath("/admin/vendas");
     revalidatePath("/admin");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     return { success: true };
   } catch (error: any) {
@@ -1037,6 +1042,7 @@ export async function updateOrderItemQuantity(orderId: string, productId: string
 
     revalidatePath("/admin/vendas");
     revalidatePath("/admin");
+    await syncLotLiquidation();
     revalidatePath("/admin/mapa-de-armas");
     revalidatePath("/admin/erp/produtos");
     return {

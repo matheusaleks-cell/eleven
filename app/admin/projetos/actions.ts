@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
+import { syncLotLiquidation } from "@/lib/lot-liquidation";
 import { calcImportBreakdown, SimulatorInputs } from "@/lib/calculations";
 import { getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
@@ -450,11 +451,10 @@ export async function createCycle(data: any) {
       }
     });
 
+    // Registrar o ciclo NÃO liquida o lote: ele só fica LIQUIDADO quando a última arma for
+    // vendida (regra centralizada em lib/lot-liquidation.ts). Aqui só reconcilia o status.
     if (data.importLotId) {
-      await prisma.importLot.update({
-        where: { id: data.importLotId },
-        data: { status: "LIQUIDADO" }
-      });
+      await syncLotLiquidation();
     }
 
     // Abre automaticamente o próximo lote usando o capital de reinvestimento apurado —

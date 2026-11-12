@@ -1003,7 +1003,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               ? project.initialCapital
               : project.cycles[project.cycles.length - 1].reinvestmentShare
           }
-          importLots={project.importLots}
+          // Só lotes que ainda não têm ciclo registrado: um lote pode continuar vendendo (e não
+          // liquidado) depois de ter o ciclo registrado, e não deve ser oferecido de novo.
+          importLots={(project.importLots || []).filter(
+            (l: any) => !(project.cycles || []).some((c: any) => c.importLotId === l.id && c.status === "COMPLETED")
+          )}
           onClose={() => setShowCycleModal(false)}
           onSave={handleSaveCycle}
           onRefresh={fetchProject}
