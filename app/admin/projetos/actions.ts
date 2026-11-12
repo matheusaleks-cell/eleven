@@ -434,8 +434,13 @@ export async function createCycle(data: any) {
       }
     }
 
-    const cycle = await prisma.cycle.create({
-      data: {
+    // Se o lote já tem um ciclo em andamento (status != COMPLETED, ex.: reaberto), o fechamento
+    // atualiza esse registro em vez de criar um segundo ciclo para o mesmo lote.
+    const openCycleForLot = data.importLotId
+      ? await prisma.cycle.findFirst({ where: { importLotId: data.importLotId, status: { not: "COMPLETED" } }, select: { id: true } })
+      : null;
+
+    const cycleData = {
         projectId: data.projectId,
         cycleNumber: data.cycleNumber,
         cycleName: data.cycleName,
@@ -471,8 +476,11 @@ export async function createCycle(data: any) {
         companyShare: data.companyShare,
         reserveShare: data.reserveShare || 0,
         reinvestmentShare: data.reinvestmentShare || data.nextCycleCapital
-      }
-    });
+    };
+
+    const cycle = openCycleForLot
+      ? await prisma.cycle.update({ where: { id: openCycleForLot.id }, data: cycleData })
+      : await prisma.cycle.create({ data: cycleData });
 
     // Registrar o ciclo NÃO liquida o lote: ele só fica LIQUIDADO quando a última arma for
     // vendida (regra centralizada em lib/lot-liquidation.ts). Aqui só reconcilia o status.

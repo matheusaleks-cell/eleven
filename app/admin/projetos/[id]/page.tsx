@@ -676,7 +676,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
       {activeTab === "cycles" && (
         <div className="space-y-3 animate-fade-in">
-          {project.cycles.map((cycle: any) => (
+          {/* Só ciclos fechados aqui; os em andamento aparecem nos cards de ciclo aberto abaixo. */}
+          {project.cycles.filter((c: any) => c.status === "COMPLETED").map((cycle: any) => (
             <div key={cycle.id} className="rounded-[4px] overflow-hidden" style={{ border: "1px solid #333" }}>
               <button
                 onClick={() => setExpandedCycle(expandedCycle === cycle.id ? null : cycle.id)}

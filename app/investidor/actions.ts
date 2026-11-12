@@ -209,9 +209,11 @@ export async function getInvestorDashboardData() {
         };
       });
 
-      // 2. Montar o chartData baseado no avanço dos ciclos concluídos e do atual
-      const projectChartPoints = project.cycles.map((c) => {
-        const nextCycle = project.cycles.find(nc => nc.cycleNumber === c.cycleNumber + 1);
+      // 2. Montar o chartData (evolução REAL do capital): só ciclos concluídos. Ciclo em
+      // andamento/pendente tem apenas números projetados e não pode aparecer como ganho.
+      const closedCycles = project.cycles.filter(c => c.status === "COMPLETED");
+      const projectChartPoints = closedCycles.map((c) => {
+        const nextCycle = closedCycles.find(nc => nc.cycleNumber === c.cycleNumber + 1);
         const totalInv = c.totalInvestment || 0;
         const invShare = c.investorShare || 0;
         const capital = nextCycle ? (nextCycle.totalInvestment || 0) : (totalInv + invShare);
