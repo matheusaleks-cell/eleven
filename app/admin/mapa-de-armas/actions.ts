@@ -67,7 +67,8 @@ export async function getWeapons() {
       include: {
         product: true,
         customer: true,
-        importLot: true,
+        // Dono do estoque = investidor do projeto ao qual o lote pertence (lote sem projeto é da Eleven).
+        importLot: { include: { investmentProject: { select: { investor: { select: { name: true } } } } } },
       },
       orderBy: [
         { serialNumber: "asc" },
@@ -75,14 +76,17 @@ export async function getWeapons() {
       ],
     });
 
-    return weapons.map(w => ({
+    return weapons.map(w => {
+      const owner = w.importLot?.investmentProject?.investor?.name || "";
+      return {
       serial: w.serialNumber,
       product: w.product.commercialName,
       status: w.currentStatus,
       location: w.warehouseLocation || "S/L",
       entryDate: w.entryDate.toLocaleDateString("pt-BR"),
       lot: w.importLot?.batchCode || "—",
-      customer: w.customer?.name || "ESTOQUE ELEVEN",
+      owner: owner || "Eleven",
+      customer: w.customer?.name || (owner ? `ESTOQUE ${owner}` : "ESTOQUE ELEVEN"),
       id: w.id,
       di: w.diNumber || "N/A",
       diDate: w.diDate ? w.diDate.toLocaleDateString("pt-BR") : null,
@@ -92,7 +96,8 @@ export async function getWeapons() {
       observations: w.observations,
       caliber: w.product.caliber,
       brand: w.product.brand,
-    }));
+    };
+    });
   } catch (error) {
     console.error("Erro ao buscar armas:", error);
     return [];

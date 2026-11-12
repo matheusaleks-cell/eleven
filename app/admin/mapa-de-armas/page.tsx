@@ -407,7 +407,7 @@ export default function WeaponsMapPage() {
                   // em vez de inventadas.
                   const steps: { date: string; text: string }[] = [];
                   if (selectedWeapon.entryDate) {
-                    steps.push({ date: selectedWeapon.entryDate, text: "Entrada em Estoque Eleven" });
+                    steps.push({ date: selectedWeapon.entryDate, text: `Entrada em Estoque ${selectedWeapon.owner || "Eleven"}` });
                   }
                   if (selectedWeapon.customsClearanceDate) {
                     steps.push({ date: selectedWeapon.customsClearanceDate, text: "Desembaraço Aduaneiro" });
@@ -415,7 +415,7 @@ export default function WeaponsMapPage() {
                   if (selectedWeapon.status === "VENDIDA" && selectedWeapon.saleDate) {
                     steps.push({ date: selectedWeapon.saleDate, text: `Venda registrada${selectedWeapon.customer ? ` — ${selectedWeapon.customer}` : ""}` });
                   } else {
-                    steps.push({ date: "Atual", text: selectedWeapon.status === "VENDIDA" ? "Vendida" : "Em custódia Eleven" });
+                    steps.push({ date: "Atual", text: selectedWeapon.status === "VENDIDA" ? "Vendida" : `Em custódia — ${selectedWeapon.owner || "Eleven"}` });
                   }
 
                   return (
