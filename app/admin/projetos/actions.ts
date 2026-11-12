@@ -3,7 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
-import { syncLotLiquidation } from "@/lib/lot-liquidation";
+import { syncLotLiquidation, countUnsoldWeapons } from "@/lib/lot-liquidation";
 import { createImportLot } from "../importacao/lotes/actions";
 import { calcImportBreakdown, SimulatorInputs } from "@/lib/calculations";
 import { getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
@@ -418,6 +418,22 @@ export async function createCycle(data: any) {
   if (!session) return { success: false, error: "Não autorizado." };
 
   try {
+    // Fechamento = resultado REAL do ciclo. Só pode ser registrado quando todas as armas do
+    // lote foram vendidas (mesma regra da liquidação do lote). Antes dava para "fechar" um
+    // ciclo recém-aberto e o lucro projetado entrava no painel do investidor como realizado.
+    if (data.importLotId) {
+      const [total, unsold] = await Promise.all([
+        prisma.weaponMap.count({ where: { importLotId: data.importLotId } }),
+        countUnsoldWeapons(data.importLotId),
+      ]);
+      if (total === 0) {
+        return { success: false, error: "Este ciclo ainda não tem armas cadastradas. O fechamento é feito depois que todas forem vendidas." };
+      }
+      if (unsold > 0) {
+        return { success: false, error: `Ainda há ${unsold} de ${total} arma(s) não vendida(s) neste ciclo. O fechamento só é liberado quando todas forem vendidas.` };
+      }
+    }
+
     const cycle = await prisma.cycle.create({
       data: {
         projectId: data.projectId,

@@ -774,6 +774,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             const sold = (lot.weapons || []).filter((w: any) => w.currentStatus === "VENDIDA").length;
             const registered = (lot.weapons || []).length;
             const docsCount = (lot.documents || []).length;
+            // Fechamento só com tudo vendido (o servidor também bloqueia).
+            const canClose = registered > 0 && sold === registered;
             return (
               <div key={lot.id} className="rounded-[4px] p-5 flex flex-col sm:flex-row sm:items-center gap-4" style={{ background: "#1E1E1E", border: "1px dashed #333", borderLeft: "3px dashed #F5C400" }}>
                 <div className="flex items-center gap-4 min-w-0">
@@ -797,11 +799,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                       Documentos
                     </button>
                     <button
-                      onClick={() => openCycleModal(lot.id)}
-                      className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm"
-                      style={{ background: "rgba(245,196,0,0.1)", color: "#F5C400", border: "1px solid rgba(245,196,0,0.3)", cursor: "pointer" }}
+                      onClick={() => canClose && openCycleModal(lot.id)}
+                      disabled={!canClose}
+                      title={canClose ? "Registrar o resultado real do ciclo" : "Liberado quando todas as armas do ciclo forem vendidas"}
+                      className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ background: "rgba(245,196,0,0.1)", color: "#F5C400", border: "1px solid rgba(245,196,0,0.3)", cursor: canClose ? "pointer" : "not-allowed" }}
                     >
-                      Registrar fechamento
+                      {canClose ? "Registrar fechamento" : `Fechamento: ${registered > 0 ? registered - sold : total} a vender`}
                     </button>
                   </div>
                 )}
