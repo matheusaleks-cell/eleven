@@ -173,6 +173,10 @@ export async function createProject(data: any) {
         });
       }
 
+      // Sem "custo unitário" no formulário, o custo do 1º lote é o capital aportado (o aporte paga
+      // a importação). Antes o lote nascia com custo 0 e as vendas viravam lucro integral.
+      const capitalBrl = parseFloat(data.initialCapital) || 0;
+      const lotTotalCost = costPriceBrl > 0 ? costPriceBrl * qty : capitalBrl;
       const unitFobUsd = costPriceBrl / exchangeRate;
       const fobTotal = unitFobUsd * qty;
       const batchCode = `LOT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -190,7 +194,7 @@ export async function createProject(data: any) {
           insurance: 0,
           customsTaxes: fobTotal * exchangeRate * 0.48,
           customsFees: 7884,
-          totalCostNationalized: costPriceBrl * qty,
+          totalCostNationalized: lotTotalCost,
           quantityItems: qty,
           status: "PEDIDO_FEITO",
           expectedMarginPct: 0.35,
