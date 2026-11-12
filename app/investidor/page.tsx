@@ -78,6 +78,22 @@ export default function InvestorDashboard() {
   const initialAporte = batches[0]?.totalImportCostBRL ?? 1;
   const globalROI = (totalInvestorEarnings / initialAporte) * 100;
 
+  // Resumo físico das unidades de todos os projetos do investidor.
+  const units = (dashboardData?.projects || []).reduce(
+    (acc: any, p: any) => ({
+      sold: acc.sold + (p.unitsSold || 0),
+      reserved: acc.reserved + (p.unitsReserved || 0),
+      inStock: acc.inStock + (p.unitsInStock || 0),
+      incoming: acc.incoming + (p.unitsIncoming || 0),
+    }),
+    { sold: 0, reserved: 0, inStock: 0, incoming: 0 }
+  );
+  const unitCards = [
+    { label: "Vendidas", value: units.sold, className: "text-brand-success" },
+    { label: "Reservadas", value: units.reserved, className: "text-brand-warning" },
+    { label: "Em estoque", value: units.inStock, className: "text-white" },
+    { label: "A chegar", value: units.incoming, className: "text-brand-text-secondary" },
+  ];
 
   return (
     <DashboardLayout role="INVESTOR" userName={session.name} userEmail={session.email}>
@@ -155,6 +171,21 @@ export default function InvestorDashboard() {
           </Card>
         </div>
 
+        {/* Suas unidades: contagem real das armas dos seus lotes */}
+        <div>
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.3em] text-brand-text-muted px-2 mb-3 flex items-center gap-2">
+            <Package size={14} className="text-brand-accent" /> Suas Unidades
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {unitCards.map((u) => (
+              <Card key={u.label} className="bg-brand-bg/60 p-4">
+                <p className="text-[10px] font-bold text-brand-text-muted uppercase tracking-[0.2em] mb-2">{u.label}</p>
+                <p className={cn("text-3xl font-bold font-mono tracking-tighter", u.className)}>{u.value}</p>
+              </Card>
+            ))}
+          </div>
+        </div>
+
         {/* Chart & Projects */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
            <Card className="lg:col-span-2 p-0 overflow-hidden bg-brand-surface/20">
@@ -202,7 +233,7 @@ export default function InvestorDashboard() {
                        </div>
                        <div className="flex justify-between text-[8px] font-bold text-brand-text-muted mt-1 uppercase">
                          <span>
-                           Em estoque: {project.activeCycleTotalWeapons - project.activeCycleSoldWeapons} un.
+                           Em estoque: {project.unitsInStock ?? 0} un.
                            {project.activeCycleReservedWeapons > 0 && (
                              <span className="text-brand-warning"> · {project.activeCycleReservedWeapons} reservadas</span>
                            )}

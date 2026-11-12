@@ -101,6 +101,22 @@ export async function getInvestorDashboardData() {
         completedCyclesYield += c.investorShare || 0;
       });
 
+      // Contagem física das unidades do investidor, em TODOS os lotes do projeto (inclusive os
+      // marcados como LIQUIDADO, que ainda podem ter arma em estoque/reservada). Só contagem:
+      // não entra em nenhum cálculo financeiro. "A chegar" = previsto no lote e ainda sem série.
+      let unitsSold = 0;
+      let unitsReserved = 0;
+      let unitsInStock = 0;
+      let unitsIncoming = 0;
+      project.importLots.forEach(lot => {
+        lot.weapons.forEach(w => {
+          if (w.currentStatus === "VENDIDA") unitsSold++;
+          else if (w.currentStatus === "RESERVADA") unitsReserved++;
+          else unitsInStock++;
+        });
+        unitsIncoming += Math.max(0, (lot.quantityItems || 0) - lot.weapons.length);
+      });
+
       // Iterar em todos os lotes do projeto para calcular vendas em tempo real
       project.importLots.forEach(lot => {
         const lotCycle = project.cycles.find(c => c.importLotId === lot.id);
@@ -222,6 +238,10 @@ export async function getInvestorDashboardData() {
         activeCycleTotalWeapons,
         activeCycleInventoryValue,
         activeCycleRealizedProfit,
+        unitsSold,
+        unitsReserved,
+        unitsInStock,
+        unitsIncoming,
         projection
       };
     });

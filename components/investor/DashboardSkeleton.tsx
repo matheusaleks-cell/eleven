@@ -32,6 +32,19 @@ export function DashboardSkeleton() {
         ))}
       </div>
 
+      {/* Suas unidades */}
+      <div>
+        <Skeleton className="h-3 w-32 ml-2 mb-3" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Card key={i} className="bg-brand-bg/60 p-4">
+              <Skeleton className="h-3 w-20 mb-3" />
+              <Skeleton className="h-8 w-12" />
+            </Card>
+          ))}
+        </div>
+      </div>
+
       {/* Gráfico + projetos */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-2 p-0 overflow-hidden bg-brand-surface/20">
