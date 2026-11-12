@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { downloadDocument } from "@/lib/document-transfer-client";
+import { downloadDocument, uploadLotDocumentDataUrl } from "@/lib/document-transfer-client";
 import { updateLotStatus, addLotDocument, deleteLotDocument, deleteImportLot, registerLotSerials, updateDocumentRealizedFields } from "@/app/admin/importacao/lotes/actions";
 import { deleteWeapon } from "@/app/admin/mapa-de-armas/actions";
 import Link from "next/link";
@@ -240,22 +240,22 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
                 onChange={async (e) => {
                   const file = e.target.files?.[0];
                   if (file) {
-                    const maxSizeBytes = 4.5 * 1024 * 1024;
+                    const maxSizeBytes = 25 * 1024 * 1024; // envio em partes (lib/document-transfer-client)
                     if (file.size > maxSizeBytes) {
                       const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-                      toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 4.5 MB. Comprima o arquivo ou use uma imagem menor.`);
+                      toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 25 MB.`);
                       return;
                     }
                     const reader = new FileReader();
                     reader.onloadend = async () => {
                       try {
                         const base64 = reader.result as string;
-                        const res = await addLotDocument(lotId, file.name, requiredCat, base64);
+                        const res = await uploadLotDocumentDataUrl(lotId, file.name, file.size, requiredCat, base64);
                         if (res.success) {
                           toast.success(`Documento "${requiredCat}" anexado com sucesso!`);
                           onRefresh?.();
                         } else {
-                          toast.error("Erro ao fazer upload. Verifique as dimensões ou tente novamente.");
+                          toast.error(`Erro ao enviar: ${(res as any).error || "tente novamente"}`);
                         }
                       } catch (err) {
                         console.error("Erro de upload no client:", err);
@@ -937,17 +937,17 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                           const file = e.target.files?.[0];
                           const category = (document.getElementById("doc-category-extra") as HTMLSelectElement).value;
                           if (file) {
-                            const maxSizeBytes = 4.5 * 1024 * 1024;
+                            const maxSizeBytes = 25 * 1024 * 1024; // envio em partes (lib/document-transfer-client)
                             if (file.size > maxSizeBytes) {
                               const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-                              toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 4.5 MB. Comprima o arquivo ou use uma imagem menor.`);
+                              toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 25 MB.`);
                               return;
                             }
                             const reader = new FileReader();
                             reader.onloadend = async () => {
                               try {
                                 const base64 = reader.result as string;
-                                const res = await addLotDocument(batch.dbId || batch.id, file.name, category, base64);
+                                const res = await uploadLotDocumentDataUrl(batch.dbId || batch.id, file.name, file.size, category, base64);
                                 if (res.success) {
                                   toast.success("Documento adicional anexado!");
                                   onRefresh?.();

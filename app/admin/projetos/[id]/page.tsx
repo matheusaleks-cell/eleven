@@ -19,7 +19,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { getProjectById, createCycle, setNextCycleQuantity, acceptNextCycle } from "../actions";
 import { getProjectDocuments, deleteDocument } from "../document-actions";
-import { uploadProjectDocumentInChunks, downloadDocument } from "@/lib/document-transfer-client";
+import { uploadProjectDocumentInChunks, downloadDocument, uploadLotDocumentDataUrl } from "@/lib/document-transfer-client";
 import { getTaxConfigs } from "../../configuracoes/actions";
 import { addLotDocument, deleteLotDocument, updateDocumentRealizedFields } from "../../importacao/lotes/actions";
 import { Dialog } from "@/components/ui/Dialog";
@@ -276,22 +276,22 @@ const LotDocumentCard: React.FC<LotDocumentCardProps> = ({
                     onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const maxSizeBytes = 4.5 * 1024 * 1024;
+                        const maxSizeBytes = 25 * 1024 * 1024; // envio em partes (lib/document-transfer-client)
                         if (file.size > maxSizeBytes) {
                           const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
-                          toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 4.5 MB. Comprima o arquivo ou use uma imagem menor.`);
+                          toast.error(`Arquivo muito grande (${sizeMb} MB). Limite máximo de 25 MB.`);
                           return;
                         }
                         const reader = new FileReader();
                         reader.onloadend = async () => {
                           try {
                             const base64 = reader.result as string;
-                            const res = await addLotDocument(lotId, file.name, requiredCat, base64);
+                            const res = await uploadLotDocumentDataUrl(lotId, file.name, file.size, requiredCat, base64);
                             if (res.success) {
                               toast.success(`Documento "${requiredCat}" anexado com sucesso!`);
                               onRefresh?.();
                             } else {
-                              toast.error("Erro ao fazer upload. Verifique as dimensões ou tente novamente.");
+                              toast.error(`Erro ao enviar: ${(res as any).error || "tente novamente"}`);
                             }
                           } catch (err) {
                             console.error("Erro de upload no client:", err);

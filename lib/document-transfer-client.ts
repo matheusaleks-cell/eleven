@@ -2,6 +2,7 @@
 
 import {
   beginProjectDocumentUpload,
+  beginLotDocumentUpload,
   appendDocumentChunk,
   finishProjectDocumentUpload,
   abortDocumentUpload,
@@ -83,4 +84,41 @@ export async function downloadDocument(doc: { id: string; name: string; base64Da
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+// Documento de lote já lido como data URL (os cartões de documento leem o arquivo antes):
+// envia em partes e devolve { success, error } no mesmo formato que addLotDocument.
+export async function uploadLotDocumentDataUrl(lotId: string, fileName: string, fileSize: number, category: string, dataUrl: string) {
+  try {
+    if (fileSize > DOC_MAX_FILE_BYTES) {
+      return { success: false, error: `Arquivo de ${(fileSize / 1024 / 1024).toFixed(1)} MB. O limite é ${DOC_MAX_FILE_BYTES / 1024 / 1024} MB.` };
+    }
+    const chunks: string[] = [];
+    for (let i = 0; i < dataUrl.length; i += DOC_CHUNK_CHARS) chunks.push(dataUrl.slice(i, i + DOC_CHUNK_CHARS));
+    const begin = await beginLotDocumentUpload({
+      lotId,
+      name: fileName,
+      category,
+      size: `${(fileSize / 1024).toFixed(1)} KB`,
+      totalChars: dataUrl.length,
+      firstChunk: chunks[0],
+    });
+    if (!begin.success) return { success: false, error: begin.error };
+    try {
+      let sent = chunks[0].length;
+      for (let i = 1; i < chunks.length; i++) {
+        const r = await appendDocumentChunk(begin.id, chunks[i], sent);
+        if (!r.success) throw new Error(r.error);
+        sent += chunks[i].length;
+      }
+      const done = await finishProjectDocumentUpload(begin.id, dataUrl.length);
+      if (!done.success) throw new Error(done.error);
+      return { success: true };
+    } catch (e) {
+      await abortDocumentUpload(begin.id).catch(() => {});
+      return { success: false, error: (e as Error)?.message || "Falha no envio." };
+    }
+  } catch (e) {
+    return { success: false, error: (e as Error)?.message || "Falha de comunicação com o servidor." };
+  }
 }

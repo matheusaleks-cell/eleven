@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/auth-guard";
 import { revalidatePath } from "next/cache";
 import { DOC_CHUNK_CHARS } from "@/lib/document-transfer-shared";
+import { CATEGORY_TO_STAGE } from "@/lib/import-stages";
 
 // Envio/download de documentos em partes. A hospedagem (Netlify) limita cada requisição/
 // resposta a ~6 MB, e o arquivo vai como data URL base64 (≈ +33%): sem partes, PDFs a partir
@@ -96,6 +97,7 @@ export async function finishProjectDocumentUpload(id: string, totalChars: number
     revalidatePath(`/admin/projetos/${row.project_id}`);
     revalidatePath("/investidor/documentos");
   }
+  revalidatePath("/admin/importacao/lotes");
   return { success: true as const };
 }
 
@@ -122,4 +124,52 @@ export async function getDocumentChunk(id: string, index: number) {
   const row = rows[0];
   if (!row) return { success: false as const, error: "Documento não encontrado." };
   return { success: true as const, part: row.part || "", total: Number(row.len) };
+}
+
+// Documento de LOTE (aba "Processo de Importação": invoice, swift, AWB...), em partes.
+// Mesmos metadados de addLotDocument (etapa, projeto e investidor do lote).
+export async function beginLotDocumentUpload(meta: {
+  lotId: string;
+  name: string;
+  category: string;
+  size: string;
+  totalChars: number;
+  firstChunk: string;
+}) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false as const, error: "Não autorizado." };
+  if (!meta.name?.trim()) return { success: false as const, error: "Arquivo sem nome." };
+  if (!Number.isFinite(meta.totalChars) || meta.totalChars <= 0 || meta.totalChars > MAX_TOTAL_CHARS) {
+    return { success: false as const, error: "Arquivo acima do limite de 25 MB." };
+  }
+  if (!meta.firstChunk || meta.firstChunk.length > DOC_CHUNK_CHARS + 1024) {
+    return { success: false as const, error: "Parte do arquivo inválida." };
+  }
+
+  try {
+    const lot = await prisma.importLot.findUnique({
+      where: { id: meta.lotId },
+      select: { id: true, investmentProjectId: true, investmentProject: { select: { investorId: true } } },
+    });
+    if (!lot) return { success: false as const, error: "Lote não encontrado." };
+
+    const doc = await prisma.document.create({
+      data: {
+        name: meta.name.trim(),
+        type: meta.name.toUpperCase().endsWith(".PDF") ? "PDF" : "IMAGE",
+        category: meta.category,
+        stage: CATEGORY_TO_STAGE[meta.category] || null,
+        size: meta.size,
+        base64Data: meta.firstChunk,
+        lotId: lot.id,
+        projectId: lot.investmentProjectId || null,
+        userId: lot.investmentProject?.investorId || null,
+      },
+      select: { id: true },
+    });
+    return { success: true as const, id: doc.id };
+  } catch (error) {
+    console.error("Erro ao iniciar upload do documento do lote:", error);
+    return { success: false as const, error: "Falha ao gravar o documento." };
+  }
 }
