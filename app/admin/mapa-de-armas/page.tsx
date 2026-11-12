@@ -121,7 +121,10 @@ export default function WeaponsMapPage() {
     return weapons.filter(w => {
       const matchesSearch = w.serial?.toLowerCase().includes(search.toLowerCase()) || 
                            w.product?.toLowerCase().includes(search.toLowerCase()) ||
-                           w.customer?.toLowerCase().includes(search.toLowerCase());
+                           w.customer?.toLowerCase().includes(search.toLowerCase()) ||
+                           w.lot?.toLowerCase().includes(search.toLowerCase()) ||
+                           w.di?.toLowerCase().includes(search.toLowerCase()) ||
+                           w.projectName?.toLowerCase().includes(search.toLowerCase());
       const matchesStatus = filterStatus === "Todos" || w.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
@@ -152,9 +155,9 @@ export default function WeaponsMapPage() {
       toast.error("Nenhuma arma para exportar.");
       return;
     }
-    const headers = ["Numero_Serie", "Produto", "Marca", "Calibre", "Status", "Localizacao", "Lote", "DI", "Data_Entrada", "Cliente"];
+    const headers = ["Numero_Serie", "Produto", "Marca", "Calibre", "Status", "Localizacao", "Lote", "Projeto", "Ciclo", "DI", "Data_Entrada", "Cliente"];
     const rows = filteredWeapons.map(w => [
-      w.serial, w.product, w.brand, w.caliber, w.status, w.location, w.lot, w.di, w.entryDate, w.customer,
+      w.serial, w.product, w.brand, w.caliber, w.status, w.location, w.lot, w.projectName || "Estoque Eleven", w.cycleNumber || "", w.di, w.entryDate, w.customer,
     ]);
     const csvContent = [headers, ...rows]
       .map(row => row.map((val: any) => `"${String(val ?? "").replace(/"/g, '""')}"`).join(";"))
@@ -329,6 +332,14 @@ export default function WeaponsMapPage() {
                     </td>
                     <td className="font-mono text-[10px] text-brand-text-secondary uppercase">
                       {w.lot}<br/>
+                      {w.projectName ? (
+                        <span className="block normal-case font-sans text-[10px] font-bold text-brand-accent leading-tight mt-0.5" title={`${w.projectName} — ${w.cycleLabel}`}>
+                          {w.projectName}
+                          <span className="block font-normal text-brand-text-secondary">{w.cycleLabel}</span>
+                        </span>
+                      ) : (
+                        <span className="block normal-case font-sans text-[10px] text-brand-text-muted leading-tight mt-0.5">Estoque Eleven (sem projeto)</span>
+                      )}
                       <span className="text-brand-text-muted opacity-60">DI: {w.di}</span>
                     </td>
                     <td>
@@ -429,6 +440,8 @@ export default function WeaponsMapPage() {
                                ["Fabricante", selectedWeapon.brand || "N/A"],
                                ["Calibre", selectedWeapon.caliber || "N/A"],
                                ["Lote", selectedWeapon.lot],
+                               ["Projeto", selectedWeapon.projectName || "Estoque Eleven"],
+                               ["Ciclo", selectedWeapon.cycleLabel || "—"],
                                ["DI Importação", selectedWeapon.di || "N/A"],
                              ].map(([label, val]) => (
                                <div key={label} className="flex justify-between py-1.5 border-b border-brand-border/50">

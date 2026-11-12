@@ -5,6 +5,7 @@ import { syncLotLiquidation } from "@/lib/lot-liquidation";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { logWeaponMovement } from "@/lib/weapon-movement";
+import { getCycleName } from "@/lib/calculations";
 
 // Extrato real de movimentação (entrada/reserva/venda/devolução) — usado no relatório
 // mensal/anual do Mapa de Armas. Antes disso não existia nenhum registro histórico real,
@@ -69,7 +70,7 @@ export async function getWeapons() {
         product: true,
         customer: true,
         // Dono do estoque = investidor do projeto ao qual o lote pertence (lote sem projeto é da Eleven).
-        importLot: { include: { investmentProject: { select: { investor: { select: { name: true } } } } } },
+        importLot: { include: { investmentProject: { select: { name: true, investor: { select: { name: true } } } } } },
       },
       orderBy: [
         { serialNumber: "asc" },
@@ -77,9 +78,27 @@ export async function getWeapons() {
       ],
     });
 
+    // Ciclo da arma = posição do lote dentro do projeto (ordem de abertura), igual à timeline.
+    const projectLots = await prisma.importLot.findMany({
+      where: { investmentProjectId: { not: null } },
+      select: { id: true, investmentProjectId: true },
+      orderBy: { createdAt: "asc" },
+    });
+    const cycleOfLot = new Map<string, number>();
+    const seen = new Map<string, number>();
+    for (const l of projectLots) {
+      const n = (seen.get(l.investmentProjectId!) || 0) + 1;
+      seen.set(l.investmentProjectId!, n);
+      cycleOfLot.set(l.id, n);
+    }
+
     return weapons.map(w => {
       const owner = w.importLot?.investmentProject?.investor?.name || "";
+      const cycleNumber = cycleOfLot.get(w.importLotId) || null;
       return {
+      projectName: w.importLot?.investmentProject?.name || "",
+      cycleNumber,
+      cycleLabel: cycleNumber ? `Ciclo ${cycleNumber} · ${getCycleName(cycleNumber - 1)}` : "",
       serial: w.serialNumber,
       product: w.product.commercialName,
       status: w.currentStatus,
