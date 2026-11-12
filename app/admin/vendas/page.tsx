@@ -42,6 +42,7 @@ import {
   swapWeaponSerial,
   getAvailableSerialsForProduct,
   updateOrderItemQuantity,
+  allocateMissingOrderWeapons,
 } from "@/app/admin/crm/vendas/actions";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -88,6 +89,7 @@ export default function VendasPage() {
   // Quantidade por item do pedido em edição (productId -> valor digitado) e item sendo aplicado
   const [qtyDraft, setQtyDraft] = useState<Record<string, string>>({});
   const [applyingQtyFor, setApplyingQtyFor] = useState<string | null>(null);
+  const [allocatingOrder, setAllocatingOrder] = useState(false);
 
   // Emissão de Anexo P / Pedido para um pedido já concluído (id do pedido + tipo em geração no momento)
   const [generatingDoc, setGeneratingDoc] = useState<{ orderId: string; type: "anexo" | "pedido" } | null>(null);
@@ -267,6 +269,44 @@ export default function VendasPage() {
       toast.error("Erro na comunicação com o servidor.");
     } finally {
       setApplyingQtyFor(null);
+    }
+  };
+
+  // Quantas unidades dos itens do pedido ainda não têm arma (série) presa ao pedido.
+  const missingWeapons = (order: any) => {
+    let items: any[] = [];
+    try { items = JSON.parse(order?.products || "[]"); } catch {}
+    return items.reduce((acc, i) => {
+      const have = (order?.weapons || []).filter((w: any) => w.productId === i.id).length;
+      return acc + Math.max(0, (Number(i.quantity) || 0) - have);
+    }, 0);
+  };
+
+  const handleAllocateMissing = async () => {
+    if (!editingOrder) return;
+    setAllocatingOrder(true);
+    try {
+      const res = await allocateMissingOrderWeapons(editingOrder.id);
+      if (!res.success) {
+        toast.error(res.error || "Erro ao reservar armas.");
+        return;
+      }
+      if ((res.shortage ?? 0) > 0) {
+        toast.warning(`${res.allocated} arma(s) reservada(s); faltou estoque para ${res.shortage}.`);
+      } else {
+        toast.success(`${res.allocated} arma(s) reservada(s) para o pedido.`);
+      }
+      const refreshed = await getSalesOrders();
+      setOrders(refreshed);
+      const updated = refreshed.find((o: any) => o.id === editingOrder.id);
+      if (updated) {
+        setEditingOrder(updated);
+        setEditNotes(updated.notes || "");
+      }
+    } catch {
+      toast.error("Erro na comunicação com o servidor.");
+    } finally {
+      setAllocatingOrder(false);
     }
   };
 
@@ -533,6 +573,14 @@ export default function VendasPage() {
                   <tr key={order.id} className="hover:bg-brand-accent/5 transition-colors">
                     <td className="px-6 py-4">
                       <span className="text-xs font-mono font-black text-white">{order.orderNumber}</span>
+                      {order.status !== "CANCELADO" && missingWeapons(order) > 0 && (
+                        <span
+                          className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-brand-warning/40 bg-brand-warning/10 text-[9px] font-black uppercase text-brand-warning"
+                          title="Pedido com unidades sem arma reservada. Abra o pedido e use 'Reservar armas'."
+                        >
+                          <AlertTriangle size={10} /> {missingWeapons(order)} sem arma
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 relative group">
                       <div 
@@ -812,6 +860,26 @@ export default function VendasPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Pedido com menos armas presas do que os itens pedidos (ex.: feito antes de as
+                    séries chegarem): avisa e permite reservar as que faltam. */}
+                {(() => {
+                  const missing = missingWeapons(editingOrder);
+                  if (missing <= 0 || editingOrder.status === "CANCELADO") return null;
+                  return (
+                    <div className="px-5 pb-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-3 py-3 rounded border border-brand-warning/40 bg-brand-warning/10">
+                        <div className="flex items-center gap-2 text-[11px] font-bold uppercase text-brand-warning">
+                          <AlertTriangle size={13} />
+                          {missing} arma(s) sem série reservada para este pedido
+                        </div>
+                        <Button size="sm" className="text-[10px] shrink-0" disabled={allocatingOrder} onClick={handleAllocateMissing}>
+                          {allocatingOrder ? "Reservando..." : "Reservar armas"}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Origem do Lote (derivada das armas do pedido) */}
                 {(() => {

@@ -1123,3 +1123,101 @@ export async function saveSalesGoal(month: number, year: number, targetValue: nu
     return { success: false, error: error.message || "Falha ao salvar meta." };
   }
 }
+
+// Reserva/vende as armas que faltam num pedido já lançado (ex.: pedido feito antes de as séries
+// do lote serem cadastradas — o sistema não reservava depois, e o pedido ficava sem arma).
+// Para cada item: falta = quantidade do item − armas já presas ao pedido daquele produto.
+// Mesma preferência de lote da venda (PROPRIO / INVESTIDOR / AUTO, com reserva do restante em
+// outros lotes), mais antigas primeiro. Informa se ainda faltar estoque.
+export async function allocateMissingOrderWeapons(orderId: string) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  try {
+    const order = await prisma.salesOrder.findUnique({
+      where: { id: orderId },
+      include: { weapons: { select: { id: true, productId: true } } },
+    });
+    if (!order) return { success: false, error: "Pedido não encontrado." };
+    if (order.status === "CANCELADO") return { success: false, error: "Pedido cancelado." };
+
+    const items: any[] = JSON.parse(order.products || "[]");
+    const bruto = items.reduce((acc, i) => acc + (i.price || 0) * (i.quantity || 0), 0);
+    const factor = bruto > 0 ? order.totalValue / bruto : 1;
+    const status = weaponStatusForOrder(order.status);
+    const now = new Date();
+
+    let allocated = 0;
+    let shortage = 0;
+    for (const item of items) {
+      const have = order.weapons.filter((w) => w.productId === item.id).length;
+      const missing = Math.max(0, (Number(item.quantity) || 0) - have);
+      if (missing === 0) continue;
+
+      let lotFilter: any = {};
+      if (item.lotPreference === "PROPRIO") lotFilter = { importLot: { investmentProjectId: null } };
+      else if (item.lotPreference === "INVESTIDOR" && item.investmentProjectId) lotFilter = { importLot: { investmentProjectId: item.investmentProjectId } };
+
+      let picked = await prisma.weaponMap.findMany({
+        where: { productId: item.id, currentStatus: "ESTOQUE", ...lotFilter },
+        take: missing,
+        orderBy: [{ entryDate: "asc" }, { serialNumber: "asc" }],
+        select: { id: true, serialNumber: true },
+      });
+      if (picked.length < missing && Object.keys(lotFilter).length > 0) {
+        const taken = picked.map((w) => w.id);
+        const backup = await prisma.weaponMap.findMany({
+          where: { productId: item.id, currentStatus: "ESTOQUE", id: taken.length > 0 ? { notIn: taken } : undefined },
+          take: missing - picked.length,
+          orderBy: [{ entryDate: "asc" }, { serialNumber: "asc" }],
+          select: { id: true, serialNumber: true },
+        });
+        picked = [...picked, ...backup];
+      }
+
+      if (picked.length > 0) {
+        const ids = picked.map((w) => w.id);
+        await prisma.weaponMap.updateMany({
+          where: { id: { in: ids }, currentStatus: "ESTOQUE" },
+          data: {
+            currentStatus: status,
+            salesOrderId: order.id,
+            saleDate: now,
+            saleValue: Number(((item.price || 0) * factor).toFixed(2)),
+            customerId: order.customerId,
+            sellingUserId: order.sellerId,
+            lastMovementDate: now,
+          },
+        });
+        await logWeaponMovements(ids, status === "VENDIDA" ? "VENDA" : "RESERVA", `Pedido ${order.orderNumber} — armas reservadas (pedido estava sem arma)`);
+        const prod = await prisma.product.findUnique({ where: { id: item.id }, select: { stockAvailable: true } });
+        if (prod) {
+          await prisma.product.update({ where: { id: item.id }, data: { stockAvailable: Math.max(0, prod.stockAvailable - ids.length) } });
+        }
+        if (Array.isArray(item.serialNumbers) && item.serialNumbers.length > 0) {
+          item.serialNumbers = [...item.serialNumbers, ...picked.map((w) => w.serialNumber)];
+        }
+      }
+      allocated += picked.length;
+      shortage += missing - picked.length;
+    }
+
+    if (allocated > 0) {
+      const trace = `[${allocated} arma(s) reservada(s) para o pedido em ${now.toLocaleDateString("pt-BR")}]`;
+      await prisma.salesOrder.update({
+        where: { id: orderId },
+        data: { products: JSON.stringify(items), notes: order.notes ? `${order.notes}\n${trace}` : trace },
+      });
+    }
+
+    revalidatePath("/admin/vendas");
+    revalidatePath("/admin");
+    await syncLotLiquidation();
+    revalidatePath("/admin/mapa-de-armas");
+    revalidatePath("/admin/erp/produtos");
+    return { success: true, allocated, shortage };
+  } catch (error: any) {
+    console.error("Erro ao reservar armas do pedido:", error);
+    return { success: false, error: error.message || "Falha ao reservar as armas." };
+  }
+}
