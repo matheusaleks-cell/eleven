@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getMyDocuments } from "../actions";
+import { downloadDocument, resolveDocumentDataUrl } from "@/lib/document-transfer-client";
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -67,11 +68,9 @@ function getCategoryColor(category: string) {
 
 // ─── download helper ──────────────────────────────────────────────────────────
 
+// Documentos grandes chegam sem o conteúdo na lista e são baixados em partes.
 function downloadDoc(doc: InvestorDocument) {
-  const a = document.createElement("a");
-  a.href = doc.base64Data; // already a full data URL
-  a.download = doc.name;
-  a.click();
+  downloadDocument(doc).catch((e) => alert(`Não foi possível baixar: ${(e as Error)?.message || "erro"}`));
 }
 
 // ─── viewer modal ─────────────────────────────────────────────────────────────
@@ -271,7 +270,14 @@ export default function DocumentosPage() {
 
                   <div className="flex gap-2 mt-4">
                     <button
-                      onClick={() => setViewingDoc(doc)}
+                      onClick={async () => {
+                        try {
+                          const data = await resolveDocumentDataUrl(doc);
+                          setViewingDoc({ ...doc, base64Data: data });
+                        } catch (e) {
+                          alert(`Não foi possível abrir: ${(e as Error)?.message || "erro"}`);
+                        }
+                      }}
                       className="flex-1 flex items-center justify-center gap-1.5 h-8 text-[10px] font-bold uppercase tracking-wider border border-brand-border rounded hover:border-brand-accent/50 hover:bg-brand-accent/5 text-brand-text-muted hover:text-white transition-all"
                     >
                       <Eye size={12} /> VISUALIZAR

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { requireSession } from "@/lib/auth-guard";
+import { stripLargeDocuments } from "@/lib/document-transfer-shared";
 import { FinancialRates, getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
 // Lote já apurado financeiramente = tem ciclo COMPLETED registrado para ele. O lucro dele
@@ -555,8 +556,8 @@ export async function getInvestorProjectDetails(id: string) {
         currentCycle: project.cycles.length,
         max_cycles: project.maxCycles,
         cycles: mappedCycles,
-        importLots: project.importLots,
-        documents: project.documents
+        importLots: project.importLots.map((l) => ({ ...l, documents: stripLargeDocuments(l.documents) })),
+        documents: stripLargeDocuments(project.documents)
       }
     };
   } catch (error) {
@@ -725,7 +726,8 @@ export async function getMyDocuments() {
       where: { userId: session.user.id },
       orderBy: { createdAt: "desc" },
     });
-    return { success: true, documents };
+    // Arquivos grandes não vão inteiros na lista; são baixados em partes ao abrir.
+    return { success: true, documents: stripLargeDocuments(documents) };
   } catch (error) {
     console.error("Erro ao buscar documentos:", error);
     return { success: false, documents: [] };

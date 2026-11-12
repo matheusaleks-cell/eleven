@@ -18,7 +18,8 @@ import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { getProjectById, createCycle, setNextCycleQuantity, acceptNextCycle } from "../actions";
-import { uploadDocument, getProjectDocuments, deleteDocument } from "../document-actions";
+import { getProjectDocuments, deleteDocument } from "../document-actions";
+import { uploadProjectDocumentInChunks, downloadDocument } from "@/lib/document-transfer-client";
 import { getTaxConfigs } from "../../configuracoes/actions";
 import { addLotDocument, deleteLotDocument, updateDocumentRealizedFields } from "../../importacao/lotes/actions";
 import { Dialog } from "@/components/ui/Dialog";
@@ -253,11 +254,9 @@ const LotDocumentCard: React.FC<LotDocumentCardProps> = ({
               )}
               <button
                 onClick={() => {
-                  const link = document.createElement("a");
-                  link.href = doc.base64Data;
-                  link.download = doc.name;
-                  link.click();
-                  toast.success("Download iniciado!");
+                  downloadDocument(doc)
+                    .then(() => toast.success("Download iniciado!"))
+                    .catch((e) => toast.error(`Não foi possível baixar: ${(e as Error)?.message || "erro"}`));
                 }}
                 className="p-1 hover:text-brand-accent text-brand-text-muted transition-colors"
                 title="Baixar"
@@ -344,6 +343,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadCategory, setUploadCategory] = useState("Legal");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [realTaxConfig, setRealTaxConfig] = useState<any>(null);
 
   useEffect(() => {
@@ -414,42 +414,25 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       return;
     }
     
+    // Envio em partes (limite de ~6 MB por requisição na hospedagem). Antes o arquivo ia inteiro
+    // e, ao falhar, o erro não era capturado: o botão ficava em "ENVIANDO..." para sempre.
     setIsUploading(true);
+    setUploadProgress(0);
     try {
-      // Converter para base64
-      const reader = new FileReader();
-      reader.readAsDataURL(uploadFile);
-      reader.onload = async () => {
-        const base64 = reader.result as string;
-        const sizeMb = (uploadFile.size / (1024 * 1024)).toFixed(2);
-        
-        const res = await uploadDocument({
-          name: uploadFile.name,
-          type: uploadFile.type.includes("pdf") ? "PDF" : uploadFile.type.includes("image") ? "IMAGEM" : "ARQUIVO",
-          category: uploadCategory,
-          size: `${sizeMb} MB`,
-          base64Data: base64,
-          projectId: project.id,
-          userId: project.investorId
-        });
-
-        if (res.success) {
-          toast.success("Documento salvo com sucesso no servidor!");
-          setIsUploadModalOpen(false);
-          setUploadFile(null);
-          fetchDocs(project.id);
-        } else {
-          toast.error("Erro ao fazer upload: " + res.error);
-        }
-        setIsUploading(false);
-      };
-      reader.onerror = () => {
-        toast.error("Falha ao ler o arquivo.");
-        setIsUploading(false);
-      };
+      await uploadProjectDocumentInChunks(uploadFile, {
+        projectId: project.id,
+        category: uploadCategory,
+        onProgress: setUploadProgress,
+      });
+      toast.success("Documento salvo!");
+      setIsUploadModalOpen(false);
+      setUploadFile(null);
+      fetchDocs(project.id);
     } catch (err) {
-      toast.error("Erro inesperado no upload.");
+      toast.error(`Não foi possível enviar: ${(err as Error)?.message || "erro inesperado"}`);
+    } finally {
       setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -465,14 +448,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const handleDownloadDoc = (doc: any) => {
-    toast.success(`Iniciando download seguro: ${doc.name}`);
-    const link = document.createElement("a");
-    link.href = doc.base64Data;
-    link.download = doc.name;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownloadDoc = async (doc: any) => {
+    const t = toast.loading(`Baixando ${doc.name}...`);
+    try {
+      await downloadDocument(doc);
+      toast.success("Download iniciado!", { id: t });
+    } catch (err) {
+      toast.error(`Não foi possível baixar: ${(err as Error)?.message || "erro"}`, { id: t });
+    }
   };
 
   const handleSaveCycle = async (data: any) => {
@@ -1269,13 +1252,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               onChange={handleFileChange}
               className="w-full text-sm text-brand-text-muted file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-bold file:bg-brand-accent/10 file:text-brand-accent hover:file:bg-brand-accent/20 cursor-pointer"
             />
-            {uploadFile && <p className="text-xs text-brand-success font-bold mt-2">Arquivo selecionado: {uploadFile.name}</p>}
+            {uploadFile && (
+              <p className="text-xs text-brand-success font-bold mt-2">
+                Arquivo selecionado: {uploadFile.name} ({(uploadFile.size / (1024 * 1024)).toFixed(2)} MB)
+              </p>
+            )}
+            <p className="text-[10px] text-brand-text-muted uppercase">Até 25 MB por arquivo.</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-brand-border mt-4">
             <Button variant="ghost" onClick={() => setIsUploadModalOpen(false)} className="text-[10px]">CANCELAR</Button>
             <Button onClick={handleUploadSubmit} disabled={isUploading || !uploadFile} className="gap-2 text-[10px]">
-              {isUploading ? "ENVIANDO..." : "SALVAR NO BANCO"}
+              {isUploading ? `ENVIANDO... ${uploadProgress}%` : "SALVAR NO BANCO"}
             </Button>
           </div>
         </div>

@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { downloadDocument } from "@/lib/document-transfer-client";
 import { updateLotStatus, addLotDocument, deleteLotDocument, deleteImportLot, registerLotSerials, updateDocumentRealizedFields } from "@/app/admin/importacao/lotes/actions";
 import { deleteWeapon } from "@/app/admin/mapa-de-armas/actions";
 import Link from "next/link";
@@ -216,11 +217,9 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
               </button>
               <button
                 onClick={() => {
-                  const link = document.createElement("a");
-                  link.href = doc.base64Data;
-                  link.download = doc.name;
-                  link.click();
-                  toast.success("Download iniciado!");
+                  downloadDocument(doc)
+                    .then(() => toast.success("Download iniciado!"))
+                    .catch((e) => toast.error(`Não foi possível baixar: ${(e as Error)?.message || "erro"}`));
                 }}
                 className="p-1 hover:text-brand-accent text-brand-text-muted transition-colors"
                 title="Baixar"
@@ -898,11 +897,9 @@ export const BatchWorkspace: React.FC<BatchWorkspaceProps> = ({ batch, onClose, 
                         </button>
                         <button 
                           onClick={() => {
-                            const link = document.createElement("a");
-                            link.href = doc.base64Data;
-                            link.download = doc.name;
-                            link.click();
-                            toast.success("Download iniciado!");
+                            downloadDocument(doc)
+                              .then(() => toast.success("Download iniciado!"))
+                              .catch((e) => toast.error(`Não foi possível baixar: ${(e as Error)?.message || "erro"}`));
                           }}
                           className="p-1 hover:text-brand-accent text-brand-text-muted transition-colors"
                           title="Baixar"

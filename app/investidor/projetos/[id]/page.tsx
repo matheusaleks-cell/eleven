@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { downloadDocument } from "@/lib/document-transfer-client";
 import { addLotDocument, deleteLotDocument, updateDocumentRealizedFields } from "../../../admin/importacao/lotes/actions";
 
 const DOCUMENT_GROUPS = [
@@ -243,11 +244,9 @@ const LotDocumentCard: React.FC<LotDocumentCardProps> = ({
               )}
               <button
                 onClick={() => {
-                  const link = document.createElement("a");
-                  link.href = doc.base64Data;
-                  link.download = doc.name;
-                  link.click();
-                  toast.success("Download iniciado!");
+                  downloadDocument(doc)
+                    .then(() => toast.success("Download iniciado!"))
+                    .catch((e) => toast.error(`Não foi possível baixar: ${(e as Error)?.message || "erro"}`));
                 }}
                 className="p-1 hover:text-brand-accent text-brand-text-muted transition-colors"
                 title="Baixar"
@@ -804,11 +803,9 @@ export default function InvestorProjectDetailPage({ params }: { params: Promise<
                           size="sm" 
                           className="text-brand-accent hover:bg-brand-accent/10 gap-2 font-bold uppercase text-[10px]"
                           onClick={() => {
-                            const link = document.createElement("a");
-                            link.href = doc.base64Data;
-                            link.download = doc.name;
-                            link.click();
-                            toast.success("Download iniciado!");
+                            downloadDocument(doc)
+                              .then(() => toast.success("Download iniciado!"))
+                              .catch((e) => toast.error(`Não foi possível baixar: ${(e as Error)?.message || "erro"}`));
                           }}
                         >
                            Visualizar
