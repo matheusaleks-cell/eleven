@@ -11,6 +11,7 @@ import { ArrowLeft, ChevronDown, ChevronUp, Plus, CheckCircle, Clock, FileText, 
 import { CycleModal } from "@/components/cycles/CycleModal";
 import { LinkLotDialog } from "@/components/projects/LinkLotDialog";
 import { EditProjectDialog } from "@/components/projects/EditProjectDialog";
+import { parseProductMix, productMixLabel } from "@/lib/product-mix";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
@@ -546,7 +547,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   };
   // Próximo ciclo proposto (copia o último lote com a quantidade do campo do projeto).
   const lastLot = projectLots[projectLots.length - 1];
-  const nextQty = Number(nextQtyDraft);
+  // Projeto com mais de um modelo: a quantidade do ciclo vem da seleção de produtos do projeto.
+  const projectMix = parseProductMix(project.productMix);
+  const mixTotal = projectMix.length > 1 ? projectMix.reduce((acc, m) => acc + (m.quantity || 0), 0) : 0;
+  const nextQty = projectMix.length > 1 ? mixTotal : Number(nextQtyDraft);
   const nextQtyValid = Number.isInteger(nextQty) && nextQty >= 1;
   const lastUnitFob = lastLot && lastLot.quantityItems > 0 ? (lastLot.fobValue || 0) / lastLot.quantityItems : 0;
   const canProposeNext = project.status === "ACTIVE" && !!lastLot && projectLots.length < project.max_cycles;
@@ -833,12 +837,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                     CICLO {projectLots.length + 1} · {getCycleName(projectLots.length).toUpperCase()} — PROPOSTO
                   </p>
                   <p style={{ color: "#808080", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}>
-                    {(lastLot.products?.[0]?.commercialName || project.product_name)} · FOB US$ {lastUnitFob.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/un. · câmbio R$ {Number(lastLot.exchangeRate || 0).toFixed(2)} · ciclo {projectLots.length + 1} de {project.max_cycles}
+                    {projectMix.length > 1 ? productMixLabel(projectMix) : (projectMix[0]?.name || lastLot.products?.[0]?.commercialName || project.product_name)} · FOB US$ {lastUnitFob.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/un. · câmbio R$ {Number(lastLot.exchangeRate || 0).toFixed(2)} · ciclo {projectLots.length + 1} de {project.max_cycles}
                     {lastUnitFob === 0 && <span style={{ color: "#FF9800" }}> · ciclo anterior sem FOB</span>}
                   </p>
                 </div>
               </div>
               <div className="md:ml-auto flex items-center gap-2 flex-wrap">
+                {projectMix.length > 1 ? (
+                  <span className="text-[11px] font-bold uppercase" style={{ color: "#A0A0A0" }} title="Quantidades por modelo definidas em Editar projeto">
+                    Total {mixTotal} un.
+                  </span>
+                ) : (
                 <label className="flex items-center gap-2 text-[11px] font-bold uppercase" style={{ color: "#A0A0A0" }}>
                   Qtd.
                   <input
@@ -852,6 +861,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                   />
                   un.
                 </label>
+                )}
                 <Link
                   href={newCycleHref}
                   className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm"

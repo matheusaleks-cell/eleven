@@ -16,6 +16,7 @@ import { getProducts } from "../../../erp/produtos/actions";
 import { createImportLot, getSuppliers } from "../actions";
 import { getProjects, getProjectById } from "../../../projetos/actions";
 import { isValidDecimalInput, parseDecimalInput } from "@/lib/masks";
+import { parseProductMix, productMixLabel } from "@/lib/product-mix";
 
 export default function NewBatchPage() {
   const session = useAdminSession();
@@ -66,7 +67,23 @@ export default function NewBatchPage() {
     const last = lots[lots.length - 1];
     const toInput = (n: number) => (Number.isFinite(n) && n > 0 ? n.toFixed(2).replace(".", ",") : "0");
 
-    let lotProducts: any[] = last?.products || [];
+    // Projeto com mais de um modelo: um item por produto, com a quantidade definida no projeto
+    // e o FOB unitário médio do ciclo anterior.
+    const mix = parseProductMix(project.productMix);
+    if (mix.length > 1) {
+      const lastQtyMix = last?.quantityItems || 0;
+      const unitFobMix = lastQtyMix > 0 ? (last?.fobValue || 0) / lastQtyMix : 0;
+      setItems(mix.map((m) => ({ id: Math.random().toString(), productId: m.productId, name: m.name, qty: m.quantity || 1, unitFob: toInput(unitFobMix) })));
+      if (last?.supplierId) setSupplierId(last.supplierId);
+      if (last?.currency) setCurrency(last.currency);
+      if (last?.exchangeRate) setPtax(toInput(last.exchangeRate));
+      toast.info(`Produtos do projeto preenchidos (${productMixLabel(mix)}). Ajuste se precisar.`);
+      return;
+    }
+
+    let lotProducts: any[] = mix.length === 1
+      ? catalogList.filter((c: any) => c.id === mix[0].productId)
+      : last?.products || [];
     if (lotProducts.length === 0) {
       const byName = catalogList.find(
         (c: any) => String(c.commercialName).trim().toUpperCase() === String(project.productName || "").trim().toUpperCase()

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { syncLotLiquidation, countUnsoldWeapons } from "@/lib/lot-liquidation";
+import { ProductMixItem, productMixLabel, parseProductMix } from "@/lib/product-mix";
 import { createImportLot } from "../importacao/lotes/actions";
 import { calcImportBreakdown, SimulatorInputs } from "@/lib/calculations";
 import { getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
@@ -795,13 +796,26 @@ export async function acceptNextCycle(projectId: string, quantity: number) {
     const last = project.importLots[project.importLots.length - 1];
     if (!last) return { success: false, error: "O projeto ainda não tem um lote para servir de base. Use 'Editar' para montar o ciclo." };
 
-    let productIds = last.products.map((p) => p.id);
-    if (productIds.length === 0) {
-      const byName = await prisma.product.findFirst({ where: { commercialName: project.productName }, select: { id: true } });
-      if (byName) productIds = [byName.id];
-    }
-    if (productIds.length !== 1) {
-      return { success: false, error: "O ciclo anterior não tem exatamente um produto. Use 'Editar' para montar o ciclo." };
+    // Produtos do ciclo: a seleção do projeto (com quantidade por modelo quando há mais de um);
+    // sem seleção salva, o produto do lote anterior.
+    const mix = parseProductMix(project.productMix);
+    let items: { productId: string; quantity: number }[];
+    if (mix.length > 1) {
+      items = mix.map((m) => ({ productId: m.productId, quantity: m.quantity || 0 }));
+      if (items.some((i) => i.quantity < 1)) {
+        return { success: false, error: "O projeto tem mais de um produto sem quantidade definida. Ajuste em 'Editar projeto'." };
+      }
+      quantity = items.reduce((acc, i) => acc + i.quantity, 0);
+    } else {
+      let productIds = mix.length === 1 ? [mix[0].productId] : last.products.map((p) => p.id);
+      if (productIds.length === 0) {
+        const byName = await prisma.product.findFirst({ where: { commercialName: project.productName }, select: { id: true } });
+        if (byName) productIds = [byName.id];
+      }
+      if (productIds.length !== 1) {
+        return { success: false, error: "Defina o produto do projeto em 'Editar projeto' ou use 'Editar' para montar o ciclo." };
+      }
+      items = [{ productId: productIds[0], quantity }];
     }
 
     const lastQty = last.quantityItems || 0;
@@ -817,7 +831,7 @@ export async function acceptNextCycle(projectId: string, quantity: number) {
       fobTotal: unitFob * quantity,
       freightTotal: (last.freight || 0) * ratio,
       insuranceTotal: (last.insurance || 0) * ratio,
-      items: [{ productId: productIds[0], quantity }],
+      items,
     });
     if (!res.success) return { success: false, error: res.error || "Falha ao criar o lote do ciclo." };
 
@@ -838,7 +852,7 @@ export async function updateProject(
   id: string,
   data: {
     name: string;
-    productName: string;
+    productMix: { productId: string; quantity: number | null }[];
     status: string;
     maxCycles: number;
     initialCapital: number;
@@ -854,9 +868,13 @@ export async function updateProject(
   if (!session) return { success: false, error: "Não autorizado." };
 
   const name = (data.name || "").trim();
-  const productName = (data.productName || "").trim();
   if (!name) return { success: false, error: "Informe o nome do projeto." };
-  if (!productName) return { success: false, error: "Informe o produto." };
+  const mixIn = Array.isArray(data.productMix) ? data.productMix : [];
+  if (mixIn.length === 0) return { success: false, error: "Selecione ao menos um produto do catálogo." };
+  if (new Set(mixIn.map((i) => i.productId)).size !== mixIn.length) return { success: false, error: "Produto repetido na seleção." };
+  if (mixIn.length > 1 && mixIn.some((i) => !Number.isInteger(i.quantity) || (i.quantity as number) < 1)) {
+    return { success: false, error: "Com mais de um produto, informe a quantidade de cada um (inteiro maior que zero)." };
+  }
   if (!["ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"].includes(data.status)) return { success: false, error: "Status inválido." };
   if (!["REINVEST", "PAYOUT"].includes(data.payoutRule)) return { success: false, error: "Regra de pagamento inválida." };
   if (!Number.isInteger(data.maxCycles) || data.maxCycles < 1) return { success: false, error: "Máximo de ciclos deve ser um inteiro maior que zero." };
@@ -872,6 +890,20 @@ export async function updateProject(
       select: { investorId: true, _count: { select: { importLots: true } } },
     });
     if (!project) return { success: false, error: "Projeto não encontrado." };
+
+    // Só produtos que existem no catálogo; o nome vem do cadastro (não do cliente).
+    const catalog = await prisma.product.findMany({
+      where: { id: { in: mixIn.map((i) => i.productId) } },
+      select: { id: true, commercialName: true },
+    });
+    if (catalog.length !== mixIn.length) return { success: false, error: "Produto não encontrado no catálogo." };
+    const mix: ProductMixItem[] = mixIn.map((i) => ({
+      productId: i.productId,
+      name: catalog.find((c) => c.id === i.productId)!.commercialName,
+      quantity: mixIn.length > 1 ? (i.quantity as number) : null,
+    }));
+    const productName = productMixLabel(mix);
+
     if (data.maxCycles < project._count.importLots) {
       return { success: false, error: `O projeto já tem ${project._count.importLots} ciclo(s) aberto(s); o máximo não pode ser menor que isso.` };
     }
@@ -881,6 +913,7 @@ export async function updateProject(
       data: {
         name,
         productName,
+        productMix: JSON.stringify(mix),
         status: data.status,
         maxCycles: data.maxCycles,
         initialCapital: data.initialCapital,

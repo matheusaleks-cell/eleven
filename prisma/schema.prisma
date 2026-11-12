@@ -77,6 +77,9 @@ model InvestmentProject {
   // Quantidade proposta para o próximo ciclo (card "Ciclo N — proposto" na timeline do projeto).
   // Vazio = repete a quantidade do último lote. Limpo ao aceitar o ciclo.
   nextCycleQuantity Int?    @map("next_cycle_quantity")
+  // Produtos do projeto (somente do catálogo): JSON [{ productId, name, quantity }].
+  // quantity só é exigida com mais de um modelo. productName guarda os nomes p/ exibição.
+  productMix      String?   @map("product_mix")
 
   createdById     String    @map("created_by_id")
 
