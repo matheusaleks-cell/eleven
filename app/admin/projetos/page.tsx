@@ -7,7 +7,8 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { FilterBar } from "@/components/shared/FilterBar";
-import { Plus, Search, Filter, ArrowRight, Eye, Trash2 } from "lucide-react";
+import { Plus, Search, Filter, ArrowRight, Eye, Trash2, Pencil } from "lucide-react";
+import { EditProjectDialog } from "@/components/projects/EditProjectDialog";
 import { getProjects, deleteProject, getProjectDeletionImpact } from "./actions";
 import { buildProjectDeletionMessage } from "@/lib/project-deletion";
 import { getInvestors } from "../investidores/actions";
@@ -25,6 +26,7 @@ export default function AdminProjectsPage() {
   const [projects, setProjects] = useState<any[]>([]);
   const [investors, setInvestors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
     const s = localStorage.getItem("eleven_session");
@@ -223,6 +225,14 @@ export default function AdminProjectsPage() {
                           <Eye size={12} /> Ver
                         </Link>
                         <button
+                          onClick={() => setEditingId(project.id)}
+                          title="Editar projeto"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase transition-all"
+                          style={{ border: "1px solid #A0A0A0", color: "#A0A0A0", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", cursor: "pointer", background: "transparent" }}
+                        >
+                          <Pencil size={12} /> Editar
+                        </button>
+                        <button
                           onClick={() => handleDelete(project.id)}
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-[2px] text-xs font-bold uppercase transition-all"
                           style={{ border: "1px solid #E53935", color: "#E53935", fontFamily: "'Rajdhani', sans-serif", letterSpacing: "0.1em", cursor: "pointer", background: "transparent" }}
@@ -240,6 +250,8 @@ export default function AdminProjectsPage() {
           </table>
         </div>
       </div>
+
+      <EditProjectDialog projectId={editingId} onClose={() => setEditingId(null)} onSaved={fetchData} />
     </DashboardLayout>
   );
 }

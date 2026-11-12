@@ -831,3 +831,73 @@ export async function acceptNextCycle(projectId: string, quantity: number) {
     return { success: false, error: "Falha ao abrir o próximo ciclo." };
   }
 }
+
+// Edição dos dados cadastrais do projeto (nome, produto, status, ciclos, contrato...).
+// Não mexe em lotes, armas nem ciclos registrados.
+export async function updateProject(
+  id: string,
+  data: {
+    name: string;
+    productName: string;
+    status: string;
+    maxCycles: number;
+    initialCapital: number;
+    profitSplitPct: number; // 0..1
+    payoutRule: string;
+    contractNumber: string | null;
+    startDate: string | null; // yyyy-mm-dd
+    nextCycleQuantity: number | null;
+    notes: string | null;
+  }
+) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+
+  const name = (data.name || "").trim();
+  const productName = (data.productName || "").trim();
+  if (!name) return { success: false, error: "Informe o nome do projeto." };
+  if (!productName) return { success: false, error: "Informe o produto." };
+  if (!["ACTIVE", "PAUSED", "COMPLETED", "CANCELLED"].includes(data.status)) return { success: false, error: "Status inválido." };
+  if (!["REINVEST", "PAYOUT"].includes(data.payoutRule)) return { success: false, error: "Regra de pagamento inválida." };
+  if (!Number.isInteger(data.maxCycles) || data.maxCycles < 1) return { success: false, error: "Máximo de ciclos deve ser um inteiro maior que zero." };
+  if (!Number.isFinite(data.initialCapital) || data.initialCapital < 0) return { success: false, error: "Capital inválido." };
+  if (!Number.isFinite(data.profitSplitPct) || data.profitSplitPct < 0 || data.profitSplitPct > 1) return { success: false, error: "Participação do investidor deve ficar entre 0% e 100%." };
+  if (data.nextCycleQuantity !== null && (!Number.isInteger(data.nextCycleQuantity) || data.nextCycleQuantity < 1)) {
+    return { success: false, error: "Quantidade do próximo ciclo deve ser um inteiro maior que zero (ou vazia)." };
+  }
+
+  try {
+    const project = await prisma.investmentProject.findUnique({
+      where: { id },
+      select: { investorId: true, _count: { select: { importLots: true } } },
+    });
+    if (!project) return { success: false, error: "Projeto não encontrado." };
+    if (data.maxCycles < project._count.importLots) {
+      return { success: false, error: `O projeto já tem ${project._count.importLots} ciclo(s) aberto(s); o máximo não pode ser menor que isso.` };
+    }
+
+    await prisma.investmentProject.update({
+      where: { id },
+      data: {
+        name,
+        productName,
+        status: data.status,
+        maxCycles: data.maxCycles,
+        initialCapital: data.initialCapital,
+        profitSplitPct: data.profitSplitPct,
+        payoutRule: data.payoutRule,
+        contractNumber: data.contractNumber?.trim() || null,
+        startDate: data.startDate ? new Date(`${data.startDate}T00:00:00`) : null,
+        nextCycleQuantity: data.nextCycleQuantity,
+        notes: data.notes?.trim() || null,
+      },
+    });
+
+    revalidateProjectViews(id, project.investorId);
+    revalidatePath("/admin/projetos");
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao editar projeto:", error);
+    return { success: false, error: "Falha ao salvar o projeto." };
+  }
+}

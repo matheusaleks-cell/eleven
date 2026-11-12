@@ -7,9 +7,10 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { MoneyDisplay } from "@/components/shared/MoneyDisplay";
 import { getCycleName, formatMoney } from "@/lib/calculations";
-import { ArrowLeft, ChevronDown, ChevronUp, Plus, CheckCircle, Clock, FileText, Download, Trash2, DollarSign, Ship, Globe, Link2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronUp, Plus, CheckCircle, Clock, FileText, Download, Trash2, DollarSign, Ship, Globe, Link2, Pencil } from "lucide-react";
 import { CycleModal } from "@/components/cycles/CycleModal";
 import { LinkLotDialog } from "@/components/projects/LinkLotDialog";
+import { EditProjectDialog } from "@/components/projects/EditProjectDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
@@ -321,6 +322,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
   const [showCycleModal, setShowCycleModal] = useState(false);
   const [showLinkLot, setShowLinkLot] = useState(false);
+  const [showEditProject, setShowEditProject] = useState(false);
   // Lote do ciclo a fechar no modal (null = o ciclo aberto mais antigo).
   const [cycleLotId, setCycleLotId] = useState<string | null>(null);
   // Lote exibido na aba "Processo de Importação" (null = o mais recente).
@@ -599,6 +601,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </div>
           {isAdmin && (
             <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setShowEditProject(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[2px] font-bold uppercase whitespace-nowrap"
+                style={{ background: "transparent", color: "#A0A0A0", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif", border: "1px solid #444", cursor: "pointer" }}
+              >
+                <Pencil size={15} /> Editar
+              </button>
               <button
                 onClick={() => setShowLinkLot(true)}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[2px] font-bold uppercase whitespace-nowrap"
@@ -1157,6 +1166,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
           </Card>
         </div>
       )}
+
+      <EditProjectDialog projectId={showEditProject ? project.id : null} onClose={() => setShowEditProject(false)} onSaved={fetchProject} />
 
       {isAdmin && (
         <LinkLotDialog
