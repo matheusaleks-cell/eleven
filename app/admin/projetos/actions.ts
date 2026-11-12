@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth-guard";
 import { syncLotLiquidation } from "@/lib/lot-liquidation";
+import { createImportLot } from "../importacao/lotes/actions";
 import { calcImportBreakdown, SimulatorInputs } from "@/lib/calculations";
 import { getActiveFinancialRates, ratesFromCycleOrDefault, computeUnitFinancials } from "@/lib/financial-calc";
 
@@ -719,5 +720,86 @@ export async function getProjectDeletionImpact(projectId: string) {
   } catch (error) {
     console.error("Erro ao calcular impacto da exclusão do projeto:", error);
     return { success: false as const, error: "Falha ao verificar o projeto." };
+  }
+}
+
+// ---------------------------------------------------------------------------------------
+// Próximo ciclo proposto: o projeto guarda a quantidade do próximo ciclo (nextCycleQuantity)
+// e a timeline mostra "Ciclo N — proposto" pronto para aceitar com um clique. Aceitar cria o
+// lote do ciclo copiando o último lote do projeto (produto, FOB unitário, frete/seguro
+// proporcionais, fornecedor, moeda e câmbio) com a quantidade proposta.
+// ---------------------------------------------------------------------------------------
+
+export async function setNextCycleQuantity(projectId: string, quantity: number | null) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+  if (quantity !== null && (!Number.isInteger(quantity) || quantity < 1)) {
+    return { success: false, error: "A quantidade deve ser um número inteiro maior que zero." };
+  }
+  try {
+    await prisma.investmentProject.update({ where: { id: projectId }, data: { nextCycleQuantity: quantity } });
+    revalidatePath(`/admin/projetos/${projectId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Erro ao salvar quantidade do próximo ciclo:", error);
+    return { success: false, error: "Falha ao salvar a quantidade." };
+  }
+}
+
+export async function acceptNextCycle(projectId: string, quantity: number) {
+  const session = await requireSession("ADMIN");
+  if (!session) return { success: false, error: "Não autorizado." };
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return { success: false, error: "A quantidade deve ser um número inteiro maior que zero." };
+  }
+
+  try {
+    const project = await prisma.investmentProject.findUnique({
+      where: { id: projectId },
+      include: { importLots: { orderBy: { createdAt: "asc" }, include: { products: { select: { id: true } } } } },
+    });
+    if (!project) return { success: false, error: "Projeto não encontrado." };
+    if (project.status !== "ACTIVE") return { success: false, error: "Projeto não está ativo." };
+    if (project.importLots.length >= project.maxCycles) {
+      return { success: false, error: `O projeto já tem ${project.importLots.length} de ${project.maxCycles} ciclos.` };
+    }
+
+    const last = project.importLots[project.importLots.length - 1];
+    if (!last) return { success: false, error: "O projeto ainda não tem um lote para servir de base. Use 'Editar' para montar o ciclo." };
+
+    let productIds = last.products.map((p) => p.id);
+    if (productIds.length === 0) {
+      const byName = await prisma.product.findFirst({ where: { commercialName: project.productName }, select: { id: true } });
+      if (byName) productIds = [byName.id];
+    }
+    if (productIds.length !== 1) {
+      return { success: false, error: "O ciclo anterior não tem exatamente um produto. Use 'Editar' para montar o ciclo." };
+    }
+
+    const lastQty = last.quantityItems || 0;
+    const ratio = lastQty > 0 ? quantity / lastQty : 0;
+    const unitFob = lastQty > 0 ? (last.fobValue || 0) / lastQty : 0;
+
+    const res = await createImportLot({
+      supplierId: last.supplierId,
+      projectId,
+      originCountry: last.countryOrigin,
+      currency: last.currency,
+      exchangeRate: last.exchangeRate,
+      fobTotal: unitFob * quantity,
+      freightTotal: (last.freight || 0) * ratio,
+      insuranceTotal: (last.insurance || 0) * ratio,
+      items: [{ productId: productIds[0], quantity }],
+    });
+    if (!res.success) return { success: false, error: res.error || "Falha ao criar o lote do ciclo." };
+
+    await prisma.investmentProject.update({ where: { id: projectId }, data: { nextCycleQuantity: null } });
+
+    revalidatePath(`/admin/projetos/${projectId}`);
+    revalidatePath(`/investidor/projetos/${projectId}`);
+    return { success: true, lotId: res.lot?.id, batchCode: res.lot?.batchCode, unitFob };
+  } catch (error) {
+    console.error("Erro ao aceitar próximo ciclo:", error);
+    return { success: false, error: "Falha ao abrir o próximo ciclo." };
   }
 }

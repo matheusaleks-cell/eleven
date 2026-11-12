@@ -74,7 +74,10 @@ model InvestmentProject {
   pixKey          String?   @map("pix_key")
   payoutRule      String?   @default("REINVEST") @map("payout_rule") // REINVEST, PAYOUT
   taxProfile      String?   @default("PF") @map("tax_profile") // PF, PJ
-  
+  // Quantidade proposta para o próximo ciclo (card "Ciclo N — proposto" na timeline do projeto).
+  // Vazio = repete a quantidade do último lote. Limpo ao aceitar o ciclo.
+  nextCycleQuantity Int?    @map("next_cycle_quantity")
+
   createdById     String    @map("created_by_id")
 
   // Relations

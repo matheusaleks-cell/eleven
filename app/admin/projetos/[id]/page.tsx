@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { getProjectById, createCycle } from "../actions";
+import { getProjectById, createCycle, setNextCycleQuantity, acceptNextCycle } from "../actions";
 import { uploadDocument, getProjectDocuments, deleteDocument } from "../document-actions";
 import { getTaxConfigs } from "../../configuracoes/actions";
 import { addLotDocument, deleteLotDocument, updateDocumentRealizedFields } from "../../importacao/lotes/actions";
@@ -325,6 +325,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [cycleLotId, setCycleLotId] = useState<string | null>(null);
   // Lote exibido na aba "Processo de Importação" (null = o mais recente).
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
+  // Quantidade do próximo ciclo proposto (editável no card da timeline).
+  const [nextQtyDraft, setNextQtyDraft] = useState("");
+  const [acceptingCycle, setAcceptingCycle] = useState(false);
   const [activeTab, setActiveTab] = useState<"cycles" | "import" | "docs">("cycles");
   const [updatingLotDoc, setUpdatingLotDoc] = useState(false);
 
@@ -371,6 +374,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       const data = await getProjectById(id);
       if (data) {
         setProject(data);
+        const lots: any[] = data.importLots || [];
+        const proposed = data.nextCycleQuantity ?? lots[lots.length - 1]?.quantityItems;
+        setNextQtyDraft(proposed ? String(proposed) : "");
         fetchDocs(data.id);
       } else {
         toast.error("Projeto não encontrado");
@@ -536,7 +542,38 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     setCycleLotId(lotId);
     setShowCycleModal(true);
   };
-  const newCycleHref = `/admin/importacao/lotes/new?projectId=${project.id}`;
+  // Próximo ciclo proposto (copia o último lote com a quantidade do campo do projeto).
+  const lastLot = projectLots[projectLots.length - 1];
+  const nextQty = Number(nextQtyDraft);
+  const nextQtyValid = Number.isInteger(nextQty) && nextQty >= 1;
+  const lastUnitFob = lastLot && lastLot.quantityItems > 0 ? (lastLot.fobValue || 0) / lastLot.quantityItems : 0;
+  const canProposeNext = project.status === "ACTIVE" && !!lastLot && projectLots.length < project.max_cycles;
+  const newCycleHref = `/admin/importacao/lotes/new?projectId=${project.id}${nextQtyValid ? `&qty=${nextQty}` : ""}`;
+
+  const saveNextQty = async () => {
+    const current = project.nextCycleQuantity ?? lastLot?.quantityItems;
+    if (!nextQtyValid || nextQty === current) return;
+    const res = await setNextCycleQuantity(project.id, nextQty);
+    if (res.success) {
+      setProject({ ...project, nextCycleQuantity: nextQty });
+      toast.success(`Próximo ciclo: ${nextQty} un.`);
+    } else toast.error(res.error);
+  };
+
+  const handleAcceptNextCycle = async () => {
+    if (!nextQtyValid) {
+      toast.error("Informe a quantidade do próximo ciclo.");
+      return;
+    }
+    setAcceptingCycle(true);
+    const res = await acceptNextCycle(project.id, nextQty);
+    setAcceptingCycle(false);
+    if (res.success) {
+      toast.success(`Ciclo aberto: ${res.batchCode} com ${nextQty} un.`);
+      if (!res.unitFob) toast.warning("O ciclo anterior não tinha FOB. Informe os valores do novo lote em Importação.");
+      fetchProject();
+    } else toast.error(res.error);
+  };
 
   return (
     <DashboardLayout role={isAdmin ? "ADMIN" : "INVESTOR"} userName={session.name} userEmail={session.email} pageTitle="Detalhe do Projeto">
@@ -772,13 +809,61 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             );
           })}
 
-          {project.status === "ACTIVE" && isAdmin && (
+          {/* Próximo ciclo proposto: pronto para aceitar; quantidade editável na hora. */}
+          {isAdmin && canProposeNext && (
+            <div className="rounded-[4px] p-5 flex flex-col md:flex-row md:items-center gap-4" style={{ background: "rgba(245,196,0,0.04)", border: "1px dashed rgba(245,196,0,0.4)" }}>
+              <div className="flex items-center gap-4 min-w-0">
+                <Plus size={18} style={{ color: "#F5C400", flexShrink: 0 }} />
+                <div className="min-w-0">
+                  <p style={{ color: "#F5C400", fontFamily: "'Rajdhani', sans-serif", fontSize: "15px", fontWeight: 700 }}>
+                    CICLO {projectLots.length + 1} · {getCycleName(projectLots.length).toUpperCase()} — PROPOSTO
+                  </p>
+                  <p style={{ color: "#808080", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}>
+                    {(lastLot.products?.[0]?.commercialName || project.product_name)} · FOB US$ {lastUnitFob.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/un. · câmbio R$ {Number(lastLot.exchangeRate || 0).toFixed(2)} · ciclo {projectLots.length + 1} de {project.max_cycles}
+                    {lastUnitFob === 0 && <span style={{ color: "#FF9800" }}> · ciclo anterior sem FOB</span>}
+                  </p>
+                </div>
+              </div>
+              <div className="md:ml-auto flex items-center gap-2 flex-wrap">
+                <label className="flex items-center gap-2 text-[11px] font-bold uppercase" style={{ color: "#A0A0A0" }}>
+                  Qtd.
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={nextQtyDraft}
+                    onChange={(e) => setNextQtyDraft(e.target.value)}
+                    onBlur={saveNextQty}
+                    className="w-20 bg-brand-input border border-brand-border rounded px-2 py-1.5 text-sm text-white font-mono outline-none focus:border-brand-accent"
+                  />
+                  un.
+                </label>
+                <Link
+                  href={newCycleHref}
+                  className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm"
+                  style={{ background: "transparent", color: "#A0A0A0", border: "1px solid #333", textDecoration: "none" }}
+                >
+                  Editar
+                </Link>
+                <button
+                  onClick={handleAcceptNextCycle}
+                  disabled={acceptingCycle || !nextQtyValid}
+                  className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm disabled:opacity-50"
+                  style={{ background: "#F5C400", color: "#1A1A1A", border: "none", cursor: "pointer" }}
+                >
+                  {acceptingCycle ? "Abrindo..." : "Aceitar"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {isAdmin && project.status === "ACTIVE" && !lastLot && (
             <Link
               href={newCycleHref}
               className="rounded-[4px] p-4 flex items-center justify-center gap-2 font-bold uppercase text-xs tracking-widest"
               style={{ background: "transparent", border: "1px dashed #333", color: "#808080", textDecoration: "none", fontFamily: "'Rajdhani', sans-serif" }}
             >
-              <Plus size={14} /> Abrir próximo ciclo (Ciclo {projectLots.length + 1} de {project.max_cycles})
+              <Plus size={14} /> Abrir primeiro ciclo
             </Link>
           )}
         </div>

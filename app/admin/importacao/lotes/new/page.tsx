@@ -75,8 +75,12 @@ export default function NewBatchPage() {
     }
     if (lotProducts.length === 0) return;
 
-    const qty = last?.quantityItems || 0;
-    const unitFob = qty > 0 ? (last?.fobValue || 0) / qty : 0;
+    // Quantidade: a que veio do card "Ciclo proposto" (?qty=), senão a do próximo ciclo
+    // salva no projeto, senão a do último lote.
+    const qtyParam = Number(new URLSearchParams(window.location.search).get("qty"));
+    const qty = (Number.isInteger(qtyParam) && qtyParam > 0 ? qtyParam : 0) || project.nextCycleQuantity || last?.quantityItems || 0;
+    const lastQty = last?.quantityItems || 0;
+    const unitFob = lastQty > 0 ? (last?.fobValue || 0) / lastQty : 0;
     const single = lotProducts.length === 1;
 
     setItems(
