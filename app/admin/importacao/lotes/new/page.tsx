@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 import { getProducts } from "../../../erp/produtos/actions";
 import { createImportLot, getSuppliers } from "../actions";
-import { getProjects } from "../../../projetos/actions";
+import { getProjects, getProjectById } from "../../../projetos/actions";
 import { isValidDecimalInput, parseDecimalInput } from "@/lib/masks";
 
 export default function NewBatchPage() {
@@ -37,25 +37,67 @@ export default function NewBatchPage() {
 
   // Vindo de "Abrir Novo Ciclo" no projeto: já deixa o projeto escolhido e volta pra ele ao salvar.
   const [returnProjectId, setReturnProjectId] = useState("");
+
   useEffect(() => {
     const pid = new URLSearchParams(window.location.search).get("projectId");
     if (pid) {
       setProjectId(pid);
       setReturnProjectId(pid);
     }
-  }, []);
 
-  useEffect(() => {
     Promise.all([
       getProducts(),
       getSuppliers(),
-      getProjects()
-    ]).then(([p, s, proj]) => {
+      getProjects(),
+      pid ? getProjectById(pid) : Promise.resolve(null),
+    ]).then(([p, s, proj, project]) => {
       setCatalog(p);
       setSuppliers(s);
       setProjects(proj);
+      if (project) prefillFromProject(project, p);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Novo ciclo de um projeto: parte do último lote dele (produto, quantidade, FOB unitário,
+  // fornecedor e câmbio). Tudo continua editável na tabela antes de salvar.
+  const prefillFromProject = (project: any, catalogList: any[]) => {
+    const lots: any[] = project.importLots || [];
+    const last = lots[lots.length - 1];
+    const toInput = (n: number) => (Number.isFinite(n) && n > 0 ? n.toFixed(2).replace(".", ",") : "0");
+
+    let lotProducts: any[] = last?.products || [];
+    if (lotProducts.length === 0) {
+      const byName = catalogList.find(
+        (c: any) => String(c.commercialName).trim().toUpperCase() === String(project.productName || "").trim().toUpperCase()
+      );
+      if (byName) lotProducts = [byName];
+    }
+    if (lotProducts.length === 0) return;
+
+    const qty = last?.quantityItems || 0;
+    const unitFob = qty > 0 ? (last?.fobValue || 0) / qty : 0;
+    const single = lotProducts.length === 1;
+
+    setItems(
+      lotProducts.map((prod: any) => ({
+        id: Math.random().toString(),
+        productId: prod.id,
+        name: prod.commercialName,
+        qty: single ? qty || 1 : 0,
+        unitFob: single ? toInput(unitFob) : "0",
+      }))
+    );
+    if (last?.supplierId) setSupplierId(last.supplierId);
+    if (last?.currency) setCurrency(last.currency);
+    if (last?.exchangeRate) setPtax(toInput(last.exchangeRate));
+
+    toast.info(
+      single && qty > 0
+        ? `Produtos preenchidos a partir do ciclo anterior (${qty} un.). Ajuste se precisar.`
+        : "Produtos do ciclo anterior preenchidos. Ajuste as quantidades."
+    );
+  };
 
   // Helper para limpar máscara
   const cleanCurrency = (val: string) => {
