@@ -97,6 +97,9 @@ export async function getWeapons() {
       const cycleNumber = cycleOfLot.get(w.importLotId) || null;
       return {
       projectName: w.importLot?.investmentProject?.name || "",
+      projectId: w.importLot?.investmentProjectId || "",
+      customerName: w.customer?.name || "",
+      entryDateIso: w.entryDate.toISOString().slice(0, 10),
       cycleNumber,
       cycleLabel: cycleNumber ? `Ciclo ${cycleNumber} · ${getCycleName(cycleNumber - 1)}` : "",
       serial: w.serialNumber,

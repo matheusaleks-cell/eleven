@@ -6,7 +6,7 @@ import { useAdminSession } from "@/lib/hooks/use-session";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { Search, Filter, ShieldCheck, QrCode, MoreHorizontal, Target, History, CheckCircle2, Plus, Eye, Trash2, Save } from "lucide-react";
+import { Search, Filter, ShieldCheck, QrCode, MoreHorizontal, Target, History, CheckCircle2, Plus, Eye, Trash2, Save, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog } from "@/components/ui/Dialog";
@@ -25,6 +25,10 @@ const STATUS_STYLES: Record<string, string> = {
   IMPORTADA: "bg-blue-500/10 text-blue-500 border-blue-500/20",
 };
 
+const filterSelectClass =
+  "w-full bg-brand-input border border-brand-border rounded-military px-3 py-2 text-sm text-brand-text-secondary outline-none focus:border-brand-accent disabled:opacity-50";
+const filterLabelClass = "text-[9px] font-bold uppercase tracking-widest text-brand-text-muted";
+
 export default function WeaponsMapPage() {
   const session = useAdminSession();
   const [weapons, setWeapons] = useState<any[]>([]);
@@ -32,6 +36,13 @@ export default function WeaponsMapPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("Todos");
+  const [filterProject, setFilterProject] = useState(""); // "" = todos, "__none__" = Estoque Eleven
+  const [filterLot, setFilterLot] = useState("");
+  const [filterProduct, setFilterProduct] = useState("");
+  const [filterCustomer, setFilterCustomer] = useState("");
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
+  const [onlyDivergence, setOnlyDivergence] = useState(false);
   const [selectedWeapon, setSelectedWeapon] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -117,18 +128,82 @@ export default function WeaponsMapPage() {
     refreshWeapons();
   }, [refreshWeapons]);
 
-  const filteredWeapons = useMemo(() => {
+  // Opções dos filtros, derivadas das próprias armas (só aparece o que existe).
+  const filterOptions = useMemo(() => {
+    const projects = new Map<string, string>();
+    const products = new Set<string>();
+    const customers = new Set<string>();
+    let hasNoProject = false;
+    for (const w of weapons) {
+      if (w.projectId) projects.set(w.projectId, w.projectName);
+      else hasNoProject = true;
+      if (w.product) products.add(w.product);
+      if (w.customerName) customers.add(w.customerName);
+    }
+    const sortPt = (a: string, b: string) => a.localeCompare(b, "pt-BR");
+    return {
+      projects: [...projects.entries()].sort((a, b) => sortPt(a[1], b[1])),
+      hasNoProject,
+      products: [...products].sort(sortPt),
+      customers: [...customers].sort(sortPt),
+    };
+  }, [weapons]);
+
+  // Ciclos (lotes) do projeto escolhido.
+  const cycleOptions = useMemo(() => {
+    if (!filterProject || filterProject === "__none__") return [];
+    const m = new Map<string, string>();
+    for (const w of weapons) {
+      if (w.projectId === filterProject) m.set(w.lot, w.cycleLabel ? `${w.cycleLabel} · ${w.lot}` : w.lot);
+    }
+    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], "pt-BR"));
+  }, [weapons, filterProject]);
+
+  // Todos os filtros, menos o de status: usado também para contar cada status nos cartões.
+  const baseFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return weapons.filter(w => {
-      const matchesSearch = w.serial?.toLowerCase().includes(search.toLowerCase()) || 
-                           w.product?.toLowerCase().includes(search.toLowerCase()) ||
-                           w.customer?.toLowerCase().includes(search.toLowerCase()) ||
-                           w.lot?.toLowerCase().includes(search.toLowerCase()) ||
-                           w.di?.toLowerCase().includes(search.toLowerCase()) ||
-                           w.projectName?.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = filterStatus === "Todos" || w.status === filterStatus;
-      return matchesSearch && matchesStatus;
+      if (q) {
+        const hay = [w.serial, w.product, w.customerName, w.lot, w.di, w.projectName].map(v => String(v || "").toLowerCase());
+        if (!hay.some(v => v.includes(q))) return false;
+      }
+      if (filterProject === "__none__" ? !!w.projectId : filterProject && w.projectId !== filterProject) return false;
+      if (filterLot && w.lot !== filterLot) return false;
+      if (filterProduct && w.product !== filterProduct) return false;
+      if (filterCustomer && w.customerName !== filterCustomer) return false;
+      if (filterFrom && w.entryDateIso < filterFrom) return false;
+      if (filterTo && w.entryDateIso > filterTo) return false;
+      if (onlyDivergence && !w.hasDivergence) return false;
+      return true;
     });
-  }, [weapons, search, filterStatus]);
+  }, [weapons, search, filterProject, filterLot, filterProduct, filterCustomer, filterFrom, filterTo, onlyDivergence]);
+
+  const statusCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const w of baseFiltered) c[w.status] = (c[w.status] || 0) + 1;
+    return c;
+  }, [baseFiltered]);
+
+  const filteredWeapons = useMemo(
+    () => (filterStatus === "Todos" ? baseFiltered : baseFiltered.filter(w => w.status === filterStatus)),
+    [baseFiltered, filterStatus]
+  );
+
+  const activeFilterCount =
+    (search.trim() ? 1 : 0) + (filterStatus !== "Todos" ? 1 : 0) + (filterProject ? 1 : 0) + (filterLot ? 1 : 0) +
+    (filterProduct ? 1 : 0) + (filterCustomer ? 1 : 0) + (filterFrom ? 1 : 0) + (filterTo ? 1 : 0) + (onlyDivergence ? 1 : 0);
+
+  const clearFilters = () => {
+    setSearch("");
+    setFilterStatus("Todos");
+    setFilterProject("");
+    setFilterLot("");
+    setFilterProduct("");
+    setFilterCustomer("");
+    setFilterFrom("");
+    setFilterTo("");
+    setOnlyDivergence(false);
+  };
 
   const handleAddWeapon = async () => {
     if (!newWeapon.serialNumber || !newWeapon.productId) {
@@ -239,31 +314,66 @@ export default function WeaponsMapPage() {
         </div>
 
         {/* Stats Summary */}
+        {/* Cartões = atalhos de status. Contam o que está dentro dos outros filtros. */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
-            { label: "Total Rastreado", val: stats.total, color: "border-brand-border" },
-            { label: "Disponível", val: stats.available, color: "border-brand-success text-brand-success" },
-            { label: "Reservado", val: stats.reserved, color: "border-brand-warning text-brand-warning" },
-            { label: "Vendido/Baixa", val: stats.sold, color: "border-brand-text-muted text-brand-text-muted" },
-            { label: "Divergências", val: stats.divergence, color: "border-brand-danger text-brand-danger" },
-          ].map((stat, i) => (
-            <Card key={i} className={cn("py-3 px-4 border-l-2 bg-brand-surface/30", stat.color)}>
-              <p className="text-[9px] font-bold uppercase tracking-widest text-brand-text-muted mb-0.5">{stat.label}</p>
-              <p className={cn("text-xl font-bold font-mono", stat.color.includes("text-") ? stat.color.split(" ").pop() : "text-white")}>{stat.val}</p>
-            </Card>
-          ))}
+            { key: "Todos", label: "Total Rastreado", val: baseFiltered.length, color: "border-brand-border", text: "text-white" },
+            { key: "ESTOQUE", label: "Disponível", val: statusCounts.ESTOQUE || 0, color: "border-brand-success", text: "text-brand-success" },
+            { key: "RESERVADA", label: "Reservado", val: statusCounts.RESERVADA || 0, color: "border-brand-warning", text: "text-brand-warning" },
+            { key: "VENDIDA", label: "Vendido/Baixa", val: statusCounts.VENDIDA || 0, color: "border-brand-text-muted", text: "text-brand-text-muted" },
+          ].map((stat) => {
+            const active = filterStatus === stat.key;
+            return (
+              <button
+                key={stat.key}
+                type="button"
+                onClick={() => setFilterStatus(stat.key)}
+                aria-pressed={active}
+                className={cn(
+                  "text-left py-3 px-4 rounded border border-l-2 bg-brand-surface/30 transition-all hover:bg-brand-surface/60",
+                  stat.color,
+                  active ? "ring-1 ring-brand-accent bg-brand-surface/70" : "border-brand-border/60"
+                )}
+              >
+                <p className="text-[9px] font-bold uppercase tracking-widest text-brand-text-muted mb-0.5">{stat.label}</p>
+                <p className={cn("text-xl font-bold font-mono", stat.text)}>{stat.val}</p>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setOnlyDivergence(v => !v)}
+            aria-pressed={onlyDivergence}
+            className={cn(
+              "text-left py-3 px-4 rounded border border-l-2 border-brand-danger bg-brand-surface/30 transition-all hover:bg-brand-surface/60",
+              onlyDivergence ? "ring-1 ring-brand-danger bg-brand-surface/70" : "border-brand-border/60"
+            )}
+          >
+            <p className="text-[9px] font-bold uppercase tracking-widest text-brand-text-muted mb-0.5">Divergências</p>
+            <p className="text-xl font-bold font-mono text-brand-danger">{baseFiltered.filter(w => w.hasDivergence).length}</p>
+          </button>
         </div>
 
         <Card className="p-4 bg-brand-surface/20 border-brand-border">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" size={18} />
-              <Input 
-                className="pl-10" 
-                placeholder="Buscar por Serial, Lote, DI ou Cliente..." 
+              <Input
+                className="pl-10 pr-9"
+                placeholder="Buscar por série, modelo, lote, DI, projeto ou cliente..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Limpar busca"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              )}
               <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;
@@ -280,23 +390,84 @@ export default function WeaponsMapPage() {
         }
       `}</style>
             </div>
-            <div className="flex gap-2">
-              <select 
-                className="bg-brand-input border border-brand-border rounded-military px-4 py-2 text-sm text-brand-text-secondary outline-none focus:border-brand-accent min-w-[160px]"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
+            <select
+              className={cn(filterSelectClass, "md:w-56")}
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              aria-label="Status"
+            >
+              <option value="Todos">Status: todos</option>
+              <option value="ESTOQUE">Em estoque</option>
+              <option value="RESERVADA">Reservada</option>
+              <option value="VENDIDA">Vendida</option>
+              <option value="IMPORTADA">Importada (a chegar)</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mt-3">
+            <label className="flex flex-col gap-1">
+              <span className={filterLabelClass}>Projeto</span>
+              <select
+                className={filterSelectClass}
+                value={filterProject}
+                onChange={(e) => { setFilterProject(e.target.value); setFilterLot(""); }}
               >
-                <option value="Todos">Status: Todos</option>
-                <option value="ESTOQUE">Status: Estoque</option>
-                <option value="RESERVADA">Status: Reservada</option>
-                <option value="VENDIDA">Status: Vendida</option>
-                <option value="CONFERÊNCIA">Status: Conferência</option>
+                <option value="">Todos</option>
+                {filterOptions.projects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                {filterOptions.hasNoProject && <option value="__none__">Estoque Eleven (sem projeto)</option>}
               </select>
-              <Button variant="secondary" className="gap-2">
-                <Filter size={16} />
-                FILTRAR
-              </Button>
-            </div>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={filterLabelClass}>Ciclo / Lote</span>
+              <select
+                className={filterSelectClass}
+                value={filterLot}
+                onChange={(e) => setFilterLot(e.target.value)}
+                disabled={cycleOptions.length === 0}
+                title={cycleOptions.length === 0 ? "Escolha um projeto primeiro" : undefined}
+              >
+                <option value="">{cycleOptions.length === 0 ? "Escolha o projeto" : "Todos os ciclos"}</option>
+                {cycleOptions.map(([lot, label]) => <option key={lot} value={lot}>{label}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={filterLabelClass}>Modelo</span>
+              <select className={filterSelectClass} value={filterProduct} onChange={(e) => setFilterProduct(e.target.value)}>
+                <option value="">Todos</option>
+                {filterOptions.products.map((p) => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={filterLabelClass}>Cliente</span>
+              <select className={filterSelectClass} value={filterCustomer} onChange={(e) => setFilterCustomer(e.target.value)}>
+                <option value="">Todos</option>
+                {filterOptions.customers.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={filterLabelClass}>Entrada de</span>
+              <input type="date" className={filterSelectClass} value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className={filterLabelClass}>Entrada até</span>
+              <input type="date" className={filterSelectClass} value={filterTo} onChange={(e) => setFilterTo(e.target.value)} />
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-brand-border/40">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-brand-text-muted">
+              Mostrando <span className="text-white">{filteredWeapons.length}</span> de {weapons.length} armas
+              {onlyDivergence && <span className="text-brand-danger"> · só com divergência</span>}
+            </p>
+            {activeFilterCount > 0 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest text-brand-accent hover:underline"
+              >
+                <X size={13} /> Limpar filtros ({activeFilterCount})
+              </button>
+            )}
           </div>
         </Card>
 
