@@ -61,8 +61,8 @@ function ResultRow({ label, value, accent = false, bold = false }: { label: stri
 }
 
 export function CycleModal({ projectName, cycleNumber, splitPct, taxConfig, plannedCapital, onClose, onSave, importLots, onRefresh }: CycleModalProps) {
-  // A página já passa só lotes sem ciclo registrado; prefere o que ainda não está liquidado.
-  const activeLot = importLots?.find(lot => lot.status !== "LIQUIDADO") || importLots?.[0];
+  // A página passa o lote do ciclo a fechar (ou os lotes sem ciclo, do mais antigo ao mais novo).
+  const activeLot = importLots?.[0];
   const [qty, setQty] = useState("");
   const [price, setPrice] = useState("");
   const [rate, setRate] = useState("");

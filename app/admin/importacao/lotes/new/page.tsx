@@ -35,6 +35,16 @@ export default function NewBatchPage() {
   const [items, setItems] = useState<any[]>([]);
   const [catalog, setCatalog] = useState<any[]>([]);
 
+  // Vindo de "Abrir Novo Ciclo" no projeto: já deixa o projeto escolhido e volta pra ele ao salvar.
+  const [returnProjectId, setReturnProjectId] = useState("");
+  useEffect(() => {
+    const pid = new URLSearchParams(window.location.search).get("projectId");
+    if (pid) {
+      setProjectId(pid);
+      setReturnProjectId(pid);
+    }
+  }, []);
+
   useEffect(() => {
     Promise.all([
       getProducts(),
@@ -180,8 +190,8 @@ export default function NewBatchPage() {
     });
 
     if (res.success) {
-      toast.success("Lote de Importação registrado no banco de dados!");
-      router.push("/admin/importacao/lotes");
+      toast.success(returnProjectId ? "Novo ciclo aberto no projeto!" : "Lote de Importação registrado no banco de dados!");
+      router.push(returnProjectId ? `/admin/projetos/${returnProjectId}` : "/admin/importacao/lotes");
     } else {
       toast.error("Falha ao salvar lote.");
     }

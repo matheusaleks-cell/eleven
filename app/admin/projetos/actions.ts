@@ -351,6 +351,8 @@ export async function getProjectById(id: string) {
           orderBy: { cycleNumber: "asc" }
         },
         importLots: {
+          // Ordem de abertura = ordem dos ciclos (1º lote = Aplicação, 2º = 1ª Reaplicação...).
+          orderBy: { createdAt: "asc" },
           include: {
             documents: true,
             products: true,
@@ -480,11 +482,16 @@ async function tryAutoOpenNextLot(projectId: string, closedLotId: string | null 
   try {
     const project = await prisma.investmentProject.findUnique({
       where: { id: projectId },
-      include: { cycles: true },
+      include: { cycles: true, importLots: { select: { id: true } } },
     });
     if (!project) return;
     if (project.payoutRule && project.payoutRule !== "REINVEST") return; // investidor optou por saque, não reinveste
     if (project.cycles.length >= project.maxCycles) return; // já atingiu o máximo de ciclos do projeto
+    // Próximo ciclo já aberto à mão ("Abrir Novo Ciclo", p/ adiantar a burocracia): não duplica.
+    const hasOtherOpenLot = project.importLots.some(
+      (l) => l.id !== closedLotId && !project.cycles.some((c) => c.importLotId === l.id && c.status === "COMPLETED")
+    );
+    if (hasOtherOpenLot) return;
 
     const closedLot = await prisma.importLot.findUnique({
       where: { id: closedLotId },

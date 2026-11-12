@@ -321,6 +321,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [expandedCycle, setExpandedCycle] = useState<string | null>(null);
   const [showCycleModal, setShowCycleModal] = useState(false);
   const [showLinkLot, setShowLinkLot] = useState(false);
+  // Lote do ciclo a fechar no modal (null = o ciclo aberto mais antigo).
+  const [cycleLotId, setCycleLotId] = useState<string | null>(null);
+  // Lote exibido na aba "Processo de Importação" (null = o mais recente).
+  const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"cycles" | "import" | "docs">("cycles");
   const [updatingLotDoc, setUpdatingLotDoc] = useState(false);
 
@@ -466,11 +470,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       return Number(val.replace(/\D/g, "")) / 100 || 0;
     };
 
+    // Número/nome do ciclo vêm da posição do lote no projeto (lotes podem ser abertos antes
+    // de o anterior fechar, então "quantos ciclos já foram registrados" não serve mais).
+    const lotIdx = (project.importLots || []).findIndex((l: any) => l.id === data.importLotId);
+    const cycleIdx = lotIdx >= 0 ? lotIdx : project.currentCycle;
+
     try {
       const result = await createCycle({
         projectId: project.id,
-        cycleNumber: project.currentCycle + 1,
-        cycleName: getCycleName(project.currentCycle),
+        cycleNumber: cycleIdx + 1,
+        cycleName: getCycleName(cycleIdx),
         importLotId: data.importLotId,
         ...data.result,
         quantity: parseFloat(data.qty),
@@ -507,6 +516,28 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   if (!session || !project) return null;
 
   const isAdmin = session.role === "ADMIN";
+
+  // Cada lote do projeto é um ciclo (ordem de abertura). Ciclo "aberto" = lote sem ciclo
+  // COMPLETED registrado — pode haver vários ao mesmo tempo (o próximo é aberto antes do
+  // anterior fechar, para já receber a documentação burocrática).
+  const projectLots: any[] = project.importLots || [];
+  const hasClosedCycle = (lotId: string) =>
+    (project.cycles || []).some((c: any) => c.importLotId === lotId && c.status === "COMPLETED");
+  const openLots = projectLots.filter((l: any) => !hasClosedCycle(l.id));
+  const lotCycleLabel = (lotId: string) => {
+    const idx = projectLots.findIndex((l: any) => l.id === lotId);
+    return idx >= 0 ? `Ciclo ${idx + 1} · ${getCycleName(idx)}` : "Ciclo";
+  };
+  const openCycleModal = (lotId: string | null) => {
+    if (openLots.length === 0) {
+      toast.error("Nenhum ciclo aberto para registrar. Abra um novo ciclo primeiro.");
+      return;
+    }
+    setCycleLotId(lotId);
+    setShowCycleModal(true);
+  };
+  const newCycleHref = `/admin/importacao/lotes/new?projectId=${project.id}`;
+
   return (
     <DashboardLayout role={isAdmin ? "ADMIN" : "INVESTOR"} userName={session.name} userEmail={session.email} pageTitle="Detalhe do Projeto">
       {/* Back */}
@@ -539,8 +570,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                 <Link2 size={15} /> Vincular Lote
               </button>
               {project.status === "ACTIVE" && (
+                <Link
+                  href={newCycleHref}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[2px] font-bold uppercase whitespace-nowrap"
+                  style={{ background: "transparent", color: "#F5C400", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif", border: "1px solid #F5C400", textDecoration: "none" }}
+                >
+                  <Ship size={15} /> Abrir Novo Ciclo
+                </Link>
+              )}
+              {project.status === "ACTIVE" && (
                 <button
-                  onClick={() => setShowCycleModal(true)}
+                  onClick={() => openCycleModal(null)}
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-[2px] font-bold uppercase whitespace-nowrap"
                   style={{ background: "#F5C400", color: "#1A1A1A", fontSize: "13px", letterSpacing: "0.1em", fontFamily: "'Rajdhani', sans-serif", border: "none", cursor: "pointer" }}
                 >
@@ -691,33 +731,62 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
             </div>
           ))}
 
-          {project.status === "ACTIVE" && (
-            <div className="rounded-[4px] p-5 flex items-center gap-4" style={{ background: "#1E1E1E", border: "1px dashed #333", borderLeft: "3px dashed #F5C400" }}>
-              <Clock size={18} style={{ color: "#F5C400" }} />
-              <div>
-                <p style={{ color: "#A0A0A0", fontFamily: "'Rajdhani', sans-serif", fontSize: "15px", fontWeight: 600 }}>
-                  {getCycleName(project.currentCycle)} — Aguardando registro
-                </p>
-                <p style={{ color: "#606060", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}>
-                  Ciclo {project.currentCycle + 1} de {project.max_cycles}
-                </p>
+          {/* Ciclos abertos: lotes do projeto ainda sem fechamento registrado. */}
+          {openLots.map((lot: any) => {
+            const total = lot.quantityItems || 0;
+            const sold = (lot.weapons || []).filter((w: any) => w.currentStatus === "VENDIDA").length;
+            const registered = (lot.weapons || []).length;
+            const docsCount = (lot.documents || []).length;
+            return (
+              <div key={lot.id} className="rounded-[4px] p-5 flex flex-col sm:flex-row sm:items-center gap-4" style={{ background: "#1E1E1E", border: "1px dashed #333", borderLeft: "3px dashed #F5C400" }}>
+                <div className="flex items-center gap-4 min-w-0">
+                  <Clock size={18} style={{ color: "#F5C400", flexShrink: 0 }} />
+                  <div className="min-w-0">
+                    <p style={{ color: "#FFFFFF", fontFamily: "'Rajdhani', sans-serif", fontSize: "15px", fontWeight: 700 }}>
+                      {lotCycleLabel(lot.id).toUpperCase()} — EM ANDAMENTO
+                    </p>
+                    <p style={{ color: "#808080", fontSize: "12px", fontFamily: "'Rajdhani', sans-serif" }}>
+                      {lot.batchCode} · {String(lot.status || "").replace("_", " ")} · {registered > 0 ? `${sold}/${total} vendidas` : `${total} un. previstas (séries não cadastradas)`} · {docsCount} documento(s)
+                    </p>
+                  </div>
+                </div>
+                {isAdmin && (
+                  <div className="sm:ml-auto flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => { setSelectedLotId(lot.id); setActiveTab("import"); }}
+                      className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm"
+                      style={{ background: "transparent", color: "#A0A0A0", border: "1px solid #333", cursor: "pointer" }}
+                    >
+                      Documentos
+                    </button>
+                    <button
+                      onClick={() => openCycleModal(lot.id)}
+                      className="px-4 py-2 rounded-[2px] font-bold uppercase text-sm"
+                      style={{ background: "rgba(245,196,0,0.1)", color: "#F5C400", border: "1px solid rgba(245,196,0,0.3)", cursor: "pointer" }}
+                    >
+                      Registrar fechamento
+                    </button>
+                  </div>
+                )}
               </div>
-              {isAdmin && (
-                <button
-                  onClick={() => setShowCycleModal(true)}
-                  className="ml-auto px-4 py-2 rounded-[2px] font-bold uppercase text-sm"
-                  style={{ background: "rgba(245,196,0,0.1)", color: "#F5C400", border: "1px solid rgba(245,196,0,0.3)", cursor: "pointer" }}
-                >
-                  Registrar
-                </button>
-              )}
-            </div>
+            );
+          })}
+
+          {project.status === "ACTIVE" && isAdmin && (
+            <Link
+              href={newCycleHref}
+              className="rounded-[4px] p-4 flex items-center justify-center gap-2 font-bold uppercase text-xs tracking-widest"
+              style={{ background: "transparent", border: "1px dashed #333", color: "#808080", textDecoration: "none", fontFamily: "'Rajdhani', sans-serif" }}
+            >
+              <Plus size={14} /> Abrir próximo ciclo (Ciclo {projectLots.length + 1} de {project.max_cycles})
+            </Link>
           )}
         </div>
       )}
 
       {activeTab === "import" && (() => {
-        const activeLot = project.importLots?.[0];
+        // Um lote por ciclo: o selecionado, ou o mais recente (onde costuma estar a burocracia em curso).
+        const activeLot = projectLots.find((l: any) => l.id === selectedLotId) || projectLots[projectLots.length - 1];
         if (!activeLot) {
           return (
             <div className="bg-brand-surface/20 border border-brand-border p-8 rounded-xl text-center">
@@ -758,6 +827,30 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
 
         return (
           <div className="space-y-6 animate-fade-in">
+            {/* Seletor de ciclo (lote) */}
+            {projectLots.length > 1 && (
+              <div className="flex flex-wrap gap-2">
+                {projectLots.map((l: any) => {
+                  const active = l.id === activeLot.id;
+                  return (
+                    <button
+                      key={l.id}
+                      onClick={() => setSelectedLotId(l.id)}
+                      className={cn(
+                        "px-3 py-2 rounded border text-[10px] font-bold uppercase tracking-widest transition-colors",
+                        active
+                          ? "border-brand-accent bg-brand-accent/10 text-brand-accent"
+                          : "border-brand-border text-brand-text-muted hover:text-white"
+                      )}
+                    >
+                      {lotCycleLabel(l.id)} · {l.batchCode}
+                      {hasClosedCycle(l.id) ? " · fechado" : ""}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Cabecalho Rápido do Lote */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Card className="p-3 bg-brand-surface border-brand-border shadow-md">
@@ -990,7 +1083,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
       {showCycleModal && (
         <CycleModal
           projectName={project.name}
-          cycleNumber={project.currentCycle}
+          cycleNumber={(() => {
+            const lotId = cycleLotId || openLots[0]?.id;
+            const idx = projectLots.findIndex((l: any) => l.id === lotId);
+            return idx >= 0 ? idx : project.currentCycle;
+          })()}
           splitPct={project.profitSplitPct}
           taxConfig={realTaxConfig || {
             name: "Padrão (Fallback)",
@@ -1003,11 +1100,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
               ? project.initialCapital
               : project.cycles[project.cycles.length - 1].reinvestmentShare
           }
-          // Só lotes que ainda não têm ciclo registrado: um lote pode continuar vendendo (e não
-          // liquidado) depois de ter o ciclo registrado, e não deve ser oferecido de novo.
-          importLots={(project.importLots || []).filter(
-            (l: any) => !(project.cycles || []).some((c: any) => c.importLotId === l.id && c.status === "COMPLETED")
-          )}
+          // O lote escolhido na timeline; sem escolha, o ciclo aberto mais antigo. Nunca um lote
+          // que já tem fechamento registrado (pode continuar vendendo depois dele).
+          importLots={cycleLotId ? openLots.filter((l: any) => l.id === cycleLotId) : openLots}
           onClose={() => setShowCycleModal(false)}
           onSave={handleSaveCycle}
           onRefresh={fetchProject}
